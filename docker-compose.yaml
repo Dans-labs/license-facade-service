@@ -1,0 +1,19 @@
+services:
+  license-facade-service:
+    container_name: lfs
+    image: ekoindarto/lfs:0.1.0-amd64
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#      args:
+#        BUILD_DATE: ${BUILD_DATE:-}
+    environment:
+      APP_NAME: ${APP_NAME:-License Facade Service}
+      EXPOSE_PORT: ${EXPOSE_PORT:-12104}
+      BASE_DIR: /home/akmi/lfs
+    ports:
+      - "12104:12104"
+    volumes:
+      - ./conf:/home/akmi/lfs/conf:ro
+      - ./logs:/home/akmi/lfs/logs
+    restart: unless-stopped
