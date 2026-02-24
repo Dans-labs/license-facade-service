@@ -1,0 +1,19 @@
+[default]
+
+api_prefix = "/api/v1"
+expose_port = 12104
+
+reload_enable = true
+
+
+
+# Logging
+log_level = 10
+log_file = "@format {env[BASE_DIR]}/logs/lfs.log"
+log_format = '%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s'
+cors_origins = ["*"]
+
+db_dialect="postgresql+psycopg2"
+
+# Other
+otlp_enable = false

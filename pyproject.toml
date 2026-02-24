@@ -1,0 +1,14 @@
+[project]
+name = "license-facade-service"
+title = "License Facade Service"
+version = "0.1.0"
+description = "The License Facade Service (LFS) is a centralized service that enables end users, data publishers, and developers to unambiguously identify, reference, validate, and retrieve information about dataset licenses."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dynaconf>=3.2.12",
+    "fastapi>=0.131.0",
+    "tomli>=2.4.0",
+    "uvicorn>=0.41.0",
+    "psycopg[binary]>=3.3.2",
+]
