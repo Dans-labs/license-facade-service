@@ -11,13 +11,13 @@ from src.license_facade_service.api.v1 import metrics, licenses
 from src.license_facade_service.utils.commons import app_settings, get_project_details
 
 APP_NAME = os.environ.get("APP_NAME", "OSTrails Clarin SKG-IF Service")
-EXPOSE_PORT = os.environ.get("EXPOSE_PORT", 41012)
+EXPOSE_PORT = os.environ.get("EXPOSE_PORT", 12104)
 
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
 build_date = os.environ.get("BUILD_DATE", "unknown")
-log_file = app_settings.get("log_file", "licsrv.log")
+log_file = app_settings.get("log_file", "lsf.log")
 handler = TimedRotatingFileHandler(
     log_file,
     when="midnight",  # rotate every second for testing
