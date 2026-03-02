@@ -1,19 +1,52 @@
 services:
+  fuseki:
+    image: secoresearch/fuseki:latest
+    container_name: lfs-fuseki
+    environment:
+      ADMIN_PASSWORD: ${FUSEKI_ADMIN_PASSWORD:-admin}
+      JVM_ARGS: ${FUSEKI_JVM_ARGS:--Xmx2g -Xms1g}
+    ports:
+      - "3030:3030"
+    volumes:
+      - fuseki-data:/fuseki
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/$/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   license-facade-service:
     container_name: lfs
-    image: ekoindarto/lfs:0.1.0-amd64
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#      args:
-#        BUILD_DATE: ${BUILD_DATE:-}
+#    image: ekoindarto/lfs:0.1.0-amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
     environment:
       APP_NAME: ${APP_NAME:-License Facade Service}
       EXPOSE_PORT: ${EXPOSE_PORT:-12104}
       BASE_DIR: /home/akmi/lfs
+      URL_BASE: ${URL_BASE:-https://lfs.labs.dansdemo.nl/api/v1/licenses}
+      FUSEKI_URL: ${FUSEKI_URL:-http://fuseki:3030}
+      FUSEKI_USER: ${FUSEKI_USER:-admin}
+      FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
+      FUSEKI_ENABLE: ${FUSEKI_ENABLE:-true}
+      FUSEKI_CLEAR_ON_STARTUP: ${FUSEKI_CLEAR_ON_STARTUP:-false}
     ports:
       - "12104:12104"
     volumes:
       - ./conf:/home/akmi/lfs/conf:ro
       - ./logs:/home/akmi/lfs/logs
+      - ./resources:/home/akmi/lfs/resources
+    depends_on:
+      fuseki:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  fuseki-data:
+    driver: local
+

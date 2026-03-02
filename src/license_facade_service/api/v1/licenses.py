@@ -8,7 +8,7 @@ from uuid import uuid5, NAMESPACE_DNS
 
 import httpx
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import PlainTextResponse, HTMLResponse
+from fastapi.responses import PlainTextResponse
 
 
 router = APIRouter()
@@ -419,7 +419,7 @@ async def refresh_cache():
 
 @router.get("/licenses/{id}")
 async def get_license(id: str):
-    """Get human-readable metadata landing page for a license (HTML)."""
+    """Get complete license information by license ID or URI."""
     logging.debug(f"Get license endpoint called with id: {id}")
 
     # Get basic info from licenses list
@@ -467,134 +467,44 @@ async def get_license(id: str):
     if not license_info:
         raise HTTPException(status_code=404, detail=f"License '{id}' not found")
 
-    # Get detailed info to include isFsfLibre and other metadata
+    # Get detailed info including full text, templates, HTML, and cross-references
     try:
         details = await fetch_license_details(actual_id)
 
-        # Extract metadata
-        uri = license_info.get("uri") or generate_license_uri(actual_id)
-        license_name = license_info.get("name", "Unknown License")
-        license_id = license_info.get("licenseId", "Unknown")
-        reference = license_info.get("reference", "")
-        is_deprecated = license_info.get("isDeprecatedLicenseId", False)
-        is_osi_approved = license_info.get("isOsiApproved", False)
-        is_fsf_libre = details.get("isFsfLibre", None)
-        see_also = license_info.get("seeAlso", [])
-        details_url = license_info.get("detailsUrl", "")
+        # Build complete info with all fields from details
+        complete_info = {
+            "uri": license_info.get("uri") or generate_license_uri(actual_id),
+            "isDeprecatedLicenseId": license_info.get("isDeprecatedLicenseId", False),
+            "licenseText": details.get("licenseText", ""),
+            "standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
+            "name": license_info.get("name"),
+            "licenseId": license_info.get("licenseId"),
+            "crossRef": details.get("crossRef", []),
+            "seeAlso": license_info.get("seeAlso", []),
+            "isOsiApproved": license_info.get("isOsiApproved", False),
+            "licenseTextHtml": details.get("licenseTextHtml", "")
+        }
 
-        # Build HTML landing page
-        html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{license_name} - SPDX License</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
-        .container {{ max-width: 900px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; }}
-        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; }}
-        .license-id {{ font-size: 1.1em; opacity: 0.9; font-family: monospace; }}
-        .content {{ padding: 40px; }}
-        .section {{ margin-bottom: 30px; }}
-        .section h2 {{ font-size: 1.3em; color: #667eea; margin-bottom: 15px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }}
-        .metadata-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }}
-        .metadata-item {{ background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #667eea; }}
-        .metadata-item label {{ font-weight: bold; color: #667eea; display: block; margin-bottom: 5px; font-size: 0.9em; }}
-        .metadata-item value {{ font-size: 0.95em; }}
-        .badge {{ display: inline-block; padding: 5px 12px; border-radius: 20px; font-size: 0.85em; margin-right: 10px; margin-bottom: 10px; }}
-        .badge.approved {{ background: #d4edda; color: #155724; }}
-        .badge.deprecated {{ background: #f8d7da; color: #721c24; }}
-        .badge.fsf {{ background: #cce5ff; color: #004085; }}
-        .links {{ background: #f8f9fa; padding: 20px; border-radius: 5px; margin-top: 20px; }}
-        .links a {{ display: inline-block; margin: 10px 10px 10px 0; padding: 10px 15px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }}
-        .links a:hover {{ background: #764ba2; }}
-        .footer {{ background: #f8f9fa; padding: 20px; text-align: center; font-size: 0.9em; color: #666; border-top: 1px solid #ddd; }}
-        .uri {{ font-family: monospace; font-size: 0.85em; word-break: break-all; background: #f5f5f5; padding: 10px; border-radius: 3px; margin-top: 10px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{license_name}</h1>
-            <div class="license-id">SPDX ID: {license_id}</div>
-        </div>
-        <div class="content">
-            <div class="section">
-                <h2>License Information</h2>
-                <div class="metadata-grid">
-                    <div class="metadata-item">
-                        <label>License ID</label>
-                        <value>{license_id}</value>
-                    </div>
-                    <div class="metadata-item">
-                        <label>Reference Number</label>
-                        <value>{license_info.get('referenceNumber', 'N/A')}</value>
-                    </div>
-                    <div class="metadata-item">
-                        <label>URI</label>
-                        <value style="font-family: monospace; font-size: 0.85em;">{uri}</value>
-                    </div>
-                </div>
-            </div>
+        # Add isFsfLibre from details if available
+        if "isFsfLibre" in details:
+            complete_info["isFsfLibre"] = details.get("isFsfLibre")
 
-            <div class="section">
-                <h2>Approval Status</h2>
-                <div>
-                    {'<span class="badge approved">✓ OSI Approved</span>' if is_osi_approved else '<span class="badge">⊘ Not OSI Approved</span>'}
-                    {f'<span class="badge fsf">✓ FSF Free/Libre</span>' if is_fsf_libre else ('<span class="badge">⊘ Not FSF Libre</span>' if is_fsf_libre is False else '<span class="badge">? FSF Status Unknown</span>')}
-                    {'<span class="badge deprecated">⚠ DEPRECATED</span>' if is_deprecated else ''}
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>References</h2>
-                <div class="links">
-                    {f'<a href="{reference}" target="_blank">SPDX License Page</a>' if reference else ''}
-                    {f'<a href="{details_url}" target="_blank">License Details (JSON)</a>' if details_url else ''}
-                    {chr(10).join([f'<a href="{url}" target="_blank">External Reference</a>' for url in see_also[:5]])}
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>License URI</h2>
-                <div class="uri">{uri}</div>
-            </div>
-
-            <div class="section">
-                <h2>API Endpoints</h2>
-                <p>Access this license data through different formats:</p>
-                <div class="links" style="margin-top: 15px;">
-                    <a href="/licenses/{actual_id}/json">JSON Format</a>
-                    <a href="/licenses/{actual_id}/original">License Text (Plain)</a>
-                    <a href="/licenses/{actual_id}/machine">Machine Format</a>
-                    <a href="/licenses/{actual_id}/legal">Legal Text</a>
-                </div>
-            </div>
-        </div>
-        <div class="footer">
-            <p>License Facade Service - SPDX License Information Landing Page</p>
-            <p>Last Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</p>
-        </div>
-    </div>
-</body>
-</html>"""
-
-        from fastapi.responses import HTMLResponse
-        return HTMLResponse(content=html_content)
-
+        return complete_info
     except HTTPException:
-        # If details not available, return error
-        raise HTTPException(status_code=500, detail=f"Could not fetch details for {actual_id}")
+        # If details not available, return basic info from list with URI
+        if "uri" not in license_info:
+            license_info["uri"] = generate_license_uri(actual_id)
+        return license_info
     except Exception as e:
-        logging.warning(f"Could not fetch details for {actual_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Could not fetch details for {actual_id}")
+        logging.warning(f"Could not fetch details for {actual_id}: {e}, returning basic info")
+        if "uri" not in license_info:
+            license_info["uri"] = generate_license_uri(actual_id)
+        return license_info
 
 
 @router.get("/licenses/{id}/json")
 async def get_license_json(id: str):
-    """Get detailed license information in JSON format with URI - same as /licenses/{id} endpoint."""
+    """Get detailed license information in JSON format with all fields."""
     logging.debug(f"Get license JSON endpoint called with id: {id}")
 
     # Get basic info from licenses list
@@ -642,21 +552,22 @@ async def get_license_json(id: str):
     if not license_info:
         raise HTTPException(status_code=404, detail=f"License '{id}' not found")
 
-    # Get detailed info to include isFsfLibre and other metadata
+    # Get detailed info including full text, templates, HTML, and cross-references
     try:
         details = await fetch_license_details(actual_id)
 
-        # Merge license list info with additional details - same structure as get_license
+        # Build complete info with all fields from details - same structure as get_license
         complete_info = {
             "uri": license_info.get("uri") or generate_license_uri(actual_id),
-            "reference": license_info.get("reference"),
             "isDeprecatedLicenseId": license_info.get("isDeprecatedLicenseId", False),
-            "detailsUrl": license_info.get("detailsUrl"),
-            "referenceNumber": license_info.get("referenceNumber"),
+            "licenseText": details.get("licenseText", ""),
+            "standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
             "name": license_info.get("name"),
             "licenseId": license_info.get("licenseId"),
+            "crossRef": details.get("crossRef", []),
             "seeAlso": license_info.get("seeAlso", []),
-            "isOsiApproved": license_info.get("isOsiApproved", False)
+            "isOsiApproved": license_info.get("isOsiApproved", False),
+            "licenseTextHtml": details.get("licenseTextHtml", "")
         }
 
         # Add isFsfLibre from details if available
