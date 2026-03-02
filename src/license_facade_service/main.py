@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
-from src.license_facade_service.api.v1 import metrics, licenses
+from src.license_facade_service.api.v1 import metrics, licenses, licenses_graph
 from src.license_facade_service.utils.commons import app_settings, get_project_details
 
 APP_NAME = os.environ.get("APP_NAME", "OSTrails Clarin SKG-IF Service")
@@ -36,13 +36,61 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    logging.info("start up")
+    logging.info("Application startup")
+
+    # Check and update license cache on startup
+    try:
+        from src.license_facade_service.api.v1.licenses import ensure_cache_updated
+        logging.info("Checking for license data updates...")
+        await ensure_cache_updated()
+        logging.info("License cache check complete")
+    except Exception as e:
+        logging.error(f"Failed to update license cache on startup: {e}")
+        logging.warning("Service will continue but may fetch licenses on-demand")
+
+    # Initialize Fuseki with RDF license data
+    fuseki_enable = app_settings.get("fuseki_enable", True)
+    if fuseki_enable:
+        try:
+            from src.license_facade_service.utils.license_rdf_uploader import initialize_fuseki_with_licenses
+
+            logging.info("Initializing Fuseki with license RDF data...")
+
+            fuseki_url = app_settings.get("fuseki_url", "http://localhost:3030")
+            fuseki_dataset = app_settings.get("fuseki_dataset", "licenses")
+            fuseki_user = app_settings.get("fuseki_user", "admin")
+            fuseki_password = app_settings.get("fuseki_password", "admin")
+            fuseki_clear = app_settings.get("fuseki_clear_on_startup", False)
+
+            result = await initialize_fuseki_with_licenses(
+                fuseki_url=fuseki_url,
+                dataset=fuseki_dataset,
+                username=fuseki_user,
+                password=fuseki_password,
+                clear_existing=fuseki_clear
+            )
+
+            if result["success"]:
+                logging.info("✓ Fuseki initialization completed successfully")
+            elif not result["fuseki_available"]:
+                logging.warning("⚠ Fuseki server not available - RDF features will be disabled")
+            else:
+                logging.warning(f"⚠ Fuseki initialization completed with errors: {result.get('errors', [])}")
+
+        except Exception as e:
+            logging.error(f"Failed to initialize Fuseki: {e}")
+            logging.warning("Service will continue without Fuseki RDF features")
+    else:
+        logging.info("Fuseki integration is disabled (fuseki_enable=false)")
+
     yield
+    logging.info("Application shutdown")
 
 app = FastAPI(
     title=get_project_details(os.getenv("BASE_DIR"), ["title"])["title"],
     version=f"{get_project_details(os.getenv('BASE_DIR'), ["version"])["version"]} (Build Date: {build_date})",
     description=get_project_details(os.getenv("BASE_DIR"), ["description"])["description"],
+    lifespan=lifespan,
     # openapi_url=settings.openapi_url,
     # docs_url=settings.docs_url,
     # redoc_url=settings.redoc_url,
@@ -57,9 +105,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(metrics.router, tags=["Metrics"], prefix="")
-app.include_router(licenses.router, tags=["Licenses"], prefix="")
+app.include_router(metrics.router, tags=["Metrics"], prefix="/api/v1")
+app.include_router(licenses.router, tags=["Licenses"], prefix="/api/v1")
 
+app.include_router(licenses_graph.router, tags=["RDF Transformer"], prefix="/api/v1")
 @app.exception_handler(StarletteHTTPException)
 async def custom_404_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
