@@ -9,6 +9,7 @@ from uuid import uuid5, NAMESPACE_DNS
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
+from spdx_tools.spdx.parser.parse_anything import parse_file as parse_spdx2
 
 
 router = APIRouter()
@@ -416,7 +417,6 @@ async def refresh_cache():
         raise HTTPException(status_code=500, detail=f"Cache refresh failed: {str(e)}")
 
 
-
 @router.get("/licenses/{id}")
 async def get_license(id: str):
     """Get complete license information by license ID or URI."""
@@ -628,3 +628,119 @@ async def get_license_legal(id: str):
         raise HTTPException(status_code=404, detail=f"License text not found for '{id}'")
 
     return license_text
+
+
+def build_minimal_spdx3_document(name: str, namespace: str) -> Dict[str, Any]:
+    """Build a minimal SPDX 3.0 JSON-LD document matching SPDX license-list style.
+
+    Reuses the same structure as scripts/create_minimal_spdx_v3.py:
+    - @context for SPDX 3.0.1
+    - CreationInfo node with @id
+    - SpdxDocument node referencing CreationInfo via creationInfo
+    """
+    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    creation_info_id = "_:creationInfo_0"
+    document_spdx_id = f"{namespace.rstrip('/')}_document"
+
+    creation_info_node: Dict[str, Any] = {
+        "@id": creation_info_id,
+        "type": "CreationInfo",
+        "specVersion": "3.0.1",
+        "createdBy": [f"{namespace.rstrip('/')}/creator"],
+        "created": created,
+    }
+
+    document_node: Dict[str, Any] = {
+        "spdxId": document_spdx_id,
+        "type": "SpdxDocument",
+        "rootElement": [document_spdx_id],
+        "name": name,
+        "creationInfo": creation_info_id,
+    }
+
+    return {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [creation_info_node, document_node],
+    }
+
+
+@router.post("/licenses/spdx3/minimal")
+async def create_minimal_spdx3(name: str = "Minimal SPDX 3.0 Document", namespace: str = "https://example.org/spdx3/minimal-doc-1"):
+    """Create and return a minimal SPDX v3 JSON-LD document.
+
+    The structure matches the generator used in scripts/create_minimal_spdx_v3.py
+    and is compatible with the SPDX v3 validator.
+    """
+    try:
+        document = build_minimal_spdx3_document(name=name, namespace=namespace)
+        return document
+    except Exception as e:
+        logging.error(f"Failed to build minimal SPDX v3 document: {e}")
+        raise HTTPException(status_code=500, detail="Failed to build minimal SPDX v3 document")
+
+
+@router.post("/licenses/spdx3/complete/{license_id}")
+async def create_complete_spdx3(license_id: str):
+    """Create a complete SPDX v3 JSON-LD document for a given license.
+
+    This endpoint uses the existing SPDX v2 JSON data (from cache or remote)
+    as the source of truth and wraps it into a minimal SPDX v3 document
+    structure. The resulting JSON-LD is compatible with the v3 validator
+    and follows the same pattern as scripts/create_minimal_spdx_v3.py.
+    """
+    logging.debug(f"Create complete SPDX v3 document for license: {license_id}")
+
+    # Fetch detailed SPDX v2 JSON for this license
+    try:
+        details = await fetch_license_details(license_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logging.error(f"Failed to fetch SPDX v2 details for {license_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch SPDX v2 license details")
+
+    # Build SPDX v3 CreationInfo and SpdxDocument nodes
+    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    creation_info_id = "_:creationInfo_0"
+    namespace = f"https://spdx.org/spdxdocs/{license_id}"
+    document_spdx_id = f"{namespace}_document"
+
+    creation_info_node: Dict[str, Any] = {
+        "@id": creation_info_id,
+        "type": "CreationInfo",
+        "specVersion": "3.0.1",
+        "createdBy": [f"{namespace}/creator"],
+        "created": created,
+    }
+
+    document_node: Dict[str, Any] = {
+        "spdxId": document_spdx_id,
+        "type": "SpdxDocument",
+        "rootElement": [document_spdx_id],
+        "name": f"SPDX Document for {license_id}",
+        "creationInfo": creation_info_id,
+    }
+
+    # Embed the SPDX v2 JSON details as an additional element in @graph
+    license_element_id = f"{namespace}#License-{license_id}"
+    license_node: Dict[str, Any] = {
+        "spdxId": license_element_id,
+        "type": "expandedlicensing_ListedLicense",
+        "name": details.get("name"),
+        "simplelicensing_licenseText": details.get("licenseText", ""),
+        "expandedlicensing_standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
+        "expandedlicensing_isOsiApproved": details.get("isOsiApproved", False),
+        "expandedlicensing_isDeprecatedLicenseId": details.get("isDeprecatedLicenseId", False),
+        "expandedlicensing_seeAlso": details.get("seeAlso", []),
+        "creationInfo": creation_info_id,
+    }
+
+    document_node["rootElement"] = [license_element_id]
+
+    spdx3_document: Dict[str, Any] = {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [creation_info_node, document_node, license_node],
+    }
+
+    return spdx3_document
+
