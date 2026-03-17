@@ -258,4 +258,3 @@ For questions or support, please open an issue in the repository.
 
 ---
 
-**Note**: This service is part of the OSTrails Clarin SKG-IF ecosystem.
