@@ -9,6 +9,7 @@ from uuid import uuid5, NAMESPACE_DNS
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from spdx_tools.spdx.parser.parse_anything import parse_file as parse_spdx2
 
 
@@ -630,6 +631,39 @@ async def get_license_legal(id: str):
     return license_text
 
 
+@router.get("/licenses/taxonomy")
+async def get_license_taxonomy():
+    """Return a human-readable overview of common SPDX-related license taxonomies.
+
+    This endpoint provides static descriptive text about how tools typically
+    classify licenses (e.g. permissive, weak/strong copyleft, public domain,
+    data licenses). It does not query SPDX or depend on cached data.
+    """
+
+    taxonomy_text = (
+        "Permissive:\n\n"
+        " - MIT\n"
+        " - BSD\n"
+        " - Apache\n\n"
+        "Weak copyleft:\n\n"
+        " - MPL\n"
+        " - LGPL\n\n"
+        "Strong copyleft:\n\n"
+        " - GPL\n"
+        " - AGPL\n\n"
+        "Content / documentation:\n\n"
+        " - Creative Commons\n\n"
+        "Public domain:\n\n"
+        " - CC0\n"
+        " - Unlicense\n\n"
+        "Data licenses:\n\n"
+        " - ODbL\n"
+        " - ODC-BY\n"
+    )
+
+    return {"description": taxonomy_text}
+
+
 def build_minimal_spdx3_document(name: str, namespace: str) -> Dict[str, Any]:
     """Build a minimal SPDX 3.0 JSON-LD document matching SPDX license-list style.
 
@@ -679,28 +713,67 @@ async def create_minimal_spdx3(name: str = "Minimal SPDX 3.0 Document", namespac
         raise HTTPException(status_code=500, detail="Failed to build minimal SPDX v3 document")
 
 
+class CustomLicenseInput(BaseModel):
+    licenseId: str
+    name: str
+    licenseText: str
+    standardLicenseTemplate: Optional[str] = None
+    seeAlso: list[str] = []
+    isOsiApproved: bool = False
+    isDeprecatedLicenseId: bool = False
+
+
 @router.post("/licenses/spdx3/complete/{license_id}")
-async def create_complete_spdx3(license_id: str):
+async def create_complete_spdx3(
+    license_id: str,
+    custom: bool = False,
+    custom_payload: Optional[CustomLicenseInput] = None,
+):
     """Create a complete SPDX v3 JSON-LD document for a given license.
 
-    This endpoint uses the existing SPDX v2 JSON data (from cache or remote)
-    as the source of truth and wraps it into a minimal SPDX v3 document
-    structure. The resulting JSON-LD is compatible with the v3 validator
-    and follows the same pattern as scripts/create_minimal_spdx_v3.py.
+    Modes:
+    - Official SPDX license: `custom=False` (default), `license_id` must exist
+      in the SPDX license list. Details are loaded via `fetch_license_details`.
+    - Custom license: `custom=True`, and `custom_payload` must be provided
+      in the request body. In this mode, no call is made to the SPDX GitHub
+      repository; all content comes from `custom_payload`.
     """
-    logging.debug(f"Create complete SPDX v3 document for license: {license_id}")
+    logging.debug(
+        f"Create complete SPDX v3 document for license: {license_id}, custom={custom}"
+    )
 
-    # Fetch detailed SPDX v2 JSON for this license
-    try:
-        details = await fetch_license_details(license_id)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logging.error(f"Failed to fetch SPDX v2 details for {license_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch SPDX v2 license details")
+    if custom:
+        # Use data supplied by the client for a brand-new local licenseId
+        if custom_payload is None:
+            raise HTTPException(
+                status_code=400,
+                detail="custom_payload is required when custom=true",
+            )
+        if custom_payload.licenseId != license_id:
+            raise HTTPException(
+                status_code=400,
+                detail="licenseId in path and custom_payload.licenseId must match",
+            )
+        details: Dict[str, Any] = custom_payload.dict()
+    else:
+        # Official SPDX license: load SPDX v2 JSON from cache or SPDX GitHub
+        try:
+            details = await fetch_license_details(license_id)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logging.error(f"Failed to fetch SPDX v2 details for {license_id}: {e}")
+            raise HTTPException(
+                status_code=500, detail="Failed to fetch SPDX v2 license details"
+            )
 
     # Build SPDX v3 CreationInfo and SpdxDocument nodes
-    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    created = (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     creation_info_id = "_:creationInfo_0"
     namespace = f"https://spdx.org/spdxdocs/{license_id}"
     document_spdx_id = f"{namespace}_document"
@@ -721,20 +794,25 @@ async def create_complete_spdx3(license_id: str):
         "creationInfo": creation_info_id,
     }
 
-    # Embed the SPDX v2 JSON details as an additional element in @graph
+    # Embed license details as ListedLicense node
     license_element_id = f"{namespace}#License-{license_id}"
     license_node: Dict[str, Any] = {
         "spdxId": license_element_id,
         "type": "expandedlicensing_ListedLicense",
         "name": details.get("name"),
         "simplelicensing_licenseText": details.get("licenseText", ""),
-        "expandedlicensing_standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
+        "expandedlicensing_standardLicenseTemplate": details.get(
+            "standardLicenseTemplate", ""
+        ),
         "expandedlicensing_isOsiApproved": details.get("isOsiApproved", False),
-        "expandedlicensing_isDeprecatedLicenseId": details.get("isDeprecatedLicenseId", False),
+        "expandedlicensing_isDeprecatedLicenseId": details.get(
+            "isDeprecatedLicenseId", False
+        ),
         "expandedlicensing_seeAlso": details.get("seeAlso", []),
         "creationInfo": creation_info_id,
     }
 
+    # Root element points to the license node
     document_node["rootElement"] = [license_element_id]
 
     spdx3_document: Dict[str, Any] = {

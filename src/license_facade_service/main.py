@@ -62,6 +62,14 @@ async def lifespan(application: FastAPI):
             fuseki_password = app_settings.get("fuseki_password", "admin")
             fuseki_clear = app_settings.get("fuseki_clear_on_startup", False)
 
+            # NOTE: We intentionally do NOT call the Fuseki admin endpoint `/$/datasets`
+            # here because in many deployments (including Dockerized Fuseki), that
+            # endpoint is restricted to true localhost only and will return 403
+            # "Access denied : only localhost access allowed" when called from
+            # another container. Dataset creation should be handled via the Fuseki
+            # UI or admin tools; here we only attempt to upload data to the
+            # configured dataset and log the result.
+
             result = await initialize_fuseki_with_licenses(
                 fuseki_url=fuseki_url,
                 dataset=fuseki_dataset,
@@ -109,7 +117,7 @@ app.include_router(metrics.router, tags=["Metrics"], prefix="/api/v1")
 app.include_router(licenses.router, tags=["Licenses"], prefix="/api/v1")
 
 app.include_router(licenses_graph.router, tags=["RDF Transformer"], prefix="/api/v1")
-@app.exception_handler(StarletteHTTPException)
+@ app.exception_handler(StarletteHTTPException)
 async def custom_404_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
         return JSONResponse(status_code=404, content={"message": "Endpoint not found"})
