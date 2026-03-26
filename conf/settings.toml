@@ -15,5 +15,11 @@ cors_origins = ["*"]
 
 db_dialect="postgresql+psycopg2"
 
+# Apache Jena Fuseki Configuration
+fuseki_url = "http://localhost:3030"
+fuseki_dataset = "licenses"
+fuseki_enable = true
+fuseki_clear_on_startup = false
+
 # Other
 otlp_enable = false

@@ -18,6 +18,7 @@ Try the live demo: [https://lfs.labs.dansdemo.nl/docs](https://lfs.labs.dansdemo
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [API Endpoints](#api-endpoints)
+- [Testing](#-testing)
 - [Development](#development)
 - [Docker Deployment](#docker-deployment)
 - [License](#license)
@@ -209,6 +210,57 @@ curl -X POST http://localhost:12104/licenses/cache/update
 curl -X POST http://localhost:12104/licenses/cache/refresh
 ```
 
+## 🧪 Testing
+
+This project includes a suite of Python tests for license retrieval, caching, URI generation, RDF transformation, and Fuseki integration.
+
+All commands below assume you are in the project root (`license-facade-service`) and have installed dependencies as described in the [Installation](#installation) section.
+
+### Run all tests (recommended)
+
+Using `uv` and `pytest`:
+
+```bash
+# Install dependencies (if not done yet)
+uv sync
+
+# Run the test suite
+uv run pytest
+```
+
+Or, from an activated virtual environment:
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+If you prefer the built-in unittest discovery:
+
+```bash
+python -m unittest discover -p "test_*.py"
+```
+
+### Run individual tests
+
+You can also run specific test modules directly. For example:
+
+```bash
+# License API tests
+python test_licenses_api.py
+
+# Cache system tests
+python test_cache_system.py
+
+# Fuseki integration tests (requires Fuseki running via Docker)
+python test_fuseki_integration.py
+
+# RDF transformer tests
+python test_rdf_transformer.py
+```
+
+Some tests (such as Fuseki integration) require the Docker services to be running. See the [Docker Deployment](#docker-deployment) section for how to start the stack.
+
 ## 🛠️ Development
 
 ### Project Structure
@@ -236,17 +288,7 @@ license-facade-service/
 
 ### Running Tests
 
-Test the API integration with SPDX license data:
-
-```bash
-# Run the test script
-python test_licenses_api.py
-```
-
-This will test:
-- Fetching the complete license list
-- Retrieving details for specific licenses (MIT, Apache-2.0, GPL-3.0, BSD-3-Clause)
-- Error handling for invalid license IDs
+For detailed testing instructions (running all tests or targeted tests), see the [Testing](#-testing) section above.
 
 ### Code Style
 
