@@ -28,6 +28,11 @@ Try the live demo: [https://lfs.labs.dansdemo.nl/docs](https://lfs.labs.dansdemo
 - **Multiple License Formats**: Support for JSON, machine-readable, legal text, and original formats
 - **RESTful API**: FastAPI-based REST API with automatic OpenAPI documentation
 - **Health Monitoring**: Built-in health check and ping endpoints
+- **Intelligent Caching**: Automatic caching of SPDX license data with version tracking
+  - Downloads all licenses on first run or when SPDX updates
+  - Serves from local cache for fast response times
+  - Automatic update checks on startup
+  - Manual cache refresh endpoints
 - **Docker Support**: Ready-to-deploy Docker container with docker-compose
 - **Logging**: Comprehensive logging with daily rotation
 - **CORS Support**: Configurable CORS for cross-origin requests
@@ -97,9 +102,10 @@ otlp_enable = false
 ### Environment Variables
 
 - `APP_NAME`: Application name (default: "OSTrails Clarin SKG-IF Service")
-- `EXPOSE_PORT`: Port to expose the service (default: 1912)
+- `EXPOSE_PORT`: Port to expose the service (default: 12104)
 - `BASE_DIR`: Base directory for the application
 - `BUILD_DATE`: Build date for version tracking
+- `URL_BASE`: Base URL for license URIs (default: "https://lfs.labs.dansdemo.nl/api/v1/licenses")
 
 ## 🚀 Usage
 
@@ -108,16 +114,16 @@ otlp_enable = false
 ```bash
 # Set environment variables
 export BASE_DIR=$(pwd)
-export EXPOSE_PORT=1912
+export EXPOSE_PORT=12104
 
 # Run the service
 python -m src.license_facade_service.main
 ```
 
 The service will be available at:
-- API: `http://localhost:1912`
-- Interactive API docs: `http://localhost:1912/docs`
-- ReDoc: `http://localhost:1912/redoc`
+- API: `http://localhost:12104`
+- Interactive API docs: `http://localhost:12104/docs`
+- ReDoc: `http://localhost:12104/redoc`
 
 ## 📚 API Endpoints
 
@@ -128,24 +134,79 @@ The service will be available at:
 
 ### License Endpoints
 
-- `GET /licenses` - List all available licenses
-- `GET /licenses/{id}` - Get basic license information
-- `GET /licenses/{id}/json` - Get detailed license information in JSON format
-- `GET /licenses/{id}/original` - Get original license text
+- `GET /licenses` - List all available licenses with complete details (from cache)
+- `GET /licenses/{id}` - **Human-readable HTML landing page** for a license (DEFAULT)
+  - Supports:
+    - License ID: `MIT`, `0BSD`, `Apache-2.0`
+    - UUID only: `d1b405f5-98e2-5acd-9f7b-531983fb5aad` (recommended - cleanest URLs)
+    - UUID with path: `d1b405f5-98e2-5acd-9f7b-531983fb5aad/details`
+    - Full URI: `https://lfs.labs.dansdemo.nl/api/v1/licenses/d1b405f5-98e2-5acd-9f7b-531983fb5aad`
+  - Returns: Beautiful HTML landing page with license metadata, approval status, and links
+  - Content-Type: `text/html`
+- `GET /licenses/{id}/json` - Get detailed license information in JSON format (includes full license text and templates)
+- `GET /licenses/{id}/original` - Get original license text (plain text)
 - `GET /licenses/{id}/machine` - Get machine-readable license format
-- `GET /licenses/{id}/legal` - Get legal text for the license
+- `GET /licenses/{id}/legal` - Get legal text for the license (plain text)
+
+### Endpoint Format Notes
+
+- **`/licenses/{id}`** - Returns **HTML landing page** (web browser friendly)
+  - Perfect for viewing in a web browser
+  - Shows all license metadata with nice formatting
+  - Includes approval status and links to other formats
+
+- **`/licenses/{id}/json`** - Returns **JSON** (programmatic access)
+  - Use when you need structured data
+  - Same metadata as HTML landing page
+  - Perfect for API integration
+
+### Cache Management Endpoints
+
+- `GET /licenses/cache/status` - Get cache status, version, and last update time
+- `POST /licenses/cache/update` - Check for updates and download if new version available
+- `POST /licenses/cache/refresh` - Force refresh cache regardless of version
 
 ### Example Usage
 
 ```bash
 # Health check
-curl http://localhost:1912/health
+curl http://localhost:12104/health
 
-# Get license information
-curl http://localhost:1912/licenses/mit
+# Check cache status
+curl http://localhost:12104/licenses/cache/status
 
-# Get detailed license JSON
-curl http://localhost:1912/licenses/mit/json
+# Get all licenses
+curl http://localhost:12104/licenses | jq '.licenses | length'
+
+# Get license information by License ID
+curl http://localhost:12104/licenses/AFL-1.1
+# Returns: Complete license metadata with URI
+
+# Get license information by UUID (NEW - RECOMMENDED!)
+# Extract UUID from any license's URI and search directly
+curl http://localhost:12104/licenses/d1b405f5-98e2-5acd-9f7b-531983fb5aad
+# Returns: Same license data as by ID search
+
+# Get license information by Full URI (also supported)
+URI="https://lfs.labs.dansdemo.nl/api/v1/licenses/550e8400-..."
+curl "http://localhost:12104/licenses/$(python3 -c "import urllib.parse; print(urllib.parse.quote('$URI', safe=''))")"
+
+# Get license information by URI
+URI="https://lfs.labs.dansdemo.nl/api/v1/licenses/550e8400-..."
+curl "http://localhost:12104/licenses/$(python3 -c "import urllib.parse; print(urllib.parse.quote('$URI', safe=''))")"
+# Returns: Same license data as above
+
+# Get detailed license JSON (includes full text and templates)
+curl http://localhost:12104/licenses/MIT/json
+
+# Get license text
+curl http://localhost:12104/licenses/Apache-2.0/original
+
+# Update cache if new version available
+curl -X POST http://localhost:12104/licenses/cache/update
+
+# Force refresh cache
+curl -X POST http://localhost:12104/licenses/cache/refresh
 ```
 
 ## 🛠️ Development
@@ -175,10 +236,17 @@ license-facade-service/
 
 ### Running Tests
 
+Test the API integration with SPDX license data:
+
 ```bash
-# Run tests (if available)
-pytest
+# Run the test script
+python test_licenses_api.py
 ```
+
+This will test:
+- Fetching the complete license list
+- Retrieving details for specific licenses (MIT, Apache-2.0, GPL-3.0, BSD-3-Clause)
+- Error handling for invalid license IDs
 
 ### Code Style
 
