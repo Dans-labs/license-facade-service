@@ -11,7 +11,7 @@ A centralized service that enables end users, data publishers, and developers to
 Try the live demo: [https://lfs.labs.dansdemo.nl/docs](https://lfs.labs.dansdemo.nl/docs)
 
 ## 📋 Table of Contents
-
+ 
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
@@ -349,7 +349,7 @@ You can override default settings using environment variables:
 
 ```bash
 # Using .env file
-echo "EXPOSE_PORT=8080" > .env
+echo "EXPOSE_PORT= 12104" > .env
 echo "APP_NAME=My License Service" >> .env
 docker compose up
 ```
