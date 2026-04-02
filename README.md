@@ -102,7 +102,7 @@ otlp_enable = false
 
 ### Environment Variables
 
-- `APP_NAME`: Application name (default: "OSTrails Clarin SKG-IF Service")
+- `APP_NAME`: Application name (default: "License Facade Service")
 - `EXPOSE_PORT`: Port to expose the service (default: 12104)
 - `BASE_DIR`: Base directory for the application
 - `BUILD_DATE`: Build date for version tracking
@@ -368,4 +368,4 @@ For questions or support, please open an issue in the repository.
 
 ---
 
-**Note**: This service is part of the OSTrails Clarin SKG-IF ecosystem.
+**Note**: This service is part of the License Facade Service ecosystem.
