@@ -1,0 +1,20 @@
+{
+  "@context": "https://spdx.github.io/spdx-spec/v3.0/model/jsonld/context.json",
+  "@graph": [
+    {
+      "@type": "Bundle",
+      "spdxId": "https://example.org/spdx3/minimal-doc-1#bundle-77fb492e-971d-4fd9-91d0-ea09a33ce94f",
+      "creationInfo": {
+        "specVersion": "3.0.0",
+        "created": "2026-06-17T04:54:33+00:00Z",
+        "createdBy": [
+          "https://example.org/spdx3/minimal-doc-1#creator-60ee13a5-e1e9-4e44-b956-87d23b8dc8a7"
+        ],
+        "profile": [
+          "core"
+        ]
+      },
+      "name": "Minimal SPDX 3.0 Document"
+    }
+  ]
+}

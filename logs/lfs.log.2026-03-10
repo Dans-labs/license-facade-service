@@ -1,0 +1,792 @@
+2026-03-10 10:12:42,048 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-10 10:14:40,705 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-10 10:16:33,145 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-10 10:16:36,068 DEBUG Using selector: KqueueSelector
+2026-03-10 10:16:36,131 INFO Application startup
+2026-03-10 10:16:39,305 INFO Checking for license data updates...
+2026-03-10 10:16:40,102 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-10 10:16:40,130 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081ebbf0>
+2026-03-10 10:16:40,130 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10847e450> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-10 10:16:40,145 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10784e480>
+2026-03-10 10:16:40,148 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-10 10:16:40,150 DEBUG send_request_headers.complete
+2026-03-10 10:16:40,150 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-10 10:16:40,151 DEBUG send_request_body.complete
+2026-03-10 10:16:40,151 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-10 10:16:40,287 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'63CA:270DE:929278:A84DF0:69AFDCF3'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Tue, 10 Mar 2026 09:16:40 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290034-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1773134200.156300,VS0,VE130'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'aaf686e05e6466e819ea52a0451f45afd49577db'), (b'Expires', b'Tue, 10 Mar 2026 09:21:40 GMT'), (b'Source-Age', b'0')])
+2026-03-10 10:16:40,295 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-10 10:16:40,296 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-10 10:16:40,328 DEBUG receive_response_body.complete
+2026-03-10 10:16:40,331 DEBUG response_closed.started
+2026-03-10 10:16:40,333 DEBUG response_closed.complete
+2026-03-10 10:16:40,339 DEBUG Cache is up to date: 1ff5448
+2026-03-10 10:16:40,342 DEBUG close.started
+2026-03-10 10:16:40,343 DEBUG close.complete
+2026-03-10 10:16:40,344 DEBUG Using cached license data
+2026-03-10 10:16:41,153 INFO License cache check complete
+2026-03-10 10:16:50,880 INFO Initializing Fuseki with license RDF data...
+2026-03-10 10:17:00,415 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-10 10:17:00,416 INFO Checking Fuseki connection...
+2026-03-10 10:17:00,431 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-10 10:17:00,439 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1085e27e0>
+2026-03-10 10:17:00,442 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-10 10:17:00,444 DEBUG send_request_headers.complete
+2026-03-10 10:17:00,444 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-10 10:17:00,445 DEBUG send_request_body.complete
+2026-03-10 10:17:00,445 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-10 10:17:00,450 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:00 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-10 10:17:00,452 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-10 10:17:00,452 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-10 10:17:00,454 DEBUG receive_response_body.complete
+2026-03-10 10:17:00,456 DEBUG response_closed.started
+2026-03-10 10:17:00,457 DEBUG response_closed.complete
+2026-03-10 10:17:00,462 DEBUG close.started
+2026-03-10 10:17:00,463 DEBUG close.complete
+2026-03-10 10:17:00,464 INFO ✓ Fuseki server is accessible
+2026-03-10 10:17:00,464 INFO Checking dataset 'licenses'...
+2026-03-10 10:17:00,480 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-10 10:17:00,488 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1085e2ea0>
+2026-03-10 10:17:00,490 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-10 10:17:00,492 DEBUG send_request_headers.complete
+2026-03-10 10:17:00,492 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-10 10:17:00,493 DEBUG send_request_body.complete
+2026-03-10 10:17:00,493 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-10 10:17:00,506 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:00 GMT'), (b'Vary', b'Accept,Accept-Encoding,Accept-Charset,Origin,Access-Control-Request-Method,Access-Control-Request-Headers'), (b'Set-Cookie', b'JSESSIONID=node069nf6pemw5knmivd9nzx19r81.node0; Path=/'), (b'Expires', b'Thu, 01 Jan 1970 00:00:00 GMT'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Mon, 09-Mar-2026 09:17:00 GMT; SameSite=lax'), (b'Fuseki-Request-Id', b'2'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'596')])
+2026-03-10 10:17:00,509 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 200 OK"
+2026-03-10 10:17:00,510 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-10 10:17:00,511 DEBUG receive_response_body.complete
+2026-03-10 10:17:00,514 DEBUG response_closed.started
+2026-03-10 10:17:00,514 DEBUG response_closed.complete
+2026-03-10 10:17:00,520 DEBUG close.started
+2026-03-10 10:17:00,521 DEBUG close.complete
+2026-03-10 10:17:00,521 WARNING Error checking dataset existence: 'licenses.name'
+2026-03-10 10:17:00,522 INFO Creating dataset 'licenses'...
+2026-03-10 10:17:00,538 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-10 10:17:00,546 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1085e2cc0>
+2026-03-10 10:17:00,549 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:00,550 DEBUG send_request_headers.complete
+2026-03-10 10:17:00,551 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:00,552 DEBUG send_request_body.complete
+2026-03-10 10:17:00,552 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:00,676 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:00 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'JSESSIONID=node01whlbyh94zj3kkbq53mr05bdm2.node0; Path=/'), (b'Expires', b'Thu, 01 Jan 1970 00:00:00 GMT'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Mon, 09-Mar-2026 09:17:00 GMT; SameSite=lax'), (b'Fuseki-Request-Id', b'3'), (b'Content-Type', b'text/plain'), (b'Content-Length', b'0')])
+2026-03-10 10:17:00,679 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 200 OK"
+2026-03-10 10:17:00,680 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:00,680 DEBUG receive_response_body.complete
+2026-03-10 10:17:00,683 DEBUG response_closed.started
+2026-03-10 10:17:00,684 DEBUG response_closed.complete
+2026-03-10 10:17:00,688 INFO Fuseki dataset 'licenses' created successfully
+2026-03-10 10:17:00,690 DEBUG close.started
+2026-03-10 10:17:00,692 DEBUG close.complete
+2026-03-10 10:17:00,692 INFO ✓ Dataset 'licenses' is ready
+2026-03-10 10:17:00,693 INFO Starting license upload to Fuseki...
+2026-03-10 10:17:00,696 INFO Found 727 licenses in cache
+2026-03-10 10:17:01,041 INFO Loaded 727 detailed licenses
+2026-03-10 10:17:01,049 INFO Processing batch 1/15 (licenses 1-50)
+2026-03-10 10:17:01,469 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:01,477 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1089ba360>
+2026-03-10 10:17:01,480 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:01,482 DEBUG send_request_headers.complete
+2026-03-10 10:17:01,482 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:01,483 DEBUG send_request_body.complete
+2026-03-10 10:17:01,484 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:01,576 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:01 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'4'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:01,578 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:01,578 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:01,580 DEBUG receive_response_body.complete
+2026-03-10 10:17:01,582 DEBUG response_closed.started
+2026-03-10 10:17:01,583 DEBUG response_closed.complete
+2026-03-10 10:17:01,586 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:01,589 DEBUG close.started
+2026-03-10 10:17:01,590 DEBUG close.complete
+2026-03-10 10:17:01,591 INFO Batch 1 uploaded successfully (50 licenses)
+2026-03-10 10:17:01,591 INFO Processing batch 2/15 (licenses 51-100)
+2026-03-10 10:17:02,001 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:02,009 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a176e0>
+2026-03-10 10:17:02,012 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:02,014 DEBUG send_request_headers.complete
+2026-03-10 10:17:02,014 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:02,015 DEBUG send_request_body.complete
+2026-03-10 10:17:02,016 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:02,068 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:02 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'5'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:02,070 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:02,070 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:02,071 DEBUG receive_response_body.complete
+2026-03-10 10:17:02,074 DEBUG response_closed.started
+2026-03-10 10:17:02,075 DEBUG response_closed.complete
+2026-03-10 10:17:02,078 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:02,081 DEBUG close.started
+2026-03-10 10:17:02,082 DEBUG close.complete
+2026-03-10 10:17:02,082 INFO Batch 2 uploaded successfully (50 licenses)
+2026-03-10 10:17:02,083 INFO Processing batch 3/15 (licenses 101-150)
+2026-03-10 10:17:02,478 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:02,486 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108ab4ad0>
+2026-03-10 10:17:02,489 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:02,491 DEBUG send_request_headers.complete
+2026-03-10 10:17:02,491 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:02,492 DEBUG send_request_body.complete
+2026-03-10 10:17:02,493 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:02,536 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:02 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'6'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:02,538 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:02,539 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:02,540 DEBUG receive_response_body.complete
+2026-03-10 10:17:02,543 DEBUG response_closed.started
+2026-03-10 10:17:02,543 DEBUG response_closed.complete
+2026-03-10 10:17:02,547 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:02,549 DEBUG close.started
+2026-03-10 10:17:02,550 DEBUG close.complete
+2026-03-10 10:17:02,551 INFO Batch 3 uploaded successfully (50 licenses)
+2026-03-10 10:17:02,551 INFO Processing batch 4/15 (licenses 151-200)
+2026-03-10 10:17:02,954 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:02,962 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108afdcd0>
+2026-03-10 10:17:02,965 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:02,967 DEBUG send_request_headers.complete
+2026-03-10 10:17:02,967 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:02,969 DEBUG send_request_body.complete
+2026-03-10 10:17:02,969 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:03,009 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:02 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'7'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:03,011 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:03,012 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:03,013 DEBUG receive_response_body.complete
+2026-03-10 10:17:03,016 DEBUG response_closed.started
+2026-03-10 10:17:03,017 DEBUG response_closed.complete
+2026-03-10 10:17:03,020 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:03,022 DEBUG close.started
+2026-03-10 10:17:03,023 DEBUG close.complete
+2026-03-10 10:17:03,024 INFO Batch 4 uploaded successfully (50 licenses)
+2026-03-10 10:17:03,024 INFO Processing batch 5/15 (licenses 201-250)
+2026-03-10 10:17:03,439 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:03,447 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a676b0>
+2026-03-10 10:17:03,450 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:03,452 DEBUG send_request_headers.complete
+2026-03-10 10:17:03,452 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:03,454 DEBUG send_request_body.complete
+2026-03-10 10:17:03,454 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:03,495 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:03 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'8'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:03,497 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:03,498 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:03,499 DEBUG receive_response_body.complete
+2026-03-10 10:17:03,502 DEBUG response_closed.started
+2026-03-10 10:17:03,502 DEBUG response_closed.complete
+2026-03-10 10:17:03,505 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:03,508 DEBUG close.started
+2026-03-10 10:17:03,509 DEBUG close.complete
+2026-03-10 10:17:03,510 INFO Batch 5 uploaded successfully (50 licenses)
+2026-03-10 10:17:03,510 INFO Processing batch 6/15 (licenses 251-300)
+2026-03-10 10:17:03,919 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:03,927 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a16360>
+2026-03-10 10:17:03,930 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:03,932 DEBUG send_request_headers.complete
+2026-03-10 10:17:03,932 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:03,933 DEBUG send_request_body.complete
+2026-03-10 10:17:03,934 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:03,975 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:03 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'9'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:03,977 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:03,977 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:03,978 DEBUG receive_response_body.complete
+2026-03-10 10:17:03,981 DEBUG response_closed.started
+2026-03-10 10:17:03,982 DEBUG response_closed.complete
+2026-03-10 10:17:03,985 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:03,988 DEBUG close.started
+2026-03-10 10:17:03,989 DEBUG close.complete
+2026-03-10 10:17:03,989 INFO Batch 6 uploaded successfully (50 licenses)
+2026-03-10 10:17:03,990 INFO Processing batch 7/15 (licenses 301-350)
+2026-03-10 10:17:04,405 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:04,413 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108afdb20>
+2026-03-10 10:17:04,416 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:04,417 DEBUG send_request_headers.complete
+2026-03-10 10:17:04,418 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:04,419 DEBUG send_request_body.complete
+2026-03-10 10:17:04,419 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:04,458 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:04 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'10'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:04,460 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:04,461 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:04,462 DEBUG receive_response_body.complete
+2026-03-10 10:17:04,465 DEBUG response_closed.started
+2026-03-10 10:17:04,466 DEBUG response_closed.complete
+2026-03-10 10:17:04,469 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:04,471 DEBUG close.started
+2026-03-10 10:17:04,472 DEBUG close.complete
+2026-03-10 10:17:04,473 INFO Batch 7 uploaded successfully (50 licenses)
+2026-03-10 10:17:04,473 INFO Processing batch 8/15 (licenses 351-400)
+2026-03-10 10:17:04,878 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:04,886 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b4b4a0>
+2026-03-10 10:17:04,889 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:04,890 DEBUG send_request_headers.complete
+2026-03-10 10:17:04,891 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:04,892 DEBUG send_request_body.complete
+2026-03-10 10:17:04,892 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:04,931 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:04 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'11'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:04,933 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:04,933 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:04,934 DEBUG receive_response_body.complete
+2026-03-10 10:17:04,937 DEBUG response_closed.started
+2026-03-10 10:17:04,938 DEBUG response_closed.complete
+2026-03-10 10:17:04,941 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:04,944 DEBUG close.started
+2026-03-10 10:17:04,945 DEBUG close.complete
+2026-03-10 10:17:04,945 INFO Batch 8 uploaded successfully (50 licenses)
+2026-03-10 10:17:04,946 INFO Processing batch 9/15 (licenses 401-450)
+2026-03-10 10:17:05,391 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:05,399 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108afe7e0>
+2026-03-10 10:17:05,402 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:05,404 DEBUG send_request_headers.complete
+2026-03-10 10:17:05,404 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:05,405 DEBUG send_request_body.complete
+2026-03-10 10:17:05,406 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:05,442 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:05 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'12'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:05,444 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:05,444 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:05,445 DEBUG receive_response_body.complete
+2026-03-10 10:17:05,448 DEBUG response_closed.started
+2026-03-10 10:17:05,449 DEBUG response_closed.complete
+2026-03-10 10:17:05,453 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:05,455 DEBUG close.started
+2026-03-10 10:17:05,456 DEBUG close.complete
+2026-03-10 10:17:05,457 INFO Batch 9 uploaded successfully (50 licenses)
+2026-03-10 10:17:05,457 INFO Processing batch 10/15 (licenses 451-500)
+2026-03-10 10:17:05,875 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:05,883 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a17410>
+2026-03-10 10:17:05,886 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:05,887 DEBUG send_request_headers.complete
+2026-03-10 10:17:05,888 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:05,889 DEBUG send_request_body.complete
+2026-03-10 10:17:05,889 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:05,923 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:05 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'13'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:05,925 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:05,926 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:05,927 DEBUG receive_response_body.complete
+2026-03-10 10:17:05,930 DEBUG response_closed.started
+2026-03-10 10:17:05,930 DEBUG response_closed.complete
+2026-03-10 10:17:05,934 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:05,936 DEBUG close.started
+2026-03-10 10:17:05,937 DEBUG close.complete
+2026-03-10 10:17:05,938 INFO Batch 10 uploaded successfully (50 licenses)
+2026-03-10 10:17:05,938 INFO Processing batch 11/15 (licenses 501-550)
+2026-03-10 10:17:06,335 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:06,343 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108ab6570>
+2026-03-10 10:17:06,346 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:06,348 DEBUG send_request_headers.complete
+2026-03-10 10:17:06,348 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:06,350 DEBUG send_request_body.complete
+2026-03-10 10:17:06,350 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:06,380 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:06 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'14'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:06,382 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:06,383 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:06,384 DEBUG receive_response_body.complete
+2026-03-10 10:17:06,387 DEBUG response_closed.started
+2026-03-10 10:17:06,388 DEBUG response_closed.complete
+2026-03-10 10:17:06,391 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:06,393 DEBUG close.started
+2026-03-10 10:17:06,394 DEBUG close.complete
+2026-03-10 10:17:06,395 INFO Batch 11 uploaded successfully (50 licenses)
+2026-03-10 10:17:06,395 INFO Processing batch 12/15 (licenses 551-600)
+2026-03-10 10:17:06,813 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:06,821 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a15d00>
+2026-03-10 10:17:06,824 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:06,826 DEBUG send_request_headers.complete
+2026-03-10 10:17:06,827 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:06,828 DEBUG send_request_body.complete
+2026-03-10 10:17:06,828 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:06,872 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:06 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'15'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:06,874 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:06,875 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:06,876 DEBUG receive_response_body.complete
+2026-03-10 10:17:06,879 DEBUG response_closed.started
+2026-03-10 10:17:06,880 DEBUG response_closed.complete
+2026-03-10 10:17:06,883 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:06,885 DEBUG close.started
+2026-03-10 10:17:06,886 DEBUG close.complete
+2026-03-10 10:17:06,887 INFO Batch 12 uploaded successfully (50 licenses)
+2026-03-10 10:17:06,887 INFO Processing batch 13/15 (licenses 601-650)
+2026-03-10 10:17:07,293 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:07,301 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1089ba390>
+2026-03-10 10:17:07,304 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:07,306 DEBUG send_request_headers.complete
+2026-03-10 10:17:07,306 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:07,307 DEBUG send_request_body.complete
+2026-03-10 10:17:07,308 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:07,340 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:07 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'16'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:07,342 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:07,343 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:07,344 DEBUG receive_response_body.complete
+2026-03-10 10:17:07,347 DEBUG response_closed.started
+2026-03-10 10:17:07,348 DEBUG response_closed.complete
+2026-03-10 10:17:07,351 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:07,354 DEBUG close.started
+2026-03-10 10:17:07,355 DEBUG close.complete
+2026-03-10 10:17:07,355 INFO Batch 13 uploaded successfully (50 licenses)
+2026-03-10 10:17:07,356 INFO Processing batch 14/15 (licenses 651-700)
+2026-03-10 10:17:07,768 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:07,776 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a66e10>
+2026-03-10 10:17:07,779 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:07,781 DEBUG send_request_headers.complete
+2026-03-10 10:17:07,781 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:07,782 DEBUG send_request_body.complete
+2026-03-10 10:17:07,783 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:07,814 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:07 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'17'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:07,816 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:07,817 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:07,818 DEBUG receive_response_body.complete
+2026-03-10 10:17:07,821 DEBUG response_closed.started
+2026-03-10 10:17:07,822 DEBUG response_closed.complete
+2026-03-10 10:17:07,825 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:07,827 DEBUG close.started
+2026-03-10 10:17:07,829 DEBUG close.complete
+2026-03-10 10:17:07,829 INFO Batch 14 uploaded successfully (50 licenses)
+2026-03-10 10:17:07,829 INFO Processing batch 15/15 (licenses 701-727)
+2026-03-10 10:17:08,059 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:08,067 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b4ad80>
+2026-03-10 10:17:08,070 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:08,072 DEBUG send_request_headers.complete
+2026-03-10 10:17:08,072 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:08,073 DEBUG send_request_body.complete
+2026-03-10 10:17:08,074 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:08,104 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:08 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'18'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:17:08,106 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:17:08,107 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:08,108 DEBUG receive_response_body.complete
+2026-03-10 10:17:08,111 DEBUG response_closed.started
+2026-03-10 10:17:08,112 DEBUG response_closed.complete
+2026-03-10 10:17:08,115 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:17:08,117 DEBUG close.started
+2026-03-10 10:17:08,118 DEBUG close.complete
+2026-03-10 10:17:08,119 INFO Batch 15 uploaded successfully (27 licenses)
+2026-03-10 10:17:08,134 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:08,142 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b48ad0>
+2026-03-10 10:17:08,145 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:08,146 DEBUG send_request_headers.complete
+2026-03-10 10:17:08,147 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:08,148 DEBUG send_request_body.complete
+2026-03-10 10:17:08,148 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:08,175 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:08 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'19'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'application/sparql-results+json; charset=utf-8'), (b'Transfer-Encoding', b'chunked')])
+2026-03-10 10:17:08,177 INFO HTTP Request: POST http://localhost:3030/licenses/query "HTTP/1.1 200 OK"
+2026-03-10 10:17:08,178 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:08,181 DEBUG receive_response_body.complete
+2026-03-10 10:17:08,184 DEBUG response_closed.started
+2026-03-10 10:17:08,185 DEBUG response_closed.complete
+2026-03-10 10:17:08,190 DEBUG close.started
+2026-03-10 10:17:08,191 DEBUG close.complete
+2026-03-10 10:17:08,192 INFO Total licenses in Fuseki: 727
+2026-03-10 10:17:08,208 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:17:08,216 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b4af00>
+2026-03-10 10:17:08,219 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:08,220 DEBUG send_request_headers.complete
+2026-03-10 10:17:08,221 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:17:08,222 DEBUG send_request_body.complete
+2026-03-10 10:17:08,222 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:17:08,234 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:17:08 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'20'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'application/sparql-results+json; charset=utf-8'), (b'Transfer-Encoding', b'chunked')])
+2026-03-10 10:17:08,236 INFO HTTP Request: POST http://localhost:3030/licenses/query "HTTP/1.1 200 OK"
+2026-03-10 10:17:08,236 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:17:08,239 DEBUG receive_response_body.complete
+2026-03-10 10:17:08,242 DEBUG response_closed.started
+2026-03-10 10:17:08,243 DEBUG response_closed.complete
+2026-03-10 10:17:08,248 DEBUG close.started
+2026-03-10 10:17:08,249 DEBUG close.complete
+2026-03-10 10:17:08,250 INFO Total triples in Fuseki: 5481
+2026-03-10 10:17:08,251 INFO ================================================================================
+2026-03-10 10:17:08,251 INFO Fuseki Initialization Summary:
+2026-03-10 10:17:08,251 INFO   Fuseki URL: http://localhost:3030
+2026-03-10 10:17:08,252 INFO   Dataset: licenses
+2026-03-10 10:17:08,252 INFO   Total licenses: 727
+2026-03-10 10:17:08,252 INFO   Uploaded: 727
+2026-03-10 10:17:08,253 INFO   Failed: 0
+2026-03-10 10:17:08,253 INFO   Batches: 15
+2026-03-10 10:17:08,253 INFO   Licenses in Fuseki: 727
+2026-03-10 10:17:08,254 INFO   Total triples: 5481
+2026-03-10 10:17:08,254 INFO ================================================================================
+2026-03-10 10:17:23,702 INFO ✓ Fuseki initialization completed successfully
+2026-03-10 10:18:39,533 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-10 10:18:39,951 DEBUG Using selector: KqueueSelector
+2026-03-10 10:18:39,960 INFO Application startup
+2026-03-10 10:18:39,960 INFO Checking for license data updates...
+2026-03-10 10:18:39,981 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-10 10:18:39,992 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107dad760>
+2026-03-10 10:18:39,992 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x107d4f650> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-10 10:18:39,999 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107569370>
+2026-03-10 10:18:40,000 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-10 10:18:40,000 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,000 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-10 10:18:40,000 DEBUG send_request_body.complete
+2026-03-10 10:18:40,000 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-10 10:18:40,121 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'E357:C8046:8E0798:A3AC73:69AFDC28'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams21024-AMS'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1773134320.006971,VS0,VE116'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'cda2ecba1cfd7aa1dbb8529815d459ba27a1b374'), (b'Expires', b'Tue, 10 Mar 2026 09:23:40 GMT'), (b'Source-Age', b'0')])
+2026-03-10 10:18:40,122 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,122 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-10 10:18:40,124 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,124 DEBUG response_closed.started
+2026-03-10 10:18:40,124 DEBUG response_closed.complete
+2026-03-10 10:18:40,127 DEBUG Cache is up to date: 1ff5448
+2026-03-10 10:18:40,127 DEBUG close.started
+2026-03-10 10:18:40,127 DEBUG close.complete
+2026-03-10 10:18:40,127 DEBUG Using cached license data
+2026-03-10 10:18:40,127 INFO License cache check complete
+2026-03-10 10:18:40,128 INFO Initializing Fuseki with license RDF data...
+2026-03-10 10:18:40,128 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-10 10:18:40,128 INFO Checking Fuseki connection...
+2026-03-10 10:18:40,134 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-10 10:18:40,135 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107e19e20>
+2026-03-10 10:18:40,135 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-10 10:18:40,135 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,135 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-10 10:18:40,135 DEBUG send_request_body.complete
+2026-03-10 10:18:40,135 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-10 10:18:40,141 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-10 10:18:40,141 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,141 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-10 10:18:40,141 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,141 DEBUG response_closed.started
+2026-03-10 10:18:40,141 DEBUG response_closed.complete
+2026-03-10 10:18:40,142 DEBUG close.started
+2026-03-10 10:18:40,142 DEBUG close.complete
+2026-03-10 10:18:40,142 INFO ✓ Fuseki server is accessible
+2026-03-10 10:18:40,142 INFO Checking dataset 'licenses'...
+2026-03-10 10:18:40,147 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-10 10:18:40,148 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107e1acf0>
+2026-03-10 10:18:40,148 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-10 10:18:40,148 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,148 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-10 10:18:40,148 DEBUG send_request_body.complete
+2026-03-10 10:18:40,148 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-10 10:18:40,152 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Accept,Accept-Encoding,Accept-Charset,Origin,Access-Control-Request-Method,Access-Control-Request-Headers'), (b'Set-Cookie', b'JSESSIONID=node01e9j9nkvhjabz1hfv0o60yi5js3.node0; Path=/'), (b'Expires', b'Thu, 01 Jan 1970 00:00:00 GMT'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Mon, 09-Mar-2026 09:18:40 GMT; SameSite=lax'), (b'Fuseki-Request-Id', b'28'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'1651')])
+2026-03-10 10:18:40,153 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,153 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-10 10:18:40,153 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,153 DEBUG response_closed.started
+2026-03-10 10:18:40,153 DEBUG response_closed.complete
+2026-03-10 10:18:40,153 DEBUG close.started
+2026-03-10 10:18:40,153 DEBUG close.complete
+2026-03-10 10:18:40,153 WARNING Error checking dataset existence: 'licenses.name'
+2026-03-10 10:18:40,153 INFO Creating dataset 'licenses'...
+2026-03-10 10:18:40,158 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-10 10:18:40,159 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107e1bd70>
+2026-03-10 10:18:40,159 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,159 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,159 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,160 DEBUG send_request_body.complete
+2026-03-10 10:18:40,160 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,169 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'JSESSIONID=node0rdcpb1ywv2yokkzt88s1h8cs4.node0; Path=/'), (b'Expires', b'Thu, 01 Jan 1970 00:00:00 GMT'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Mon, 09-Mar-2026 09:18:40 GMT; SameSite=lax'), (b'Fuseki-Request-Id', b'29'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'36')])
+2026-03-10 10:18:40,169 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 409 Conflict"
+2026-03-10 10:18:40,169 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,169 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,169 DEBUG response_closed.started
+2026-03-10 10:18:40,170 DEBUG response_closed.complete
+2026-03-10 10:18:40,170 INFO Fuseki dataset 'licenses' already exists
+2026-03-10 10:18:40,170 DEBUG close.started
+2026-03-10 10:18:40,170 DEBUG close.complete
+2026-03-10 10:18:40,170 INFO ✓ Dataset 'licenses' is ready
+2026-03-10 10:18:40,170 INFO Starting license upload to Fuseki...
+2026-03-10 10:18:40,173 INFO Found 727 licenses in cache
+2026-03-10 10:18:40,246 INFO Loaded 727 detailed licenses
+2026-03-10 10:18:40,247 INFO Processing batch 1/15 (licenses 1-50)
+2026-03-10 10:18:40,262 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,263 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108155880>
+2026-03-10 10:18:40,263 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,264 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,264 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,264 DEBUG send_request_body.complete
+2026-03-10 10:18:40,264 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,282 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'30'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,282 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,282 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,282 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,282 DEBUG response_closed.started
+2026-03-10 10:18:40,282 DEBUG response_closed.complete
+2026-03-10 10:18:40,283 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,283 DEBUG close.started
+2026-03-10 10:18:40,283 DEBUG close.complete
+2026-03-10 10:18:40,283 INFO Batch 1 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,283 INFO Processing batch 2/15 (licenses 51-100)
+2026-03-10 10:18:40,298 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,299 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081a6ae0>
+2026-03-10 10:18:40,299 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,299 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,299 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,299 DEBUG send_request_body.complete
+2026-03-10 10:18:40,299 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,314 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'31'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,315 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,315 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,315 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,315 DEBUG response_closed.started
+2026-03-10 10:18:40,315 DEBUG response_closed.complete
+2026-03-10 10:18:40,315 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,315 DEBUG close.started
+2026-03-10 10:18:40,316 DEBUG close.complete
+2026-03-10 10:18:40,316 INFO Batch 2 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,316 INFO Processing batch 3/15 (licenses 101-150)
+2026-03-10 10:18:40,331 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,332 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081a5310>
+2026-03-10 10:18:40,332 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,332 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,332 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,332 DEBUG send_request_body.complete
+2026-03-10 10:18:40,332 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,348 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'32'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,348 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,348 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,349 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,349 DEBUG response_closed.started
+2026-03-10 10:18:40,349 DEBUG response_closed.complete
+2026-03-10 10:18:40,349 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,349 DEBUG close.started
+2026-03-10 10:18:40,349 DEBUG close.complete
+2026-03-10 10:18:40,349 INFO Batch 3 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,349 INFO Processing batch 4/15 (licenses 151-200)
+2026-03-10 10:18:40,364 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,365 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108115850>
+2026-03-10 10:18:40,365 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,365 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,365 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,365 DEBUG send_request_body.complete
+2026-03-10 10:18:40,365 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,379 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'33'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,379 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,379 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,379 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,379 DEBUG response_closed.started
+2026-03-10 10:18:40,379 DEBUG response_closed.complete
+2026-03-10 10:18:40,380 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,380 DEBUG close.started
+2026-03-10 10:18:40,380 DEBUG close.complete
+2026-03-10 10:18:40,380 INFO Batch 4 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,380 INFO Processing batch 5/15 (licenses 201-250)
+2026-03-10 10:18:40,395 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,396 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081f3d40>
+2026-03-10 10:18:40,396 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,396 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,396 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,396 DEBUG send_request_body.complete
+2026-03-10 10:18:40,396 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,410 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'34'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,410 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,410 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,411 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,411 DEBUG response_closed.started
+2026-03-10 10:18:40,411 DEBUG response_closed.complete
+2026-03-10 10:18:40,411 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,411 DEBUG close.started
+2026-03-10 10:18:40,411 DEBUG close.complete
+2026-03-10 10:18:40,411 INFO Batch 5 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,411 INFO Processing batch 6/15 (licenses 251-300)
+2026-03-10 10:18:40,426 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,427 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10828d2b0>
+2026-03-10 10:18:40,427 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,427 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,427 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,427 DEBUG send_request_body.complete
+2026-03-10 10:18:40,427 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,442 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'35'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,442 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,442 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,442 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,442 DEBUG response_closed.started
+2026-03-10 10:18:40,443 DEBUG response_closed.complete
+2026-03-10 10:18:40,443 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,443 DEBUG close.started
+2026-03-10 10:18:40,443 DEBUG close.complete
+2026-03-10 10:18:40,444 INFO Batch 6 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,444 INFO Processing batch 7/15 (licenses 301-350)
+2026-03-10 10:18:40,460 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,462 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108234e30>
+2026-03-10 10:18:40,462 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,462 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,462 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,462 DEBUG send_request_body.complete
+2026-03-10 10:18:40,462 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,476 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'36'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,477 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,477 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,477 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,477 DEBUG response_closed.started
+2026-03-10 10:18:40,477 DEBUG response_closed.complete
+2026-03-10 10:18:40,477 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,477 DEBUG close.started
+2026-03-10 10:18:40,477 DEBUG close.complete
+2026-03-10 10:18:40,477 INFO Batch 7 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,477 INFO Processing batch 8/15 (licenses 351-400)
+2026-03-10 10:18:40,492 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,493 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081146b0>
+2026-03-10 10:18:40,493 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,493 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,493 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,493 DEBUG send_request_body.complete
+2026-03-10 10:18:40,493 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,506 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'37'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,506 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,506 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,506 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,506 DEBUG response_closed.started
+2026-03-10 10:18:40,506 DEBUG response_closed.complete
+2026-03-10 10:18:40,507 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,507 DEBUG close.started
+2026-03-10 10:18:40,507 DEBUG close.complete
+2026-03-10 10:18:40,507 INFO Batch 8 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,507 INFO Processing batch 9/15 (licenses 401-450)
+2026-03-10 10:18:40,522 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,523 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081a5e20>
+2026-03-10 10:18:40,523 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,523 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,523 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,523 DEBUG send_request_body.complete
+2026-03-10 10:18:40,523 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,537 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'38'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,537 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,537 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,537 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,537 DEBUG response_closed.started
+2026-03-10 10:18:40,538 DEBUG response_closed.complete
+2026-03-10 10:18:40,538 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,538 DEBUG close.started
+2026-03-10 10:18:40,538 DEBUG close.complete
+2026-03-10 10:18:40,538 INFO Batch 9 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,538 INFO Processing batch 10/15 (licenses 451-500)
+2026-03-10 10:18:40,553 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,554 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1082dac60>
+2026-03-10 10:18:40,554 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,554 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,554 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,554 DEBUG send_request_body.complete
+2026-03-10 10:18:40,554 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,566 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'39'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,566 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,566 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,566 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,566 DEBUG response_closed.started
+2026-03-10 10:18:40,566 DEBUG response_closed.complete
+2026-03-10 10:18:40,566 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,566 DEBUG close.started
+2026-03-10 10:18:40,566 DEBUG close.complete
+2026-03-10 10:18:40,566 INFO Batch 10 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,566 INFO Processing batch 11/15 (licenses 501-550)
+2026-03-10 10:18:40,582 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,583 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081a41d0>
+2026-03-10 10:18:40,583 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,584 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,584 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,584 DEBUG send_request_body.complete
+2026-03-10 10:18:40,584 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,596 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'40'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,596 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,596 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,596 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,596 DEBUG response_closed.started
+2026-03-10 10:18:40,597 DEBUG response_closed.complete
+2026-03-10 10:18:40,597 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,597 DEBUG close.started
+2026-03-10 10:18:40,597 DEBUG close.complete
+2026-03-10 10:18:40,597 INFO Batch 11 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,597 INFO Processing batch 12/15 (licenses 551-600)
+2026-03-10 10:18:40,612 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,613 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108114890>
+2026-03-10 10:18:40,613 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,613 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,613 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,613 DEBUG send_request_body.complete
+2026-03-10 10:18:40,613 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,626 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'41'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,626 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,626 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,626 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,626 DEBUG response_closed.started
+2026-03-10 10:18:40,626 DEBUG response_closed.complete
+2026-03-10 10:18:40,627 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,627 DEBUG close.started
+2026-03-10 10:18:40,627 DEBUG close.complete
+2026-03-10 10:18:40,627 INFO Batch 12 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,627 INFO Processing batch 13/15 (licenses 601-650)
+2026-03-10 10:18:40,641 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,642 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108236300>
+2026-03-10 10:18:40,642 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,643 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,643 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,643 DEBUG send_request_body.complete
+2026-03-10 10:18:40,643 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,659 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'42'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,660 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,660 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,660 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,660 DEBUG response_closed.started
+2026-03-10 10:18:40,660 DEBUG response_closed.complete
+2026-03-10 10:18:40,660 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,660 DEBUG close.started
+2026-03-10 10:18:40,660 DEBUG close.complete
+2026-03-10 10:18:40,660 INFO Batch 13 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,661 INFO Processing batch 14/15 (licenses 651-700)
+2026-03-10 10:18:40,675 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,676 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108323ce0>
+2026-03-10 10:18:40,677 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,677 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,677 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,677 DEBUG send_request_body.complete
+2026-03-10 10:18:40,677 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,690 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'43'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,690 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,690 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,690 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,690 DEBUG response_closed.started
+2026-03-10 10:18:40,691 DEBUG response_closed.complete
+2026-03-10 10:18:40,691 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,691 DEBUG close.started
+2026-03-10 10:18:40,691 DEBUG close.complete
+2026-03-10 10:18:40,691 INFO Batch 14 uploaded successfully (50 licenses)
+2026-03-10 10:18:40,691 INFO Processing batch 15/15 (licenses 701-727)
+2026-03-10 10:18:40,703 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,704 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108321f40>
+2026-03-10 10:18:40,704 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,704 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,704 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,704 DEBUG send_request_body.complete
+2026-03-10 10:18:40,704 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,716 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'44'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-10 10:18:40,716 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,716 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,716 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,716 DEBUG response_closed.started
+2026-03-10 10:18:40,716 DEBUG response_closed.complete
+2026-03-10 10:18:40,716 DEBUG RDF data uploaded successfully to licenses
+2026-03-10 10:18:40,716 DEBUG close.started
+2026-03-10 10:18:40,717 DEBUG close.complete
+2026-03-10 10:18:40,717 INFO Batch 15 uploaded successfully (27 licenses)
+2026-03-10 10:18:40,722 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,723 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1083204d0>
+2026-03-10 10:18:40,724 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,724 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,724 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,724 DEBUG send_request_body.complete
+2026-03-10 10:18:40,724 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,728 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'45'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'application/sparql-results+json; charset=utf-8'), (b'Transfer-Encoding', b'chunked')])
+2026-03-10 10:18:40,729 INFO HTTP Request: POST http://localhost:3030/licenses/query "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,729 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,729 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,729 DEBUG response_closed.started
+2026-03-10 10:18:40,729 DEBUG response_closed.complete
+2026-03-10 10:18:40,729 DEBUG close.started
+2026-03-10 10:18:40,729 DEBUG close.complete
+2026-03-10 10:18:40,730 INFO Total licenses in Fuseki: 727
+2026-03-10 10:18:40,735 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-10 10:18:40,736 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108320470>
+2026-03-10 10:18:40,736 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,736 DEBUG send_request_headers.complete
+2026-03-10 10:18:40,736 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,736 DEBUG send_request_body.complete
+2026-03-10 10:18:40,736 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-10 10:18:40,743 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Tue, 10 Mar 2026 09:18:40 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'46'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'application/sparql-results+json; charset=utf-8'), (b'Transfer-Encoding', b'chunked')])
+2026-03-10 10:18:40,743 INFO HTTP Request: POST http://localhost:3030/licenses/query "HTTP/1.1 200 OK"
+2026-03-10 10:18:40,743 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-10 10:18:40,743 DEBUG receive_response_body.complete
+2026-03-10 10:18:40,743 DEBUG response_closed.started
+2026-03-10 10:18:40,744 DEBUG response_closed.complete
+2026-03-10 10:18:40,744 DEBUG close.started
+2026-03-10 10:18:40,744 DEBUG close.complete
+2026-03-10 10:18:40,744 INFO Total triples in Fuseki: 5481
+2026-03-10 10:18:40,745 INFO ================================================================================
+2026-03-10 10:18:40,745 INFO Fuseki Initialization Summary:
+2026-03-10 10:18:40,745 INFO   Fuseki URL: http://localhost:3030
+2026-03-10 10:18:40,745 INFO   Dataset: licenses
+2026-03-10 10:18:40,745 INFO   Total licenses: 727
+2026-03-10 10:18:40,745 INFO   Uploaded: 727
+2026-03-10 10:18:40,745 INFO   Failed: 0
+2026-03-10 10:18:40,745 INFO   Batches: 15
+2026-03-10 10:18:40,745 INFO   Licenses in Fuseki: 727
+2026-03-10 10:18:40,745 INFO   Total triples: 5481
+2026-03-10 10:18:40,745 INFO ================================================================================
+2026-03-10 10:18:40,745 INFO ✓ Fuseki initialization completed successfully

@@ -1,0 +1,121 @@
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix lfs: <https://lfs.labs.dansdemo.nl/api/v1/licenses/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema1: <http://schema.org/> .
+@prefix spdx: <http://spdx.org/rdf/terms#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+lfs:11a00c14-107a-52c0-9c99-800ca18a5d4c a spdx:License ;
+    rdfs:label "Attribution Assurance License" ;
+    dcterms:references <https://spdx.org/licenses/AAL.html> ;
+    schema1:position 94 ;
+    spdx:detailsUrl <https://spdx.org/licenses/AAL.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved true ;
+    spdx:licenseId "AAL" ;
+    spdx:name "Attribution Assurance License" ;
+    rdfs:seeAlso <https://opensource.org/licenses/attribution> .
+
+lfs:2813de08-136d-5aea-89f3-ac3feda611cc a spdx:License ;
+    rdfs:label "Abstyles License" ;
+    dcterms:references <https://spdx.org/licenses/Abstyles.html> ;
+    schema1:position 16 ;
+    spdx:detailsUrl <https://spdx.org/licenses/Abstyles.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "Abstyles" ;
+    spdx:name "Abstyles License" ;
+    rdfs:seeAlso <https://fedoraproject.org/wiki/Licensing/Abstyles> .
+
+lfs:2821ff07-95f1-5bc6-88ca-735db63dca11 a spdx:License ;
+    rdfs:label "Adobe Glyph List License" ;
+    dcterms:references <https://spdx.org/licenses/Adobe-Glyph.html> ;
+    schema1:position 345 ;
+    spdx:detailsUrl <https://spdx.org/licenses/Adobe-Glyph.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "Adobe-Glyph" ;
+    spdx:name "Adobe Glyph List License" ;
+    rdfs:seeAlso <https://fedoraproject.org/wiki/Licensing/MIT#AdobeGlyph> .
+
+lfs:38889457-73eb-5a0d-868a-0d48dc6c4b9d a spdx:License ;
+    rdfs:label "Adobe Systems Incorporated Source Code License Agreement" ;
+    dcterms:references <https://spdx.org/licenses/Adobe-2006.html> ;
+    schema1:position 373 ;
+    spdx:detailsUrl <https://spdx.org/licenses/Adobe-2006.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "Adobe-2006" ;
+    spdx:name "Adobe Systems Incorporated Source Code License Agreement" ;
+    rdfs:seeAlso <https://fedoraproject.org/wiki/Licensing/AdobeLicense> .
+
+lfs:67a3403c-d337-5349-97a7-85eaf385b8d7 a spdx:License ;
+    rdfs:label "Amazon Digital Services License" ;
+    dcterms:references <https://spdx.org/licenses/ADSL.html> ;
+    schema1:position 242 ;
+    spdx:detailsUrl <https://spdx.org/licenses/ADSL.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "ADSL" ;
+    spdx:name "Amazon Digital Services License" ;
+    rdfs:seeAlso <https://fedoraproject.org/wiki/Licensing/AmazonDigitalServicesLicense> .
+
+lfs:6ccd6a2f-7405-52ef-b581-8465a39b6b95 a spdx:License ;
+    rdfs:label "Adobe Display PostScript License" ;
+    dcterms:references <https://spdx.org/licenses/Adobe-Display-PostScript.html> ;
+    schema1:position 136 ;
+    spdx:detailsUrl <https://spdx.org/licenses/Adobe-Display-PostScript.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "Adobe-Display-PostScript" ;
+    spdx:name "Adobe Display PostScript License" ;
+    rdfs:seeAlso <https://gitlab.freedesktop.org/xorg/xserver/-/blob/master/COPYING?ref_type=heads#L752> .
+
+lfs:b84034a4-a2de-50fd-914a-f3e038857289 a spdx:License ;
+    rdfs:label "AdaCore Doc License" ;
+    dcterms:references <https://spdx.org/licenses/AdaCore-doc.html> ;
+    schema1:position 291 ;
+    spdx:detailsUrl <https://spdx.org/licenses/AdaCore-doc.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "AdaCore-doc" ;
+    spdx:name "AdaCore Doc License" ;
+    rdfs:seeAlso <https://github.com/AdaCore/gnatcoll-core/blob/master/docs/index.rst>,
+        <https://github.com/AdaCore/gnatcoll-db/blob/master/docs/index.rst>,
+        <https://github.com/AdaCore/xmlada/blob/master/docs/index.rst> .
+
+lfs:bf9a5707-1344-5105-8a13-7a8367418abd a spdx:License ;
+    rdfs:label "Adobe Utopia Font License" ;
+    dcterms:references <https://spdx.org/licenses/Adobe-Utopia.html> ;
+    schema1:position 121 ;
+    spdx:detailsUrl <https://spdx.org/licenses/Adobe-Utopia.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "Adobe-Utopia" ;
+    spdx:name "Adobe Utopia Font License" ;
+    rdfs:seeAlso <https://gitlab.freedesktop.org/xorg/font/adobe-utopia-100dpi/-/blob/master/COPYING?ref_type=heads> .
+
+lfs:d1b405f5-98e2-5acd-9f7b-531983fb5aad a spdx:License ;
+    rdfs:label "BSD Zero Clause License" ;
+    dcterms:references <https://spdx.org/licenses/0BSD.html> ;
+    schema1:position 422 ;
+    spdx:detailsUrl <https://spdx.org/licenses/0BSD.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved true ;
+    spdx:licenseId "0BSD" ;
+    spdx:name "BSD Zero Clause License" ;
+    rdfs:seeAlso <http://landley.net/toybox/license.html>,
+        <https://opensource.org/licenses/0BSD> .
+
+lfs:e6709843-75a3-5d81-a48d-8318e0d72172 a spdx:License ;
+    rdfs:label "3D Slicer License v1.0" ;
+    dcterms:references <https://spdx.org/licenses/3D-Slicer-1.0.html> ;
+    schema1:position 134 ;
+    spdx:detailsUrl <https://spdx.org/licenses/3D-Slicer-1.0.json> ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved false ;
+    spdx:licenseId "3D-Slicer-1.0" ;
+    spdx:name "3D Slicer License v1.0" ;
+    rdfs:seeAlso <https://github.com/Slicer/Slicer/blob/main/License.txt>,
+        <https://slicer.org/LICENSE> .
+

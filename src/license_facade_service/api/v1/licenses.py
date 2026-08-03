@@ -1,824 +1,482 @@
-import logging
+from __future__ import annotations
+
 import json
-import os
-from pathlib import Path
-from typing import Dict, Any, Optional
+import logging
 from datetime import datetime, timezone
-from uuid import uuid5, NAMESPACE_DNS
+from pathlib import Path
+from typing import Any
 
-import httpx
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
-from spdx_tools.spdx.parser.parse_anything import parse_file as parse_spdx2
 
+from src.license_facade_service.services.auth import (
+    AuthService,
+    AuthenticationError,
+    AuthorizationError,
+    Principal,
+)
+from src.license_facade_service.services.licenses import (
+    LicenseNotFoundError,
+    LicenseService,
+    REPRESENTATION_HTML,
+    REPRESENTATION_JSON,
+    REPRESENTATION_JSON_LD,
+    REPRESENTATION_ENCODING,
+    REPRESENTATION_MACHINE,
+    REPRESENTATION_ORIGINAL,
+    REPRESENTATION_RDFXML,
+    REPRESENTATION_TURTLE,
+    negotiate_representation,
+)
+from src.license_facade_service.services.problem import problem_response
 
 router = APIRouter()
 
-# Base URL for URI generation
-URL_BASE = os.getenv("URL_BASE", "https://lfs.labs.dansdemo.nl/api/v1/licenses")
-
-# SPDX License List Data GitHub URLs
-SPDX_LICENSES_URL = "https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json"
-SPDX_DETAILS_BASE_URL = "https://raw.githubusercontent.com/spdx/license-list-data/main/json/details"
-
-# Cache directory setup
-BASE_DIR = os.getenv("BASE_DIR", os.getcwd())
-CACHE_DIR = Path(BASE_DIR) / "resources" / "data" / "licenses"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-LICENSES_LIST_CACHE = CACHE_DIR / "licenses_list.json"
-VERSION_FILE = CACHE_DIR / "version.json"
+_license_service: LicenseService | None = None
+_auth_service: AuthService | None = None
 
 
-def generate_license_uri(license_id: str) -> str:
-    """Generate a consistent URI for a license using UUID5 based on license ID."""
-    # Use UUID5 with DNS namespace to generate deterministic UUIDs
-    license_uuid = uuid5(NAMESPACE_DNS, f"spdx.org/licenses/{license_id}")
-    return f"{URL_BASE}/{license_uuid}"
+def get_license_service() -> LicenseService:
+    global _license_service
+    if _license_service is None:
+        base_dir = Path(__file__).resolve().parents[4]
+        _license_service = LicenseService(base_dir=base_dir)
+    return _license_service
 
 
-def get_cached_version() -> Optional[Dict[str, Any]]:
-    """Get the cached version information."""
+def get_auth_service() -> AuthService:
+    global _auth_service
+    if _auth_service is None:
+        _auth_service = AuthService()
+    return _auth_service
+
+
+def _problem_404(identifier: str, request: Request) -> JSONResponse:
+    return problem_response(
+        status=404,
+        title="License Not Found",
+        detail=f"No license record found for identifier '{identifier}'.",
+        instance=str(request.url),
+    )
+
+
+def _response_headers(content_location: str, include_vary: bool = True) -> dict[str, str]:
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Location": content_location,
+    }
+    if include_vary:
+        headers["Vary"] = "Accept"
+    return headers
+
+
+def _require_mutation_auth(request: Request, auth_service: AuthService) -> Principal:
     try:
-        if VERSION_FILE.exists():
-            with open(VERSION_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        logging.warning(f"Failed to read cached version: {e}")
-    return None
-
-
-def save_version_info(version: str, license_count: int):
-    """Save version information to cache."""
+        principal = auth_service.authenticate(request)
+    except AuthenticationError:
+        raise PermissionError("authn")
     try:
-        version_data = {
-            "licenseListVersion": version,
-            "licenseCount": license_count,
-            "lastUpdated": datetime.now(timezone.utc).isoformat()
-        }
-        with open(VERSION_FILE, 'w') as f:
-            json.dump(version_data, f, indent=2)
-        logging.info(f"Saved version info: {version}")
-    except Exception as e:
-        logging.error(f"Failed to save version info: {e}")
+        auth_service.authorize(principal, {"admin", "curator"})
+    except AuthorizationError:
+        raise PermissionError("authz")
+    return principal
 
 
-def get_cached_licenses_list() -> Optional[Dict[str, Any]]:
-    """Get the cached licenses list."""
-    try:
-        if LICENSES_LIST_CACHE.exists():
-            with open(LICENSES_LIST_CACHE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        logging.warning(f"Failed to read cached licenses list: {e}")
-    return None
-
-
-def save_licenses_list(data: Dict[str, Any]):
-    """Save licenses list to cache with URIs added to each license."""
-    try:
-        # Add URI to each license in the list
-        if "licenses" in data:
-            for license_info in data["licenses"]:
-                license_id = license_info.get("licenseId")
-                if license_id:
-                    license_info["uri"] = generate_license_uri(license_id)
-
-        with open(LICENSES_LIST_CACHE, 'w') as f:
-            json.dump(data, f, indent=2)
-        logging.info(f"Saved licenses list with {len(data.get('licenses', []))} licenses")
-    except Exception as e:
-        logging.error(f"Failed to save licenses list: {e}")
-
-
-def get_cached_license_details(license_id: str) -> Optional[Dict[str, Any]]:
-    """Get cached license details."""
-    try:
-        cache_file = CACHE_DIR / f"{license_id}.json"
-        if cache_file.exists():
-            with open(cache_file, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        logging.warning(f"Failed to read cached license {license_id}: {e}")
-    return None
-
-
-def save_license_details(license_id: str, data: Dict[str, Any]):
-    """Save license details to cache with URI."""
-    try:
-        # Add URI to the data before saving
-        data_with_uri = {"uri": generate_license_uri(license_id)}
-        data_with_uri.update(data)
-
-        cache_file = CACHE_DIR / f"{license_id}.json"
-        with open(cache_file, 'w') as f:
-            json.dump(data_with_uri, f, indent=2)
-        logging.debug(f"Saved license details for {license_id}")
-    except Exception as e:
-        logging.error(f"Failed to save license details for {license_id}: {e}")
-
-
-async def check_for_updates() -> bool:
-    """Check if SPDX license data has been updated."""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(SPDX_LICENSES_URL)
-            response.raise_for_status()
-            remote_data = response.json()
-            remote_version = remote_data.get("licenseListVersion")
-
-            cached_version_info = get_cached_version()
-
-            if not cached_version_info:
-                logging.info("No cached version found, will download all licenses")
-                return True
-
-            cached_version = cached_version_info.get("licenseListVersion")
-
-            if remote_version != cached_version:
-                logging.info(f"Version changed: {cached_version} -> {remote_version}")
-                return True
-
-            logging.debug(f"Cache is up to date: {remote_version}")
-            return False
-    except Exception as e:
-        logging.error(f"Failed to check for updates: {e}")
-        return False
-
-
-async def download_all_licenses():
-    """Download and cache all license data from SPDX."""
-    logging.info("Starting download of all SPDX licenses...")
-
-    try:
-        # Fetch licenses list
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(SPDX_LICENSES_URL)
-            response.raise_for_status()
-            licenses_data = response.json()
-
-        # Save licenses list
-        save_licenses_list(licenses_data)
-
-        # Get all license IDs
-        licenses_list = licenses_data.get("licenses", [])
-        total = len(licenses_list)
-        logging.info(f"Downloading {total} license details...")
-
-        # Download each license detail
-        success_count = 0
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for idx, license_info in enumerate(licenses_list, 1):
-                license_id = license_info.get("licenseId")
-                try:
-                    url = f"{SPDX_DETAILS_BASE_URL}/{license_id}.json"
-                    response = await client.get(url)
-                    response.raise_for_status()
-                    details = response.json()
-                    save_license_details(license_id, details)
-                    success_count += 1
-
-                    if idx % 50 == 0:
-                        logging.info(f"Progress: {idx}/{total} licenses downloaded")
-                except Exception as e:
-                    logging.error(f"Failed to download {license_id}: {e}")
-
-        # Save version info
-        version = licenses_data.get("licenseListVersion")
-        save_version_info(version, success_count)
-
-        logging.info(f"Download complete: {success_count}/{total} licenses cached")
-        return True
-
-    except Exception as e:
-        logging.error(f"Failed to download licenses: {e}")
-        return False
-
-
-async def ensure_cache_updated():
-    """Ensure the cache is up to date, download if needed."""
-    # Check if we need to update
-    needs_update = await check_for_updates()
-
-    if needs_update:
-        logging.info("Cache update needed, downloading latest licenses...")
-        await download_all_licenses()
-    else:
-        logging.debug("Using cached license data")
-
-
-async def fetch_licenses_list() -> Dict[str, Any]:
-    """Fetch the complete list of licenses (from cache or SPDX)."""
-    # Try to get from cache first
-    cached_data = get_cached_licenses_list()
-
-    if cached_data:
-        logging.debug("Using cached licenses list")
-        return cached_data
-
-    # If no cache, fetch from remote and cache it
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(SPDX_LICENSES_URL)
-            response.raise_for_status()
-            data = response.json()
-            save_licenses_list(data)
-
-            # Also save version info
-            version = data.get("licenseListVersion")
-            licenses_count = len(data.get("licenses", []))
-            save_version_info(version, licenses_count)
-
-            return data
-    except httpx.HTTPError as e:
-        logging.error(f"Failed to fetch licenses list: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch licenses from SPDX repository")
-    except Exception as e:
-        logging.error(f"Unexpected error fetching licenses list: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-async def fetch_license_details(license_id: str) -> Dict[str, Any]:
-    """Fetch detailed information for a specific license (from cache or SPDX)."""
-    # Try to get from cache first
-    cached_data = get_cached_license_details(license_id)
-
-    if cached_data:
-        logging.debug(f"Using cached details for {license_id}")
-        return cached_data
-
-    # If no cache, fetch from remote and cache it
-    try:
-        url = f"{SPDX_DETAILS_BASE_URL}/{license_id}.json"
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            data = response.json()
-            save_license_details(license_id, data)
-            return data
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"License '{license_id}' not found")
-        logging.error(f"HTTP error fetching license {license_id}: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch license details")
-    except httpx.HTTPError as e:
-        logging.error(f"Failed to fetch license details for {license_id}: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch license details")
-    except Exception as e:
-        logging.error(f"Unexpected error fetching license {license_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+def _build_optional_representation_unavailable(
+    request: Request,
+    representation: str,
+    links: dict[str, str],
+) -> JSONResponse:
+    return problem_response(
+        status=404,
+        title="Representation Not Available",
+        detail=f"Representation '{representation}' is unavailable for this license.",
+        instance=str(request.url),
+        extra={"availableRepresentations": links},
+    )
 
 
 @router.get("/licenses")
-async def licenses():
-    """Retrieve all available licenses with complete details from SPDX license list."""
-    logging.debug("Licenses endpoint called")
+@router.get("/licences", include_in_schema=False)
+async def list_licenses(service: LicenseService = Depends(get_license_service)):
+    """Return the cached SPDX license inventory with LFS URI enrichment."""
+    return await service.get_all_licenses()
 
-    # Get the licenses list
-    data = await fetch_licenses_list()
-    licenses_list = data.get("licenses", [])
 
-    # Enrich each license with detailed information
-    enriched_licenses = []
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for idx, license_info in enumerate(licenses_list, 1):
-            license_id = license_info.get("licenseId")
-
-            try:
-                # Fetch detailed information for this license
-                details = await fetch_license_details(license_id)
-
-                # Build complete license object with all requested fields in order
-                complete_license = {
-                    "uri": license_info.get("uri") or generate_license_uri(license_id),
-                    "referenceNumber": license_info.get("referenceNumber"),
-                    "licenseId": license_info.get("licenseId"),
-                    "name": license_info.get("name"),
-                    "detailsUrl": license_info.get("detailsUrl"),
-                    "reference": license_info.get("reference"),
-                    "isDeprecatedLicenseId": license_info.get("isDeprecatedLicenseId", False),
-                    "seeAlso": license_info.get("seeAlso", []),
-                    "isOsiApproved": license_info.get("isOsiApproved", False),
-                    "licenseText": details.get("licenseText", ""),
-                    "standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
-                    "licenseTextHtml": details.get("licenseTextHtml", ""),
-                    "crossRef": details.get("crossRef", [])
-                }
-
-                enriched_licenses.append(complete_license)
-
-                if idx % 50 == 0:
-                    logging.info(f"Enriched {idx}/{len(licenses_list)} licenses")
-
-            except Exception as e:
-                logging.warning(f"Failed to enrich license {license_id}: {e}, using basic info")
-                # If detailed fetch fails, return basic info
-                basic_license = {
-                    "uri": license_info.get("uri") or generate_license_uri(license_id),
-                    "referenceNumber": license_info.get("referenceNumber"),
-                    "licenseId": license_info.get("licenseId"),
-                    "name": license_info.get("name"),
-                    "detailsUrl": license_info.get("detailsUrl"),
-                    "reference": license_info.get("reference"),
-                    "isDeprecatedLicenseId": license_info.get("isDeprecatedLicenseId", False),
-                    "seeAlso": license_info.get("seeAlso", []),
-                    "isOsiApproved": license_info.get("isOsiApproved", False),
-                    "licenseText": "",
-                    "standardLicenseTemplate": "",
-                    "licenseTextHtml": "",
-                    "crossRef": []
-                }
-                enriched_licenses.append(basic_license)
-
-    logging.info(f"Returning {len(enriched_licenses)} enriched licenses")
-
+@router.get("/licenses/taxonomy")
+@router.get("/licences/taxonomy", include_in_schema=False)
+async def get_license_taxonomy():
+    """Return a static taxonomy overview that cannot be shadowed by dynamic routes."""
     return {
-        "licenseListVersion": data.get("licenseListVersion"),
-        "licenses": enriched_licenses
+        "description": (
+            "Permissive: MIT, BSD, Apache; Weak copyleft: MPL, LGPL; "
+            "Strong copyleft: GPL, AGPL; Content/documentation: Creative Commons; "
+            "Public domain: CC0, Unlicense; Data licenses: ODbL, ODC-BY."
+        )
     }
 
 
 @router.get("/licenses/cache/status")
-async def cache_status():
-    """Get cache status and version information."""
-    version_info = get_cached_version()
-
-    if not version_info:
-        return {
-            "cached": False,
-            "message": "No cached data available"
-        }
-
-    # Count cached license files
-    cached_files = list(CACHE_DIR.glob("*.json"))
-    # Exclude version.json and licenses_list.json
-    license_details_count = len([f for f in cached_files if f.name not in ["version.json", "licenses_list.json"]])
-
-    return {
-        "cached": True,
-        "version": version_info.get("licenseListVersion"),
-        "totalLicenses": version_info.get("licenseCount"),
-        "cachedDetails": license_details_count,
-        "lastUpdated": version_info.get("lastUpdated"),
-        "cacheDirectory": str(CACHE_DIR)
-    }
+@router.get("/licences/cache/status", include_in_schema=False)
+async def cache_status(service: LicenseService = Depends(get_license_service)):
+    """Return cache status without exposing the cache filesystem path."""
+    return service.cache_status().model_dump()
 
 
 @router.post("/licenses/cache/update")
-async def update_cache():
-    """Manually trigger cache update from SPDX repository."""
-    logging.info("Manual cache update triggered")
-
+@router.post("/licences/cache/update", include_in_schema=False)
+async def update_cache(
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+    auth: AuthService = Depends(get_auth_service),
+):
+    """Refresh the SPDX snapshot after bearer-token authorization."""
     try:
-        needs_update = await check_for_updates()
-
-        if needs_update:
-            success = await download_all_licenses()
-            if success:
-                version_info = get_cached_version()
-                return {
-                    "status": "success",
-                    "message": "Cache updated successfully",
-                    "version": version_info.get("licenseListVersion") if version_info else None
-                }
-            else:
-                raise HTTPException(status_code=500, detail="Failed to download licenses")
-        else:
-            version_info = get_cached_version()
-            return {
-                "status": "up-to-date",
-                "message": "Cache is already up to date",
-                "version": version_info.get("licenseListVersion") if version_info else None
-            }
-    except Exception as e:
-        logging.error(f"Cache update failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Cache update failed: {str(e)}")
+        _require_mutation_auth(request, auth)
+    except PermissionError as exc:
+        if str(exc) == "authn":
+            return problem_response(
+                status=401,
+                title="Unauthorized",
+                detail="Missing or invalid bearer token.",
+                instance=str(request.url),
+            )
+        return problem_response(
+            status=403,
+            title="Forbidden",
+            detail="Authenticated principal lacks required curator/admin role.",
+            instance=str(request.url),
+        )
+    try:
+        status = await service.refresh_cache()
+    except Exception as exc:
+        logging.error("Cache update failed: %s", exc)
+        return problem_response(
+            status=500,
+            title="Cache Update Failed",
+            detail="Failed to refresh SPDX cache snapshot.",
+            instance=str(request.url),
+        )
+    return {"status": "success", "cache": status.model_dump()}
 
 
 @router.post("/licenses/cache/refresh")
-async def refresh_cache():
-    """Force refresh cache regardless of version."""
-    logging.info("Forced cache refresh triggered")
-
-    try:
-        success = await download_all_licenses()
-        if success:
-            version_info = get_cached_version()
-            return {
-                "status": "success",
-                "message": "Cache refreshed successfully",
-                "version": version_info.get("licenseListVersion") if version_info else None
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to refresh cache")
-    except Exception as e:
-        logging.error(f"Cache refresh failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Cache refresh failed: {str(e)}")
+@router.post("/licences/cache/refresh", include_in_schema=False)
+async def refresh_cache(
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+    auth: AuthService = Depends(get_auth_service),
+):
+    """Force refresh the SPDX snapshot after bearer-token authorization."""
+    return await update_cache(request=request, service=service, auth=auth)
 
 
-@router.get("/licenses/{id}")
-async def get_license(id: str):
-    """Get complete license information by license ID or URI."""
-    logging.debug(f"Get license endpoint called with id: {id}")
-
-    # Get basic info from licenses list
-    data = await fetch_licenses_list()
-    licenses_list = data.get("licenses", [])
-
-    # Check if id is a URI, UUID, or license ID
-    license_info = None
-    actual_id = id
-
-    if id.startswith("http://") or id.startswith("https://"):
-        # It's a full URI, search by exact URI match
-        logging.debug(f"Searching by full URI: {id}")
-        license_info = next((lic for lic in licenses_list if lic.get("uri") == id), None)
-
-        # If found by URI, get the actual license ID
-        if license_info:
-            actual_id = license_info.get("licenseId")
-            logging.debug(f"Found license by full URI: {actual_id}")
-    elif "/" in id:
-        # It might be a partial UUID or path, extract UUID portion if present
-        logging.debug(f"Searching by URI-like pattern: {id}")
-        # Extract the UUID from the end (last segment after /)
-        uuid_part = id.split("/")[-1] if "/" in id else id
-
-        # Search by URI containing this UUID
-        license_info = next((lic for lic in licenses_list if uuid_part in lic.get("uri", "")), None)
-
-        if license_info:
-            actual_id = license_info.get("licenseId")
-            logging.debug(f"Found license by UUID in URI: {actual_id}")
-    elif "-" in id and len(id) == 36:
-        # It looks like a UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-        logging.debug(f"Searching by UUID: {id}")
-        license_info = next((lic for lic in licenses_list if id in lic.get("uri", "")), None)
-
-        if license_info:
-            actual_id = license_info.get("licenseId")
-            logging.debug(f"Found license by UUID: {actual_id}")
-    else:
-        # It's a license ID, search by licenseId field
-        logging.debug(f"Searching by license ID: {id}")
-        license_info = next((lic for lic in licenses_list if lic.get("licenseId") == id), None)
-
-    if not license_info:
-        raise HTTPException(status_code=404, detail=f"License '{id}' not found")
-
-    # Get detailed info including full text, templates, HTML, and cross-references
-    try:
-        details = await fetch_license_details(actual_id)
-
-        # Build complete info with all fields from details
-        complete_info = {
-            "uri": license_info.get("uri") or generate_license_uri(actual_id),
-            "isDeprecatedLicenseId": license_info.get("isDeprecatedLicenseId", False),
-            "licenseText": details.get("licenseText", ""),
-            "standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
-            "name": license_info.get("name"),
-            "licenseId": license_info.get("licenseId"),
-            "crossRef": details.get("crossRef", []),
-            "seeAlso": license_info.get("seeAlso", []),
-            "isOsiApproved": license_info.get("isOsiApproved", False),
-            "licenseTextHtml": details.get("licenseTextHtml", "")
-        }
-
-        # Add isFsfLibre from details if available
-        if "isFsfLibre" in details:
-            complete_info["isFsfLibre"] = details.get("isFsfLibre")
-
-        return complete_info
-    except HTTPException:
-        # If details not available, return basic info from list with URI
-        if "uri" not in license_info:
-            license_info["uri"] = generate_license_uri(actual_id)
-        return license_info
-    except Exception as e:
-        logging.warning(f"Could not fetch details for {actual_id}: {e}, returning basic info")
-        if "uri" not in license_info:
-            license_info["uri"] = generate_license_uri(actual_id)
-        return license_info
-
-
-@router.get("/licenses/{id}/json")
-async def get_license_json(id: str):
-    """Get detailed license information in JSON format with all fields."""
-    logging.debug(f"Get license JSON endpoint called with id: {id}")
-
-    # Get basic info from licenses list
-    data = await fetch_licenses_list()
-    licenses_list = data.get("licenses", [])
-
-    # Check if id is a URI, UUID, or license ID (same logic as get_license)
-    license_info = None
-    actual_id = id
-
-    if id.startswith("http://") or id.startswith("https://"):
-        # It's a full URI, search by exact URI match
-        logging.debug(f"Searching by full URI: {id}")
-        license_info = next((lic for lic in licenses_list if lic.get("uri") == id), None)
-
-        # If found by URI, get the actual license ID
-        if license_info:
-            actual_id = license_info.get("licenseId")
-            logging.debug(f"Found license by full URI: {actual_id}")
-    elif "/" in id:
-        # It might be a partial UUID or path, extract UUID portion if present
-        logging.debug(f"Searching by URI-like pattern: {id}")
-        # Extract the UUID from the end (last segment after /)
-        uuid_part = id.split("/")[-1] if "/" in id else id
-
-        # Search by URI containing this UUID
-        license_info = next((lic for lic in licenses_list if uuid_part in lic.get("uri", "")), None)
-
-        if license_info:
-            actual_id = license_info.get("licenseId")
-            logging.debug(f"Found license by UUID in URI: {actual_id}")
-    elif "-" in id and len(id) == 36:
-        # It looks like a UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-        logging.debug(f"Searching by UUID: {id}")
-        license_info = next((lic for lic in licenses_list if id in lic.get("uri", "")), None)
-
-        if license_info:
-            actual_id = license_info.get("licenseId")
-            logging.debug(f"Found license by UUID: {actual_id}")
-    else:
-        # It's a license ID, search by licenseId field
-        logging.debug(f"Searching by license ID: {id}")
-        license_info = next((lic for lic in licenses_list if lic.get("licenseId") == id), None)
-
-    if not license_info:
-        raise HTTPException(status_code=404, detail=f"License '{id}' not found")
-
-    # Get detailed info including full text, templates, HTML, and cross-references
-    try:
-        details = await fetch_license_details(actual_id)
-
-        # Build complete info with all fields from details - same structure as get_license
-        complete_info = {
-            "uri": license_info.get("uri") or generate_license_uri(actual_id),
-            "isDeprecatedLicenseId": license_info.get("isDeprecatedLicenseId", False),
-            "licenseText": details.get("licenseText", ""),
-            "standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
-            "name": license_info.get("name"),
-            "licenseId": license_info.get("licenseId"),
-            "crossRef": details.get("crossRef", []),
-            "seeAlso": license_info.get("seeAlso", []),
-            "isOsiApproved": license_info.get("isOsiApproved", False),
-            "licenseTextHtml": details.get("licenseTextHtml", "")
-        }
-
-        # Add isFsfLibre from details if available
-        if "isFsfLibre" in details:
-            complete_info["isFsfLibre"] = details.get("isFsfLibre")
-
-        return complete_info
-    except HTTPException:
-        # If details not available, return basic info from list with URI
-        if "uri" not in license_info:
-            license_info["uri"] = generate_license_uri(actual_id)
-        return license_info
-    except Exception as e:
-        logging.warning(f"Could not fetch details for {actual_id}: {e}, returning basic info")
-        if "uri" not in license_info:
-            license_info["uri"] = generate_license_uri(actual_id)
-        return license_info
-
-
-@router.get("/licenses/{id}/original", response_class=PlainTextResponse)
-async def get_license_original(id: str):
-    """Get original license text."""
-    logging.debug(f"Get license original endpoint called with id: {id}")
-    details = await fetch_license_details(id)
-    license_text = details.get("licenseText", "")
-
-    if not license_text:
-        raise HTTPException(status_code=404, detail=f"License text not found for '{id}'")
-
-    return license_text
-
-
-@router.get("/licenses/{id}/machine")
-async def get_license_machine(id: str):
-    """Get machine-readable license format with key metadata."""
-    logging.debug(f"Get license machine endpoint called with id: {id}")
-    details = await fetch_license_details(id)
-
-    return {
-        "licenseId": details.get("licenseId"),
-        "name": details.get("name"),
-        "isOsiApproved": details.get("isOsiApproved", False),
-        "isFsfLibre": details.get("isFsfLibre"),
-        "isDeprecatedLicenseId": details.get("isDeprecatedLicenseId", False),
-        "seeAlso": details.get("seeAlso", []),
-        "crossRef": details.get("crossRef", [])
-    }
-
-
-@router.get("/licenses/{id}/legal", response_class=PlainTextResponse)
-async def get_license_legal(id: str):
-    """Get legal text (same as original for SPDX licenses)."""
-    logging.debug(f"Get license legal endpoint called with id: {id}")
-    details = await fetch_license_details(id)
-    license_text = details.get("licenseText", "")
-
-    if not license_text:
-        raise HTTPException(status_code=404, detail=f"License text not found for '{id}'")
-
-    return license_text
-
-
-@router.get("/licenses/taxonomy")
-async def get_license_taxonomy():
-    """Return a human-readable overview of common SPDX-related license taxonomies.
-
-    This endpoint provides static descriptive text about how tools typically
-    classify licenses (e.g. permissive, weak/strong copyleft, public domain,
-    data licenses). It does not query SPDX or depend on cached data.
-    """
-
-    taxonomy_text = (
-        "Permissive:\n\n"
-        " - MIT\n"
-        " - BSD\n"
-        " - Apache\n\n"
-        "Weak copyleft:\n\n"
-        " - MPL\n"
-        " - LGPL\n\n"
-        "Strong copyleft:\n\n"
-        " - GPL\n"
-        " - AGPL\n\n"
-        "Content / documentation:\n\n"
-        " - Creative Commons\n\n"
-        "Public domain:\n\n"
-        " - CC0\n"
-        " - Unlicense\n\n"
-        "Data licenses:\n\n"
-        " - ODbL\n"
-        " - ODC-BY\n"
-    )
-
-    return {"description": taxonomy_text}
-
-
-def build_minimal_spdx3_document(name: str, namespace: str) -> Dict[str, Any]:
-    """Build a minimal SPDX 3.0 JSON-LD document matching SPDX license-list style.
-
-    Reuses the same structure as scripts/create_minimal_spdx_v3.py:
-    - @context for SPDX 3.0.1
-    - CreationInfo node with @id
-    - SpdxDocument node referencing CreationInfo via creationInfo
-    """
-    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    creation_info_id = "_:creationInfo_0"
-    document_spdx_id = f"{namespace.rstrip('/')}_document"
-
-    creation_info_node: Dict[str, Any] = {
-        "@id": creation_info_id,
-        "type": "CreationInfo",
-        "specVersion": "3.0.1",
-        "createdBy": [f"{namespace.rstrip('/')}/creator"],
-        "created": created,
-    }
-
-    document_node: Dict[str, Any] = {
-        "spdxId": document_spdx_id,
-        "type": "SpdxDocument",
-        "rootElement": [document_spdx_id],
-        "name": name,
-        "creationInfo": creation_info_id,
-    }
-
-    return {
-        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
-        "@graph": [creation_info_node, document_node],
-    }
+class MinimalSpdx3Request(BaseModel):
+    name: str = "Minimal SPDX 3.0 Document"
+    namespace: str = "https://example.org/spdx3/minimal-doc-1"
 
 
 @router.post("/licenses/spdx3/minimal")
-async def create_minimal_spdx3(name: str = "Minimal SPDX 3.0 Document", namespace: str = "https://example.org/spdx3/minimal-doc-1"):
-    """Create and return a minimal SPDX v3 JSON-LD document.
-
-    The structure matches the generator used in scripts/create_minimal_spdx_v3.py
-    and is compatible with the SPDX v3 validator.
-    """
+@router.post("/licences/spdx3/minimal", include_in_schema=False)
+async def create_minimal_spdx3(
+    payload: MinimalSpdx3Request,
+    request: Request,
+    auth: AuthService = Depends(get_auth_service),
+):
+    """Create a minimal SPDX 3.0 JSON-LD document after bearer-token authorization."""
     try:
-        document = build_minimal_spdx3_document(name=name, namespace=namespace)
-        return document
-    except Exception as e:
-        logging.error(f"Failed to build minimal SPDX v3 document: {e}")
-        raise HTTPException(status_code=500, detail="Failed to build minimal SPDX v3 document")
-
-
-class CustomLicenseInput(BaseModel):
-    licenseId: str
-    name: str
-    licenseText: str
-    standardLicenseTemplate: Optional[str] = None
-    seeAlso: list[str] = []
-    isOsiApproved: bool = False
-    isDeprecatedLicenseId: bool = False
+        _require_mutation_auth(request, auth)
+    except PermissionError as exc:
+        if str(exc) == "authn":
+            return problem_response(
+                status=401,
+                title="Unauthorized",
+                detail="Missing or invalid bearer token.",
+                instance=str(request.url),
+            )
+        return problem_response(
+            status=403,
+            title="Forbidden",
+            detail="Authenticated principal lacks required curator/admin role.",
+            instance=str(request.url),
+        )
+    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    creation_info_id = "_:creationInfo_0"
+    document_spdx_id = f"{payload.namespace.rstrip('/')}_document"
+    return {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
+            {
+                "@id": creation_info_id,
+                "type": "CreationInfo",
+                "specVersion": "3.0.1",
+                "createdBy": [f"{payload.namespace.rstrip('/')}/creator"],
+                "created": created,
+            },
+            {
+                "spdxId": document_spdx_id,
+                "type": "SpdxDocument",
+                "rootElement": [document_spdx_id],
+                "name": payload.name,
+                "creationInfo": creation_info_id,
+            },
+        ],
+    }
 
 
 @router.post("/licenses/spdx3/complete/{license_id}")
+@router.post("/licences/spdx3/complete/{license_id}", include_in_schema=False)
 async def create_complete_spdx3(
     license_id: str,
-    custom: bool = False,
-    custom_payload: Optional[CustomLicenseInput] = None,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+    auth: AuthService = Depends(get_auth_service),
 ):
-    """Create a complete SPDX v3 JSON-LD document for a given license.
-
-    Modes:
-    - Official SPDX license: `custom=False` (default), `license_id` must exist
-      in the SPDX license list. Details are loaded via `fetch_license_details`.
-    - Custom license: `custom=True`, and `custom_payload` must be provided
-      in the request body. In this mode, no call is made to the SPDX GitHub
-      repository; all content comes from `custom_payload`.
-    """
-    logging.debug(
-        f"Create complete SPDX v3 document for license: {license_id}, custom={custom}"
-    )
-
-    if custom:
-        # Use data supplied by the client for a brand-new local licenseId
-        if custom_payload is None:
-            raise HTTPException(
-                status_code=400,
-                detail="custom_payload is required when custom=true",
+    """Create a complete SPDX 3.0 JSON-LD document for a specific license."""
+    try:
+        _require_mutation_auth(request, auth)
+    except PermissionError as exc:
+        if str(exc) == "authn":
+            return problem_response(
+                status=401,
+                title="Unauthorized",
+                detail="Missing or invalid bearer token.",
+                instance=str(request.url),
             )
-        if custom_payload.licenseId != license_id:
-            raise HTTPException(
-                status_code=400,
-                detail="licenseId in path and custom_payload.licenseId must match",
-            )
-        details: Dict[str, Any] = custom_payload.dict()
-    else:
-        # Official SPDX license: load SPDX v2 JSON from cache or SPDX GitHub
-        try:
-            details = await fetch_license_details(license_id)
-        except HTTPException as e:
-            raise e
-        except Exception as e:
-            logging.error(f"Failed to fetch SPDX v2 details for {license_id}: {e}")
-            raise HTTPException(
-                status_code=500, detail="Failed to fetch SPDX v2 license details"
-            )
-
-    # Build SPDX v3 CreationInfo and SpdxDocument nodes
-    created = (
-        datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
-    creation_info_id = "_:creationInfo_0"
-    namespace = f"https://spdx.org/spdxdocs/{license_id}"
-    document_spdx_id = f"{namespace}_document"
-
-    creation_info_node: Dict[str, Any] = {
-        "@id": creation_info_id,
-        "type": "CreationInfo",
-        "specVersion": "3.0.1",
-        "createdBy": [f"{namespace}/creator"],
-        "created": created,
-    }
-
-    document_node: Dict[str, Any] = {
-        "spdxId": document_spdx_id,
-        "type": "SpdxDocument",
-        "rootElement": [document_spdx_id],
-        "name": f"SPDX Document for {license_id}",
-        "creationInfo": creation_info_id,
-    }
-
-    # Embed license details as ListedLicense node
-    license_element_id = f"{namespace}#License-{license_id}"
-    license_node: Dict[str, Any] = {
-        "spdxId": license_element_id,
-        "type": "expandedlicensing_ListedLicense",
-        "name": details.get("name"),
-        "simplelicensing_licenseText": details.get("licenseText", ""),
-        "expandedlicensing_standardLicenseTemplate": details.get(
-            "standardLicenseTemplate", ""
-        ),
-        "expandedlicensing_isOsiApproved": details.get("isOsiApproved", False),
-        "expandedlicensing_isDeprecatedLicenseId": details.get(
-            "isDeprecatedLicenseId", False
-        ),
-        "expandedlicensing_seeAlso": details.get("seeAlso", []),
-        "creationInfo": creation_info_id,
-    }
-
-    # Root element points to the license node
-    document_node["rootElement"] = [license_element_id]
-
-    spdx3_document: Dict[str, Any] = {
+        return problem_response(
+            status=403,
+            title="Forbidden",
+            detail="Authenticated principal lacks required curator/admin role.",
+            instance=str(request.url),
+        )
+    try:
+        resolved = await service.resolve(license_id)
+    except LicenseNotFoundError:
+        return _problem_404(license_id, request)
+    details = resolved.details
+    return {
         "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
-        "@graph": [creation_info_node, document_node, license_node],
+        "@graph": [
+            {
+                "@id": "_:creationInfo_0",
+                "type": "CreationInfo",
+                "specVersion": "3.0.1",
+                "createdBy": ["https://spdx.org/tools/lfs"],
+                "created": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            },
+            {
+                "spdxId": f"https://spdx.org/spdxdocs/{resolved.license_id}_document",
+                "type": "SpdxDocument",
+                "rootElement": [f"https://spdx.org/spdxdocs/{resolved.license_id}#License-{resolved.license_id}"],
+                "name": f"SPDX Document for {resolved.license_id}",
+                "creationInfo": "_:creationInfo_0",
+            },
+            {
+                "spdxId": f"https://spdx.org/spdxdocs/{resolved.license_id}#License-{resolved.license_id}",
+                "type": "expandedlicensing_ListedLicense",
+                "name": details.get("name", resolved.record.get("name")),
+                "simplelicensing_licenseText": details.get("licenseText", ""),
+                "expandedlicensing_standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
+            },
+        ],
     }
 
-    return spdx3_document
 
+@router.get("/licenses/{id:path}/html")
+@router.get("/licences/{id:path}/html", include_in_schema=False)
+async def get_license_html(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return the HTML landing page for a license."""
+    return await _render_license_response(service, id, REPRESENTATION_HTML, request, negotiated=False)
+
+
+@router.get("/licenses/{id:path}/json")
+@router.get("/licences/{id:path}/json", include_in_schema=False)
+async def get_license_json(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return SPDX-compatible JSON metadata for a license."""
+    return await _render_license_response(service, id, REPRESENTATION_JSON, request, negotiated=False)
+
+
+@router.get("/licenses/{id:path}/json-ld")
+@router.get("/licences/{id:path}/json-ld", include_in_schema=False)
+async def get_license_jsonld(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return JSON-LD metadata for a license."""
+    return await _render_license_response(service, id, REPRESENTATION_JSON_LD, request, negotiated=False)
+
+
+@router.get("/licenses/{id:path}/turtle")
+@router.get("/licences/{id:path}/turtle", include_in_schema=False)
+async def get_license_turtle(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return Turtle RDF for a license."""
+    return await _render_license_response(service, id, REPRESENTATION_TURTLE, request, negotiated=False)
+
+
+@router.get("/licenses/{id:path}/rdfxml")
+@router.get("/licences/{id:path}/rdfxml", include_in_schema=False)
+async def get_license_rdfxml(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return RDF/XML for a license."""
+    return await _render_license_response(service, id, REPRESENTATION_RDFXML, request, negotiated=False)
+
+
+@router.get("/licenses/{id:path}/original")
+@router.get("/licences/{id:path}/original", include_in_schema=False)
+async def get_license_original(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Redirect to the curated original source when available."""
+    try:
+        resolved = await service.resolve(id)
+    except LicenseNotFoundError:
+        return _problem_404(id, request)
+    source = service.get_original_source(resolved)
+    if not source:
+        return _build_optional_representation_unavailable(
+            request=request,
+            representation=REPRESENTATION_ORIGINAL,
+            links=service.representation_links(resolved),
+        )
+    return RedirectResponse(url=source, status_code=307)
+
+
+@router.get("/licenses/{id:path}/legal")
+@router.get("/licences/{id:path}/legal", include_in_schema=False)
+async def get_license_legal(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return a curated legal representation when available."""
+    try:
+        resolved = await service.resolve(id)
+    except LicenseNotFoundError:
+        return _problem_404(id, request)
+    legal = service.get_legal_representation(resolved)
+    if not legal:
+        return _build_optional_representation_unavailable(
+            request=request,
+            representation="legal",
+            links=service.representation_links(resolved),
+        )
+    media_type = legal.get("mediaType", "text/plain; charset=utf-8")
+    content = legal.get("content", "")
+    headers = {"Cache-Control": "public, max-age=3600"}
+    if legal.get("profile"):
+        headers["Link"] = f'<{legal["profile"]}>; rel="profile"'
+    return Response(content=content, media_type=media_type, headers=headers)
+
+
+@router.get("/licenses/{id:path}/machine")
+@router.get("/licences/{id:path}/machine", include_in_schema=False)
+async def get_license_machine(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return an explicit machine-readable rights expression when available."""
+    try:
+        resolved = await service.resolve(id)
+    except LicenseNotFoundError:
+        return _problem_404(id, request)
+    machine = service.get_machine_representation(resolved)
+    if not machine:
+        return _build_optional_representation_unavailable(
+            request=request,
+            representation=REPRESENTATION_MACHINE,
+            links=service.representation_links(resolved),
+        )
+    headers = {"Cache-Control": "public, max-age=3600"}
+    if machine.profile:
+        headers["Link"] = f'<{machine.profile}>; rel="profile"'
+    body = machine.content if isinstance(machine.content, str) else json.dumps(machine.content)
+    return Response(content=body, media_type=machine.media_type, headers=headers)
+
+
+@router.get("/licenses/{id:path}/encoding")
+@router.get("/licences/{id:path}/encoding", include_in_schema=False)
+async def get_license_encoding(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Redirect to a curated rights-encoding reference when available."""
+    try:
+        resolved = await service.resolve(id)
+    except LicenseNotFoundError:
+        return _problem_404(id, request)
+    encoding = service.get_encoding_representation(resolved)
+    if not encoding:
+        return _build_optional_representation_unavailable(
+            request=request,
+            representation=REPRESENTATION_ENCODING,
+            links=service.representation_links(resolved),
+        )
+    return RedirectResponse(url=encoding["href"], status_code=307)
+
+
+@router.get("/licenses/{id:path}")
+@router.get("/licences/{id:path}", include_in_schema=False)
+async def get_license(
+    id: str,
+    request: Request,
+    service: LicenseService = Depends(get_license_service),
+):
+    """Return the negotiated canonical representation for a license."""
+    negotiated = negotiate_representation(request.headers.get("accept"))
+    if negotiated is None:
+        return problem_response(
+            status=406,
+            title="Not Acceptable",
+            detail="Requested representation is not supported.",
+            instance=str(request.url),
+            extra={
+                "supportedMediaTypes": [
+                    "text/html",
+                    "application/json",
+                    "application/ld+json",
+                    "text/turtle",
+                    "application/rdf+xml",
+                ]
+            },
+        )
+    return await _render_license_response(service, id, negotiated, request, negotiated=True)
+
+
+async def _render_license_response(
+    service: LicenseService,
+    identifier: str,
+    representation: str,
+    request: Request,
+    *,
+    negotiated: bool,
+) -> Response:
+    try:
+        resolved = await service.resolve(identifier)
+    except LicenseNotFoundError:
+        return _problem_404(identifier, request)
+    body, media_type = service.render_representation(resolved, representation)
+    links = service.representation_links(resolved)
+    content_location = links[representation]
+    headers = _response_headers(content_location, include_vary=negotiated)
+    return Response(content=body, media_type=media_type, headers=headers)

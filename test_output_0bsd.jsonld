@@ -1,0 +1,168 @@
+[
+  {
+    "@id": "https://lfs.labs.dansdemo.nl/api/v1/licenses/d1b405f5-98e2-5acd-9f7b-531983fb5aad",
+    "@type": [
+      "http://spdx.org/rdf/terms#License"
+    ],
+    "http://purl.org/dc/terms/identifier": [
+      {
+        "@value": "0BSD"
+      }
+    ],
+    "http://purl.org/dc/terms/title": [
+      {
+        "@value": "BSD Zero Clause License"
+      }
+    ],
+    "http://spdx.org/rdf/terms#crossRef": [
+      {
+        "@id": "_:N7bb729b3d10a431a87a5a2489bc1a3ce"
+      },
+      {
+        "@id": "_:Nd83fb151bb9142d0bc2e818431b6dd29"
+      }
+    ],
+    "http://spdx.org/rdf/terms#isDeprecatedLicenseId": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": false
+      }
+    ],
+    "http://spdx.org/rdf/terms#isOsiApproved": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": true
+      }
+    ],
+    "http://spdx.org/rdf/terms#licenseId": [
+      {
+        "@value": "0BSD"
+      }
+    ],
+    "http://spdx.org/rdf/terms#licenseText": [
+      {
+        "@value": "Copyright (C) YEAR by AUTHOR EMAIL\n\nPermission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n"
+      }
+    ],
+    "http://spdx.org/rdf/terms#licenseTextHtml": [
+      {
+        "@value": "\n      <div class=\"optional-license-text\"> \n         <p><var class=\"replaceable-license-text\"><span title=\"can be replaced with the pattern (BSD Zero[ -]Clause|Zero[ -]Clause BSD)( License)?( \\(0BSD\\))?\"> BSD Zero Clause License</span></var></p>\n\n      </div>\n      <div class=\"replaceable-license-text\"><span title=\"can be replaced with the pattern .{0,5000}\"> \n         <p>Copyright (C) YEAR by AUTHOR EMAIL</p>\n\n      </span></div>\n\n      <p>Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is\n         hereby granted.</p>\n\n      <p>THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE\n         INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE\n         LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING\n         FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS\n         ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</p>\n\n    "
+      }
+    ],
+    "http://spdx.org/rdf/terms#name": [
+      {
+        "@value": "BSD Zero Clause License"
+      }
+    ],
+    "http://spdx.org/rdf/terms#standardLicenseTemplate": [
+      {
+        "@value": "<<beginOptional>><<var;name=\"title\";original=\"BSD Zero Clause License\";match=\"(BSD Zero[ -]Clause|Zero[ -]Clause BSD)( License)?( \\(0BSD\\))?\">>\n\n<<endOptional>> <<var;name=\"copyright\";original=\"Copyright (C) YEAR by AUTHOR EMAIL  \";match=\".{0,5000}\">>\nPermission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n\n"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "BSD Zero Clause License"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#seeAlso": [
+      {
+        "@id": "http://landley.net/toybox/license.html"
+      },
+      {
+        "@id": "https://opensource.org/licenses/0BSD"
+      }
+    ]
+  },
+  {
+    "@id": "_:N7bb729b3d10a431a87a5a2489bc1a3ce",
+    "@type": [
+      "http://spdx.org/rdf/terms#CrossRef"
+    ],
+    "http://purl.org/dc/terms/date": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#dateTime",
+        "@value": "2026-02-20T20:59:24+00:00"
+      }
+    ],
+    "http://spdx.org/rdf/terms#isLive": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": false
+      }
+    ],
+    "http://spdx.org/rdf/terms#isValid": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": true
+      }
+    ],
+    "http://spdx.org/rdf/terms#isWayBackLink": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": false
+      }
+    ],
+    "http://spdx.org/rdf/terms#match": [
+      {
+        "@value": "N/A"
+      }
+    ],
+    "http://spdx.org/rdf/terms#order": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 0
+      }
+    ],
+    "http://spdx.org/rdf/terms#url": [
+      {
+        "@id": "http://landley.net/toybox/license.html"
+      }
+    ]
+  },
+  {
+    "@id": "_:Nd83fb151bb9142d0bc2e818431b6dd29",
+    "@type": [
+      "http://spdx.org/rdf/terms#CrossRef"
+    ],
+    "http://purl.org/dc/terms/date": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#dateTime",
+        "@value": "2026-02-20T20:59:24+00:00"
+      }
+    ],
+    "http://spdx.org/rdf/terms#isLive": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": true
+      }
+    ],
+    "http://spdx.org/rdf/terms#isValid": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": true
+      }
+    ],
+    "http://spdx.org/rdf/terms#isWayBackLink": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#boolean",
+        "@value": false
+      }
+    ],
+    "http://spdx.org/rdf/terms#match": [
+      {
+        "@value": "N/A"
+      }
+    ],
+    "http://spdx.org/rdf/terms#order": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 1
+      }
+    ],
+    "http://spdx.org/rdf/terms#url": [
+      {
+        "@id": "https://opensource.org/licenses/0BSD"
+      }
+    ]
+  }
+]

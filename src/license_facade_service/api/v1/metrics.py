@@ -1,56 +1,45 @@
-import logging
-from pathlib import Path
+from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import os
 
+from fastapi import APIRouter, Depends
+
+from src.license_facade_service.infra.fuseki_client import FusekiClient
+from src.license_facade_service.services.licenses import LicenseService
+from src.license_facade_service.api.v1.licenses import get_license_service
 
 router = APIRouter()
 
 
-# Base directory of the project (two levels up from this file: src/license_facade_service/...)
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SPDX_JSONLD_DIR = PROJECT_ROOT / "spdx_downloads" / "jsonld"
-
-
-def count_spdx_jsonld_files(directory: Path) -> int:
-    """Count SPDX v3 JSON-LD files (*.jsonld) in the given directory.
-
-    Raises HTTPException(503) if the directory does not exist or is not readable.
-    """
-
-    if not directory.exists() or not directory.is_dir():
-        logging.warning("SPDX JSON-LD directory not found: %s", directory)
-        raise HTTPException(
-            status_code=503,
-            detail=f"SPDX JSON-LD directory not found: {directory}",
-        )
-
-    count = 0
-    for entry in directory.iterdir():
-        if entry.is_file() and entry.suffix.lower() == ".jsonld":
-            count += 1
-    logging.debug("Counted %d SPDX JSON-LD files in %s", count, directory)
-    return count
-
-
 @router.get("/health")
-def health_check():
-    logging.debug("Health check endpoint called")
-    return {"status": "ok"}
+async def health_check():
+    return {"status": "alive"}
 
 
 @router.get("/ping")
-def ping():
-    logging.debug("Ping endpoint called")
+async def ping():
     return {"message": "pong"}
 
 
-@router.get("/metrics/spdx-jsonld-count")
-def spdx_jsonld_count():
-    """Return the number of SPDX v3 JSON-LD license files on disk.
+@router.get("/ready")
+async def readiness(service: LicenseService = Depends(get_license_service)):
+    licenses_ready = service.health_can_resolve()
+    fuseki_enabled = os.getenv("FUSEKI_ENABLE", "true").lower() == "true"
+    fuseki_ready = None
+    if fuseki_enabled:
+        client = FusekiClient(
+            fuseki_url=os.getenv("FUSEKI_URL", "http://localhost:3030"),
+            dataset=os.getenv("FUSEKI_DATASET", "licenses"),
+            username=os.getenv("FUSEKI_USER"),
+            password=os.getenv("FUSEKI_PASSWORD"),
+            timeout=5.0,
+        )
+        fuseki_ready = await client.check_connection()
 
-    Counts files under the repository's `spdx_downloads/jsonld` directory.
-    """
+    ready = licenses_ready and (fuseki_ready is True or fuseki_ready is None)
+    return {
+        "status": "ready" if ready else "not_ready",
+        "licenses": {"ready": licenses_ready},
+        "fuseki": {"enabled": fuseki_enabled, "ready": fuseki_ready},
+    }
 
-    count = count_spdx_jsonld_files(SPDX_JSONLD_DIR)
-    return {"spdx_v3_jsonld_count": count}

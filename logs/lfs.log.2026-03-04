@@ -1,0 +1,821 @@
+2026-03-04 11:09:10,077 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 11:09:10,430 DEBUG Using selector: KqueueSelector
+2026-03-04 11:09:10,441 INFO Application startup
+2026-03-04 11:09:10,442 INFO Checking for license data updates...
+2026-03-04 11:09:10,474 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 11:09:10,490 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108682810>
+2026-03-04 11:09:10,490 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x108659ed0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 11:09:10,500 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107f7cef0>
+2026-03-04 11:09:10,500 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 11:09:10,501 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,501 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 11:09:10,501 DEBUG send_request_body.complete
+2026-03-04 11:09:10,501 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 11:09:10,655 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'0CEE:358841:7BC5D7:8E9D28:69A804C6'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams21033-AMS'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772618951.511316,VS0,VE150'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'f89f33833be3f9cb53bc4694d9fe1177405bf249'), (b'Expires', b'Wed, 04 Mar 2026 10:14:10 GMT'), (b'Source-Age', b'0')])
+2026-03-04 11:09:10,656 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 11:09:10,656 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 11:09:10,658 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,658 DEBUG response_closed.started
+2026-03-04 11:09:10,659 DEBUG response_closed.complete
+2026-03-04 11:09:10,662 DEBUG Cache is up to date: 3.28.0
+2026-03-04 11:09:10,662 DEBUG close.started
+2026-03-04 11:09:10,662 DEBUG close.complete
+2026-03-04 11:09:10,662 DEBUG Using cached license data
+2026-03-04 11:09:10,662 INFO License cache check complete
+2026-03-04 11:09:10,664 INFO Initializing Fuseki with license RDF data...
+2026-03-04 11:09:10,664 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 11:09:10,664 INFO Checking Fuseki connection...
+2026-03-04 11:09:10,670 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 11:09:10,671 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1086f2a20>
+2026-03-04 11:09:10,672 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 11:09:10,672 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,672 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 11:09:10,672 DEBUG send_request_body.complete
+2026-03-04 11:09:10,672 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 11:09:10,674 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-04 11:09:10,675 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-04 11:09:10,675 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 11:09:10,675 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,675 DEBUG response_closed.started
+2026-03-04 11:09:10,675 DEBUG response_closed.complete
+2026-03-04 11:09:10,676 DEBUG close.started
+2026-03-04 11:09:10,676 DEBUG close.complete
+2026-03-04 11:09:10,676 INFO ✓ Fuseki server is accessible
+2026-03-04 11:09:10,676 INFO Checking dataset 'licenses'...
+2026-03-04 11:09:10,682 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 11:09:10,683 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1086f38f0>
+2026-03-04 11:09:10,684 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 11:09:10,684 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,684 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 11:09:10,684 DEBUG send_request_body.complete
+2026-03-04 11:09:10,684 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 11:09:10,692 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Vary', b'Accept,Accept-Encoding,Accept-Charset,Origin,Access-Control-Request-Method,Access-Control-Request-Headers'), (b'Set-Cookie', b'JSESSIONID=node0v6waem201q5xq7ijezsj9xg710.node0; Path=/'), (b'Expires', b'Thu, 01 Jan 1970 00:00:00 GMT'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Tue, 03-Mar-2026 10:09:10 GMT; SameSite=lax'), (b'Fuseki-Request-Id', b'102'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'3181')])
+2026-03-04 11:09:10,692 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 200 OK"
+2026-03-04 11:09:10,692 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 11:09:10,692 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,692 DEBUG response_closed.started
+2026-03-04 11:09:10,692 DEBUG response_closed.complete
+2026-03-04 11:09:10,693 DEBUG close.started
+2026-03-04 11:09:10,693 DEBUG close.complete
+2026-03-04 11:09:10,693 WARNING Error checking dataset existence: 'licenses.name'
+2026-03-04 11:09:10,693 INFO Creating dataset 'licenses'...
+2026-03-04 11:09:10,699 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-04 11:09:10,701 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108788860>
+2026-03-04 11:09:10,701 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,701 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,701 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,702 DEBUG send_request_body.complete
+2026-03-04 11:09:10,702 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,707 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'JSESSIONID=node0132d9yhqc3uan1gqje4txj2bpr11.node0; Path=/'), (b'Expires', b'Thu, 01 Jan 1970 00:00:00 GMT'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Tue, 03-Mar-2026 10:09:10 GMT; SameSite=lax'), (b'Fuseki-Request-Id', b'103'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'36')])
+2026-03-04 11:09:10,708 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 409 Conflict"
+2026-03-04 11:09:10,708 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,708 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,708 DEBUG response_closed.started
+2026-03-04 11:09:10,708 DEBUG response_closed.complete
+2026-03-04 11:09:10,708 INFO Fuseki dataset 'licenses' already exists
+2026-03-04 11:09:10,709 DEBUG close.started
+2026-03-04 11:09:10,709 DEBUG close.complete
+2026-03-04 11:09:10,709 INFO ✓ Dataset 'licenses' is ready
+2026-03-04 11:09:10,709 INFO Starting license upload to Fuseki...
+2026-03-04 11:09:10,712 INFO Found 727 licenses in cache
+2026-03-04 11:09:10,882 INFO Loaded 727 detailed licenses
+2026-03-04 11:09:10,883 INFO Processing batch 1/15 (licenses 1-50)
+2026-03-04 11:09:10,899 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:10,901 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a3e240>
+2026-03-04 11:09:10,901 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,901 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,901 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,901 DEBUG send_request_body.complete
+2026-03-04 11:09:10,901 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,923 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'104'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:10,923 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:10,923 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,923 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,924 DEBUG response_closed.started
+2026-03-04 11:09:10,924 DEBUG response_closed.complete
+2026-03-04 11:09:10,924 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:10,924 DEBUG close.started
+2026-03-04 11:09:10,924 DEBUG close.complete
+2026-03-04 11:09:10,924 INFO Batch 1 uploaded successfully (50 licenses)
+2026-03-04 11:09:10,924 INFO Processing batch 2/15 (licenses 51-100)
+2026-03-04 11:09:10,939 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:10,940 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a97500>
+2026-03-04 11:09:10,941 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,941 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,941 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,941 DEBUG send_request_body.complete
+2026-03-04 11:09:10,941 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,954 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'105'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:10,954 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:10,954 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,954 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,954 DEBUG response_closed.started
+2026-03-04 11:09:10,954 DEBUG response_closed.complete
+2026-03-04 11:09:10,955 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:10,955 DEBUG close.started
+2026-03-04 11:09:10,955 DEBUG close.complete
+2026-03-04 11:09:10,955 INFO Batch 2 uploaded successfully (50 licenses)
+2026-03-04 11:09:10,955 INFO Processing batch 3/15 (licenses 101-150)
+2026-03-04 11:09:10,971 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:10,972 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a3f890>
+2026-03-04 11:09:10,973 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,973 DEBUG send_request_headers.complete
+2026-03-04 11:09:10,973 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,973 DEBUG send_request_body.complete
+2026-03-04 11:09:10,973 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:10,988 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:10 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'106'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:10,988 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:10,988 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:10,988 DEBUG receive_response_body.complete
+2026-03-04 11:09:10,989 DEBUG response_closed.started
+2026-03-04 11:09:10,989 DEBUG response_closed.complete
+2026-03-04 11:09:10,989 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:10,989 DEBUG close.started
+2026-03-04 11:09:10,989 DEBUG close.complete
+2026-03-04 11:09:10,989 INFO Batch 3 uploaded successfully (50 licenses)
+2026-03-04 11:09:10,989 INFO Processing batch 4/15 (licenses 151-200)
+2026-03-04 11:09:11,004 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,005 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1089bfda0>
+2026-03-04 11:09:11,005 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,006 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,006 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,006 DEBUG send_request_body.complete
+2026-03-04 11:09:11,006 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,019 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'107'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,020 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,020 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,020 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,020 DEBUG response_closed.started
+2026-03-04 11:09:11,020 DEBUG response_closed.complete
+2026-03-04 11:09:11,020 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,020 DEBUG close.started
+2026-03-04 11:09:11,020 DEBUG close.complete
+2026-03-04 11:09:11,020 INFO Batch 4 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,020 INFO Processing batch 5/15 (licenses 201-250)
+2026-03-04 11:09:11,036 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,038 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b20710>
+2026-03-04 11:09:11,039 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,039 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,039 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,039 DEBUG send_request_body.complete
+2026-03-04 11:09:11,039 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,053 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'108'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,054 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,054 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,054 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,054 DEBUG response_closed.started
+2026-03-04 11:09:11,054 DEBUG response_closed.complete
+2026-03-04 11:09:11,054 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,054 DEBUG close.started
+2026-03-04 11:09:11,054 DEBUG close.complete
+2026-03-04 11:09:11,054 INFO Batch 5 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,054 INFO Processing batch 6/15 (licenses 251-300)
+2026-03-04 11:09:11,070 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,071 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108abdeb0>
+2026-03-04 11:09:11,071 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,071 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,071 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,072 DEBUG send_request_body.complete
+2026-03-04 11:09:11,072 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,087 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'109'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,087 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,087 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,088 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,088 DEBUG response_closed.started
+2026-03-04 11:09:11,088 DEBUG response_closed.complete
+2026-03-04 11:09:11,088 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,088 DEBUG close.started
+2026-03-04 11:09:11,088 DEBUG close.complete
+2026-03-04 11:09:11,088 INFO Batch 6 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,088 INFO Processing batch 7/15 (licenses 301-350)
+2026-03-04 11:09:11,103 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,104 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1089f07d0>
+2026-03-04 11:09:11,105 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,105 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,105 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,105 DEBUG send_request_body.complete
+2026-03-04 11:09:11,105 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,120 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'110'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,120 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,120 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,120 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,120 DEBUG response_closed.started
+2026-03-04 11:09:11,120 DEBUG response_closed.complete
+2026-03-04 11:09:11,120 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,121 DEBUG close.started
+2026-03-04 11:09:11,121 DEBUG close.complete
+2026-03-04 11:09:11,121 INFO Batch 7 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,121 INFO Processing batch 8/15 (licenses 351-400)
+2026-03-04 11:09:11,136 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,137 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b69e20>
+2026-03-04 11:09:11,137 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,137 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,137 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,137 DEBUG send_request_body.complete
+2026-03-04 11:09:11,137 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,152 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'111'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,152 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,152 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,152 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,152 DEBUG response_closed.started
+2026-03-04 11:09:11,152 DEBUG response_closed.complete
+2026-03-04 11:09:11,153 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,153 DEBUG close.started
+2026-03-04 11:09:11,153 DEBUG close.complete
+2026-03-04 11:09:11,153 INFO Batch 8 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,153 INFO Processing batch 9/15 (licenses 401-450)
+2026-03-04 11:09:11,168 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,170 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108bb3980>
+2026-03-04 11:09:11,170 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,170 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,170 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,170 DEBUG send_request_body.complete
+2026-03-04 11:09:11,170 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,183 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'112'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,183 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,183 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,183 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,184 DEBUG response_closed.started
+2026-03-04 11:09:11,184 DEBUG response_closed.complete
+2026-03-04 11:09:11,184 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,184 DEBUG close.started
+2026-03-04 11:09:11,184 DEBUG close.complete
+2026-03-04 11:09:11,184 INFO Batch 9 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,184 INFO Processing batch 10/15 (licenses 451-500)
+2026-03-04 11:09:11,200 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,202 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b6ac90>
+2026-03-04 11:09:11,202 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,202 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,202 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,202 DEBUG send_request_body.complete
+2026-03-04 11:09:11,202 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,214 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'113'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,214 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,214 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,214 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,214 DEBUG response_closed.started
+2026-03-04 11:09:11,214 DEBUG response_closed.complete
+2026-03-04 11:09:11,214 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,214 DEBUG close.started
+2026-03-04 11:09:11,214 DEBUG close.complete
+2026-03-04 11:09:11,215 INFO Batch 10 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,215 INFO Processing batch 11/15 (licenses 501-550)
+2026-03-04 11:09:11,229 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,230 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a3d940>
+2026-03-04 11:09:11,231 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,231 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,231 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,231 DEBUG send_request_body.complete
+2026-03-04 11:09:11,231 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,251 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'114'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,251 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,251 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,251 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,251 DEBUG response_closed.started
+2026-03-04 11:09:11,251 DEBUG response_closed.complete
+2026-03-04 11:09:11,252 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,252 DEBUG close.started
+2026-03-04 11:09:11,252 DEBUG close.complete
+2026-03-04 11:09:11,252 INFO Batch 11 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,252 INFO Processing batch 12/15 (licenses 551-600)
+2026-03-04 11:09:11,267 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,270 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108abd640>
+2026-03-04 11:09:11,270 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,271 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,271 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,271 DEBUG send_request_body.complete
+2026-03-04 11:09:11,271 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,295 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'115'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,295 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,296 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,296 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,296 DEBUG response_closed.started
+2026-03-04 11:09:11,296 DEBUG response_closed.complete
+2026-03-04 11:09:11,296 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,297 DEBUG close.started
+2026-03-04 11:09:11,297 DEBUG close.complete
+2026-03-04 11:09:11,297 INFO Batch 12 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,297 INFO Processing batch 13/15 (licenses 601-650)
+2026-03-04 11:09:11,313 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,319 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108c4c8c0>
+2026-03-04 11:09:11,321 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,321 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,321 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,322 DEBUG send_request_body.complete
+2026-03-04 11:09:11,322 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,347 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'116'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,347 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,347 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,347 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,347 DEBUG response_closed.started
+2026-03-04 11:09:11,347 DEBUG response_closed.complete
+2026-03-04 11:09:11,348 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,348 DEBUG close.started
+2026-03-04 11:09:11,348 DEBUG close.complete
+2026-03-04 11:09:11,348 INFO Batch 13 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,348 INFO Processing batch 14/15 (licenses 651-700)
+2026-03-04 11:09:11,364 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,366 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108abdfd0>
+2026-03-04 11:09:11,366 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,366 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,366 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,366 DEBUG send_request_body.complete
+2026-03-04 11:09:11,366 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,381 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'117'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,381 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,382 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,382 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,382 DEBUG response_closed.started
+2026-03-04 11:09:11,382 DEBUG response_closed.complete
+2026-03-04 11:09:11,382 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,382 DEBUG close.started
+2026-03-04 11:09:11,382 DEBUG close.complete
+2026-03-04 11:09:11,382 INFO Batch 14 uploaded successfully (50 licenses)
+2026-03-04 11:09:11,382 INFO Processing batch 15/15 (licenses 701-727)
+2026-03-04 11:09:11,394 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,395 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1089f0650>
+2026-03-04 11:09:11,395 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,395 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,395 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,396 DEBUG send_request_body.complete
+2026-03-04 11:09:11,396 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,412 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'118'), (b'Content-Type', b'application/json;charset=utf-8'), (b'Content-Length', b'65')])
+2026-03-04 11:09:11,412 INFO HTTP Request: POST http://localhost:3030/licenses/data "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,412 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,412 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,412 DEBUG response_closed.started
+2026-03-04 11:09:11,413 DEBUG response_closed.complete
+2026-03-04 11:09:11,413 DEBUG RDF data uploaded successfully to licenses
+2026-03-04 11:09:11,413 DEBUG close.started
+2026-03-04 11:09:11,413 DEBUG close.complete
+2026-03-04 11:09:11,413 INFO Batch 15 uploaded successfully (27 licenses)
+2026-03-04 11:09:11,418 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,419 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1089bfc80>
+2026-03-04 11:09:11,420 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,420 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,420 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,420 DEBUG send_request_body.complete
+2026-03-04 11:09:11,420 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,429 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'119'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'application/sparql-results+json; charset=utf-8'), (b'Transfer-Encoding', b'chunked')])
+2026-03-04 11:09:11,429 INFO HTTP Request: POST http://localhost:3030/licenses/query "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,429 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,430 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,430 DEBUG response_closed.started
+2026-03-04 11:09:11,430 DEBUG response_closed.complete
+2026-03-04 11:09:11,430 DEBUG close.started
+2026-03-04 11:09:11,430 DEBUG close.complete
+2026-03-04 11:09:11,430 INFO Total licenses in Fuseki: 727
+2026-03-04 11:09:11,435 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=30.0 socket_options=None
+2026-03-04 11:09:11,437 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a3f560>
+2026-03-04 11:09:11,437 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,437 DEBUG send_request_headers.complete
+2026-03-04 11:09:11,437 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,437 DEBUG send_request_body.complete
+2026-03-04 11:09:11,437 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-04 11:09:11,453 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Wed, 04 Mar 2026 10:09:11 GMT'), (b'Vary', b'Origin'), (b'Fuseki-Request-Id', b'120'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'application/sparql-results+json; charset=utf-8'), (b'Transfer-Encoding', b'chunked')])
+2026-03-04 11:09:11,453 INFO HTTP Request: POST http://localhost:3030/licenses/query "HTTP/1.1 200 OK"
+2026-03-04 11:09:11,453 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-04 11:09:11,453 DEBUG receive_response_body.complete
+2026-03-04 11:09:11,453 DEBUG response_closed.started
+2026-03-04 11:09:11,453 DEBUG response_closed.complete
+2026-03-04 11:09:11,454 DEBUG close.started
+2026-03-04 11:09:11,454 DEBUG close.complete
+2026-03-04 11:09:11,454 INFO Total triples in Fuseki: 5481
+2026-03-04 11:09:11,455 INFO ================================================================================
+2026-03-04 11:09:11,455 INFO Fuseki Initialization Summary:
+2026-03-04 11:09:11,455 INFO   Fuseki URL: http://localhost:3030
+2026-03-04 11:09:11,455 INFO   Dataset: licenses
+2026-03-04 11:09:11,455 INFO   Total licenses: 727
+2026-03-04 11:09:11,455 INFO   Uploaded: 727
+2026-03-04 11:09:11,455 INFO   Failed: 0
+2026-03-04 11:09:11,455 INFO   Batches: 15
+2026-03-04 11:09:11,455 INFO   Licenses in Fuseki: 727
+2026-03-04 11:09:11,455 INFO   Total triples: 5481
+2026-03-04 11:09:11,455 INFO ================================================================================
+2026-03-04 11:09:11,455 INFO ✓ Fuseki initialization completed successfully
+2026-03-04 11:15:53,920 INFO Application shutdown
+2026-03-04 14:17:57,462 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 14:17:57,784 DEBUG Using selector: KqueueSelector
+2026-03-04 14:17:57,794 INFO Application startup
+2026-03-04 14:17:57,794 INFO Checking for license data updates...
+2026-03-04 14:17:57,823 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:17:57,929 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a372f00>
+2026-03-04 14:17:57,929 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10a33eb50> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:17:57,939 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109fc6450>
+2026-03-04 14:17:57,939 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:17:57,939 DEBUG send_request_headers.complete
+2026-03-04 14:17:57,939 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:17:57,939 DEBUG send_request_body.complete
+2026-03-04 14:17:57,939 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:17:58,065 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'0CEE:358841:7BC5D7:8E9D28:69A804C6'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:17:58 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams2100095-AMS'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630278.942382,VS0,VE121'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'5ab9c91e93be3ae04bc77340bea1e49c97ee257b'), (b'Expires', b'Wed, 04 Mar 2026 13:22:58 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:17:58,065 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 14:17:58,066 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:17:58,068 DEBUG receive_response_body.complete
+2026-03-04 14:17:58,069 DEBUG response_closed.started
+2026-03-04 14:17:58,069 DEBUG response_closed.complete
+2026-03-04 14:17:58,071 DEBUG Cache is up to date: 3.28.0
+2026-03-04 14:17:58,072 DEBUG close.started
+2026-03-04 14:17:58,072 DEBUG close.complete
+2026-03-04 14:17:58,072 DEBUG Using cached license data
+2026-03-04 14:17:58,072 INFO License cache check complete
+2026-03-04 14:17:58,073 INFO Initializing Fuseki with license RDF data...
+2026-03-04 14:17:58,073 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 14:17:58,073 INFO Checking Fuseki connection...
+2026-03-04 14:17:58,079 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 14:17:58,080 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 14:17:58,080 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 14:17:58,080 WARNING Fuseki server is not accessible
+2026-03-04 14:17:58,080 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 14:21:42,564 INFO Application shutdown
+2026-03-04 14:21:44,045 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 14:21:44,463 DEBUG Using selector: KqueueSelector
+2026-03-04 14:21:44,474 INFO Application startup
+2026-03-04 14:21:44,474 INFO Checking for license data updates...
+2026-03-04 14:21:44,500 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:21:44,511 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107cfd5e0>
+2026-03-04 14:21:44,511 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x107cb5cd0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:21:44,520 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10713a930>
+2026-03-04 14:21:44,520 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:21:44,520 DEBUG send_request_headers.complete
+2026-03-04 14:21:44,520 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:21:44,520 DEBUG send_request_body.complete
+2026-03-04 14:21:44,520 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:21:44,679 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'F7D6:33ABF1:4B0EE:52CF2:69A831E8'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:21:44 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290057-RTM'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630505.526746,VS0,VE131'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'a1aee775fdbde13129693c3f526a08d13911fee2'), (b'Expires', b'Wed, 04 Mar 2026 13:26:44 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:21:44,679 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 14:21:44,679 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:21:44,680 DEBUG receive_response_body.complete
+2026-03-04 14:21:44,681 DEBUG response_closed.started
+2026-03-04 14:21:44,681 DEBUG response_closed.complete
+2026-03-04 14:21:44,685 DEBUG Cache is up to date: 3.28.0
+2026-03-04 14:21:44,685 DEBUG close.started
+2026-03-04 14:21:44,685 DEBUG close.complete
+2026-03-04 14:21:44,685 DEBUG Using cached license data
+2026-03-04 14:21:44,685 INFO License cache check complete
+2026-03-04 14:21:44,687 INFO Initializing Fuseki with license RDF data...
+2026-03-04 14:21:44,687 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 14:21:44,687 INFO Checking Fuseki connection...
+2026-03-04 14:21:44,693 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 14:21:44,695 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 14:21:44,695 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 14:21:44,695 WARNING Fuseki server is not accessible
+2026-03-04 14:21:44,695 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 14:22:07,777 DEBUG Create complete SPDX v3 document for license: ss
+2026-03-04 14:22:07,789 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:22:07,798 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107d856a0>
+2026-03-04 14:22:07,798 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x107dd5cd0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:22:07,807 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x107d6f4a0>
+2026-03-04 14:22:07,808 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:22:07,808 DEBUG send_request_headers.complete
+2026-03-04 14:22:07,808 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:22:07,808 DEBUG send_request_body.complete
+2026-03-04 14:22:07,808 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:22:07,950 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 404, b'Not Found', [(b'Connection', b'keep-alive'), (b'Content-Length', b'14'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'Content-Type', b'text/plain; charset=utf-8'), (b'X-GitHub-Request-Id', b'6296:25512D:4EA72:5694B:69A831FF'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:22:07 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290031-RTM'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630528.810376,VS0,VE136'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'c6cf506b20408bc81bf03d2fb8961d034b4276c2'), (b'Expires', b'Wed, 04 Mar 2026 13:27:07 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:22:07,951 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/details/ss.json "HTTP/1.1 404 Not Found"
+2026-03-04 14:22:07,952 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:22:07,952 DEBUG receive_response_body.complete
+2026-03-04 14:22:07,953 DEBUG response_closed.started
+2026-03-04 14:22:07,953 DEBUG response_closed.complete
+2026-03-04 14:22:07,955 DEBUG close.started
+2026-03-04 14:22:07,956 DEBUG close.complete
+2026-03-04 14:22:24,874 INFO Application shutdown
+2026-03-04 14:22:25,443 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 14:22:25,937 DEBUG Using selector: KqueueSelector
+2026-03-04 14:22:25,948 INFO Application startup
+2026-03-04 14:22:25,948 INFO Checking for license data updates...
+2026-03-04 14:22:25,973 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:22:25,984 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a4b1910>
+2026-03-04 14:22:25,984 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10a46dcd0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:22:25,993 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109a39b20>
+2026-03-04 14:22:25,994 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:22:25,994 DEBUG send_request_headers.complete
+2026-03-04 14:22:25,994 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:22:25,994 DEBUG send_request_body.complete
+2026-03-04 14:22:25,994 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:22:25,999 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'0CEE:358841:7BC5D7:8E9D28:69A804C6'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:22:25 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams2100095-AMS'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630546.996438,VS0,VE1'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'4647ef224057c1268f744d423092a7bc4345c11c'), (b'Expires', b'Wed, 04 Mar 2026 13:27:25 GMT'), (b'Source-Age', b'268')])
+2026-03-04 14:22:26,000 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 14:22:26,000 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:22:26,003 DEBUG receive_response_body.complete
+2026-03-04 14:22:26,003 DEBUG response_closed.started
+2026-03-04 14:22:26,003 DEBUG response_closed.complete
+2026-03-04 14:22:26,005 DEBUG Cache is up to date: 3.28.0
+2026-03-04 14:22:26,006 DEBUG close.started
+2026-03-04 14:22:26,006 DEBUG close.complete
+2026-03-04 14:22:26,006 DEBUG Using cached license data
+2026-03-04 14:22:26,006 INFO License cache check complete
+2026-03-04 14:22:26,007 INFO Initializing Fuseki with license RDF data...
+2026-03-04 14:22:26,007 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 14:22:26,007 INFO Checking Fuseki connection...
+2026-03-04 14:22:26,013 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 14:22:26,015 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 14:22:26,015 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 14:22:26,015 WARNING Fuseki server is not accessible
+2026-03-04 14:22:26,015 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 14:22:46,343 INFO Application shutdown
+2026-03-04 14:23:06,542 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 14:23:08,268 DEBUG Using selector: KqueueSelector
+2026-03-04 14:23:08,333 INFO Application startup
+2026-03-04 14:23:08,333 INFO Checking for license data updates...
+2026-03-04 14:23:08,372 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:23:08,387 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109d8c830>
+2026-03-04 14:23:08,387 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10a275d50> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:23:08,397 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10988ca70>
+2026-03-04 14:23:08,398 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:23:08,398 DEBUG send_request_headers.complete
+2026-03-04 14:23:08,398 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:23:08,399 DEBUG send_request_body.complete
+2026-03-04 14:23:08,399 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:23:08,404 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'F7D6:33ABF1:4B0EE:52CF2:69A831E8'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:23:08 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290058-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630588.400747,VS0,VE1'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'cf3f022252b17bc191b89b14bbff5fc4711b2561'), (b'Expires', b'Wed, 04 Mar 2026 13:28:08 GMT'), (b'Source-Age', b'84')])
+2026-03-04 14:23:08,406 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 14:23:08,406 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:23:08,420 DEBUG receive_response_body.complete
+2026-03-04 14:23:08,420 DEBUG response_closed.started
+2026-03-04 14:23:08,420 DEBUG response_closed.complete
+2026-03-04 14:23:08,424 DEBUG Cache is up to date: 3.28.0
+2026-03-04 14:23:08,424 DEBUG close.started
+2026-03-04 14:23:08,425 DEBUG close.complete
+2026-03-04 14:23:08,425 DEBUG Using cached license data
+2026-03-04 14:23:08,425 INFO License cache check complete
+2026-03-04 14:23:08,427 INFO Initializing Fuseki with license RDF data...
+2026-03-04 14:23:13,697 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 14:23:13,697 INFO Checking Fuseki connection...
+2026-03-04 14:23:13,705 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 14:23:13,708 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 14:23:13,710 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 14:23:13,710 WARNING Fuseki server is not accessible
+2026-03-04 14:23:13,710 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 14:23:20,172 DEBUG Create complete SPDX v3 document for license: ss
+2026-03-04 14:23:20,183 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:23:20,195 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109d8fec0>
+2026-03-04 14:23:20,195 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10a3897d0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:23:20,204 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a254290>
+2026-03-04 14:23:20,205 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:23:20,206 DEBUG send_request_headers.complete
+2026-03-04 14:23:20,206 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:23:20,206 DEBUG send_request_body.complete
+2026-03-04 14:23:20,206 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:23:20,335 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 404, b'Not Found', [(b'Connection', b'keep-alive'), (b'Content-Length', b'14'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'Content-Type', b'text/plain; charset=utf-8'), (b'X-GitHub-Request-Id', b'456A:E37B4:4FAB7:580FC:69A83248'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:23:20 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams2100135-AMS'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630600.208145,VS0,VE120'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'7cfb0dcc413e7e6e05be621e59c81856515fa937'), (b'Expires', b'Wed, 04 Mar 2026 13:28:20 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:23:20,337 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/details/ss.json "HTTP/1.1 404 Not Found"
+2026-03-04 14:23:20,338 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:23:20,339 DEBUG receive_response_body.complete
+2026-03-04 14:23:20,340 DEBUG response_closed.started
+2026-03-04 14:23:20,341 DEBUG response_closed.complete
+2026-03-04 14:23:20,342 DEBUG close.started
+2026-03-04 14:23:20,343 DEBUG close.complete
+2026-03-04 14:23:34,931 DEBUG Create complete SPDX v3 document for license: l
+2026-03-04 14:23:34,944 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:23:34,954 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a329490>
+2026-03-04 14:23:34,955 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10a342ad0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:23:34,964 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a328a40>
+2026-03-04 14:23:34,965 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:23:34,965 DEBUG send_request_headers.complete
+2026-03-04 14:23:34,965 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:23:34,966 DEBUG send_request_body.complete
+2026-03-04 14:23:34,966 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:23:35,141 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 404, b'Not Found', [(b'Connection', b'keep-alive'), (b'Content-Length', b'14'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'Content-Type', b'text/plain; charset=utf-8'), (b'X-GitHub-Request-Id', b'ACB4:27A623:54BE5:5D3F0:69A83256'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:23:35 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290047-RTM'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772630615.967387,VS0,VE170'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'23f60dc1ddc6de9a38e22fbc251534c8584bbd10'), (b'Expires', b'Wed, 04 Mar 2026 13:28:35 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:23:35,143 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/details/l.json "HTTP/1.1 404 Not Found"
+2026-03-04 14:23:35,144 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:23:35,145 DEBUG receive_response_body.complete
+2026-03-04 14:23:35,147 DEBUG response_closed.started
+2026-03-04 14:23:35,147 DEBUG response_closed.complete
+2026-03-04 14:23:35,149 DEBUG close.started
+2026-03-04 14:23:35,150 DEBUG close.complete
+2026-03-04 14:23:57,943 INFO Application shutdown
+2026-03-04 14:42:48,100 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 14:42:49,919 DEBUG Using selector: KqueueSelector
+2026-03-04 14:42:49,985 INFO Application startup
+2026-03-04 14:42:49,985 INFO Checking for license data updates...
+2026-03-04 14:42:50,036 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:42:50,049 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10ca350a0>
+2026-03-04 14:42:50,049 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10ca01bd0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:42:50,060 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10c6b48f0>
+2026-03-04 14:42:50,061 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:42:50,061 DEBUG send_request_headers.complete
+2026-03-04 14:42:50,061 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:42:50,061 DEBUG send_request_body.complete
+2026-03-04 14:42:50,061 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:42:50,161 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'F7D6:33ABF1:4B0EE:52CF2:69A831E8'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:42:50 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290045-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772631770.067935,VS0,VE95'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'9ade6939e76f1d8869eb50aeb9acf89a56a853ce'), (b'Expires', b'Wed, 04 Mar 2026 13:47:50 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:42:50,163 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 14:42:50,163 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:42:50,177 DEBUG receive_response_body.complete
+2026-03-04 14:42:50,178 DEBUG response_closed.started
+2026-03-04 14:42:50,178 DEBUG response_closed.complete
+2026-03-04 14:42:50,181 DEBUG Cache is up to date: 3.28.0
+2026-03-04 14:42:50,182 DEBUG close.started
+2026-03-04 14:42:50,182 DEBUG close.complete
+2026-03-04 14:42:50,182 DEBUG Using cached license data
+2026-03-04 14:42:50,183 INFO License cache check complete
+2026-03-04 14:42:50,186 INFO Initializing Fuseki with license RDF data...
+2026-03-04 14:42:57,405 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 14:42:57,405 INFO Checking Fuseki connection...
+2026-03-04 14:42:57,414 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 14:42:57,417 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 14:42:57,419 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 14:42:57,419 WARNING Fuseki server is not accessible
+2026-03-04 14:42:57,419 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 14:44:18,103 DEBUG Create complete SPDX v3 document for license: l
+2026-03-04 14:44:20,966 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:44:20,981 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10caadc40>
+2026-03-04 14:44:20,982 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10cb0d950> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:44:20,991 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10caacdd0>
+2026-03-04 14:44:20,994 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:44:20,996 DEBUG send_request_headers.complete
+2026-03-04 14:44:20,997 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:44:20,997 DEBUG send_request_body.complete
+2026-03-04 14:44:20,998 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:44:21,116 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 404, b'Not Found', [(b'Connection', b'keep-alive'), (b'Content-Length', b'14'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'Content-Type', b'text/plain; charset=utf-8'), (b'X-GitHub-Request-Id', b'7956:2CEA98:9CE7D:ADA0D:69A83734'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:44:21 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams21064-AMS'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772631861.003168,VS0,VE112'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'1bddfd6f591ef10dadebacfb6768ec9a256371d9'), (b'Expires', b'Wed, 04 Mar 2026 13:49:21 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:44:21,120 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/details/l.json "HTTP/1.1 404 Not Found"
+2026-03-04 14:44:21,121 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:44:21,123 DEBUG receive_response_body.complete
+2026-03-04 14:44:21,126 DEBUG response_closed.started
+2026-03-04 14:44:21,127 DEBUG response_closed.complete
+2026-03-04 14:44:21,132 DEBUG close.started
+2026-03-04 14:44:21,133 DEBUG close.complete
+2026-03-04 14:58:18,088 INFO Application shutdown
+2026-03-04 14:58:25,124 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 14:58:26,930 DEBUG Using selector: KqueueSelector
+2026-03-04 14:58:26,993 INFO Application startup
+2026-03-04 14:58:26,993 INFO Checking for license data updates...
+2026-03-04 14:58:27,035 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:58:27,070 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1086f08c0>
+2026-03-04 14:58:27,070 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x1086cb250> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:58:27,082 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10827aae0>
+2026-03-04 14:58:27,083 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:58:27,083 DEBUG send_request_headers.complete
+2026-03-04 14:58:27,084 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:58:27,084 DEBUG send_request_body.complete
+2026-03-04 14:58:27,084 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:58:27,176 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'F7D6:33ABF1:4B0EE:52CF2:69A831E8'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:58:27 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290042-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772632707.090109,VS0,VE88'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'2657225ccb4be325171343cae7e0aa0cc9bc05c0'), (b'Expires', b'Wed, 04 Mar 2026 14:03:27 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:58:27,178 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 14:58:27,179 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:58:27,192 DEBUG receive_response_body.complete
+2026-03-04 14:58:27,193 DEBUG response_closed.started
+2026-03-04 14:58:27,194 DEBUG response_closed.complete
+2026-03-04 14:58:27,196 DEBUG Cache is up to date: 3.28.0
+2026-03-04 14:58:27,197 DEBUG close.started
+2026-03-04 14:58:27,197 DEBUG close.complete
+2026-03-04 14:58:27,198 DEBUG Using cached license data
+2026-03-04 14:58:27,198 INFO License cache check complete
+2026-03-04 14:58:27,200 INFO Initializing Fuseki with license RDF data...
+2026-03-04 14:58:27,201 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 14:58:27,201 INFO Checking Fuseki connection...
+2026-03-04 14:58:27,208 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 14:58:27,211 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 14:58:27,213 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 14:58:27,213 WARNING Fuseki server is not accessible
+2026-03-04 14:58:27,213 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 14:59:24,813 DEBUG Create complete SPDX v3 document for license: abc, custom=False
+2026-03-04 14:59:29,441 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 14:59:29,458 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1087ab590>
+2026-03-04 14:59:29,458 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x1087c9e50> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 14:59:29,468 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108792c30>
+2026-03-04 14:59:29,473 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 14:59:29,475 DEBUG send_request_headers.complete
+2026-03-04 14:59:29,475 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 14:59:29,476 DEBUG send_request_body.complete
+2026-03-04 14:59:29,476 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 14:59:29,616 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 404, b'Not Found', [(b'Connection', b'keep-alive'), (b'Content-Length', b'14'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'Content-Type', b'text/plain; charset=utf-8'), (b'X-GitHub-Request-Id', b'B80D:E37B4:DBF23:F2C4F:69A83AB7'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 13:59:29 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams21034-AMS'), (b'X-Cache', b'MISS'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772632769.483151,VS0,VE134'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'b9cb9c8742be42c0341072dade5ae5d73132163a'), (b'Expires', b'Wed, 04 Mar 2026 14:04:29 GMT'), (b'Source-Age', b'0')])
+2026-03-04 14:59:29,622 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/details/abc.json "HTTP/1.1 404 Not Found"
+2026-03-04 14:59:29,623 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 14:59:29,624 DEBUG receive_response_body.complete
+2026-03-04 14:59:29,628 DEBUG response_closed.started
+2026-03-04 14:59:29,629 DEBUG response_closed.complete
+2026-03-04 14:59:29,635 DEBUG close.started
+2026-03-04 14:59:29,636 DEBUG close.complete
+2026-03-04 14:59:59,507 INFO Application shutdown
+2026-03-04 15:00:25,521 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 15:00:27,332 DEBUG Using selector: KqueueSelector
+2026-03-04 15:00:27,395 INFO Application startup
+2026-03-04 15:00:27,395 INFO Checking for license data updates...
+2026-03-04 15:00:27,437 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 15:00:27,451 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081acc20>
+2026-03-04 15:00:27,451 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x108153450> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 15:00:27,460 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x106cc06b0>
+2026-03-04 15:00:27,461 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 15:00:27,461 DEBUG send_request_headers.complete
+2026-03-04 15:00:27,461 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 15:00:27,462 DEBUG send_request_body.complete
+2026-03-04 15:00:27,462 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 15:00:27,467 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'F7D6:33ABF1:4B0EE:52CF2:69A831E8'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 14:00:27 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290042-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772632827.468203,VS0,VE1'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'88c9ba9dc9ad8799a9a969458db777ffbf1d273b'), (b'Expires', b'Wed, 04 Mar 2026 14:05:27 GMT'), (b'Source-Age', b'120')])
+2026-03-04 15:00:27,468 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 15:00:27,469 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 15:00:27,482 DEBUG receive_response_body.complete
+2026-03-04 15:00:27,483 DEBUG response_closed.started
+2026-03-04 15:00:27,483 DEBUG response_closed.complete
+2026-03-04 15:00:27,486 DEBUG Cache is up to date: 3.28.0
+2026-03-04 15:00:27,486 DEBUG close.started
+2026-03-04 15:00:27,487 DEBUG close.complete
+2026-03-04 15:00:27,487 DEBUG Using cached license data
+2026-03-04 15:00:27,487 INFO License cache check complete
+2026-03-04 15:00:27,489 INFO Initializing Fuseki with license RDF data...
+2026-03-04 15:00:27,490 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 15:00:27,490 INFO Checking Fuseki connection...
+2026-03-04 15:00:27,497 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 15:00:27,500 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 15:00:27,501 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 15:00:27,502 WARNING Fuseki server is not accessible
+2026-03-04 15:00:27,502 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 15:00:34,253 DEBUG Create complete SPDX v3 document for license: abc, custom=True
+2026-03-04 15:00:59,882 DEBUG Create complete SPDX v3 document for license: abc, custom=True
+2026-03-04 15:05:11,766 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 15:05:13,502 DEBUG Using selector: KqueueSelector
+2026-03-04 15:05:13,565 INFO Application startup
+2026-03-04 15:05:13,565 INFO Checking for license data updates...
+2026-03-04 15:05:13,603 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 15:05:13,617 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10be7f680>
+2026-03-04 15:05:13,617 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10c053250> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 15:05:13,627 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10bf5a360>
+2026-03-04 15:05:13,628 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 15:05:13,628 DEBUG send_request_headers.complete
+2026-03-04 15:05:13,628 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 15:05:13,628 DEBUG send_request_body.complete
+2026-03-04 15:05:13,628 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 15:05:13,753 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'F7D6:33ABF1:4B0EE:52CF2:69A831E8'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 14:05:13 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290035-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'1'), (b'X-Timer', b'S1772633114.634926,VS0,VE119'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'24b8c67ecd5439b5e782837e26d857b38cc14b3c'), (b'Expires', b'Wed, 04 Mar 2026 14:10:13 GMT'), (b'Source-Age', b'0')])
+2026-03-04 15:05:13,754 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 15:05:13,755 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 15:05:13,768 DEBUG receive_response_body.complete
+2026-03-04 15:05:13,769 DEBUG response_closed.started
+2026-03-04 15:05:13,769 DEBUG response_closed.complete
+2026-03-04 15:05:13,772 DEBUG Cache is up to date: 3.28.0
+2026-03-04 15:05:13,772 DEBUG close.started
+2026-03-04 15:05:13,773 DEBUG close.complete
+2026-03-04 15:05:13,773 DEBUG Using cached license data
+2026-03-04 15:05:13,773 INFO License cache check complete
+2026-03-04 15:05:13,775 INFO Initializing Fuseki with license RDF data...
+2026-03-04 15:05:13,775 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 15:05:13,775 INFO Checking Fuseki connection...
+2026-03-04 15:05:13,782 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 15:05:13,785 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 15:05:13,787 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 15:05:13,787 WARNING Fuseki server is not accessible
+2026-03-04 15:05:13,787 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 15:05:19,354 DEBUG Create complete SPDX v3 document for license: My-Custom-1.0, custom=True
+2026-03-04 15:06:23,041 INFO Application shutdown
+2026-03-04 15:06:25,784 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 15:06:26,212 DEBUG Using selector: KqueueSelector
+2026-03-04 15:06:26,220 INFO Application startup
+2026-03-04 15:06:26,220 INFO Checking for license data updates...
+2026-03-04 15:06:26,241 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 15:06:26,252 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108844560>
+2026-03-04 15:06:26,252 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x1089373d0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 15:06:26,260 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1088b5910>
+2026-03-04 15:06:26,261 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 15:06:26,261 DEBUG send_request_headers.complete
+2026-03-04 15:06:26,261 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 15:06:26,261 DEBUG send_request_body.complete
+2026-03-04 15:06:26,261 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 15:06:26,386 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'0CEE:358841:7BC5D7:8E9D28:69A804C6'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 14:06:26 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams2100117-AMS'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772633186.268065,VS0,VE120'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'569b08071f9d635ec25c270662dae94a8ac111f5'), (b'Expires', b'Wed, 04 Mar 2026 14:11:26 GMT'), (b'Source-Age', b'0')])
+2026-03-04 15:06:26,386 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 15:06:26,386 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 15:06:26,389 DEBUG receive_response_body.complete
+2026-03-04 15:06:26,389 DEBUG response_closed.started
+2026-03-04 15:06:26,389 DEBUG response_closed.complete
+2026-03-04 15:06:26,391 DEBUG Cache is up to date: 3.28.0
+2026-03-04 15:06:26,392 DEBUG close.started
+2026-03-04 15:06:26,392 DEBUG close.complete
+2026-03-04 15:06:26,392 DEBUG Using cached license data
+2026-03-04 15:06:26,392 INFO License cache check complete
+2026-03-04 15:06:26,393 INFO Initializing Fuseki with license RDF data...
+2026-03-04 15:06:26,393 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 15:06:26,393 INFO Checking Fuseki connection...
+2026-03-04 15:06:26,399 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 15:06:26,401 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 15:06:26,401 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 15:06:26,401 WARNING Fuseki server is not accessible
+2026-03-04 15:06:26,402 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 15:06:46,199 DEBUG Create complete SPDX v3 document for license: My-Custom-1.0, custom=True
+2026-03-04 15:07:00,391 DEBUG Create complete SPDX v3 document for license: My-Custom-1.0, custom=True
+2026-03-04 15:07:19,030 DEBUG Create complete SPDX v3 document for license: My-Custom-1.0, custom=True
+2026-03-04 15:08:12,618 INFO Application shutdown
+2026-03-04 15:14:58,183 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-04 15:14:58,616 DEBUG Using selector: KqueueSelector
+2026-03-04 15:14:58,626 INFO Application startup
+2026-03-04 15:14:58,626 INFO Checking for license data updates...
+2026-03-04 15:14:58,654 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-04 15:14:58,665 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108342f00>
+2026-03-04 15:14:58,665 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x1083273d0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-04 15:14:58,674 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081675c0>
+2026-03-04 15:14:58,674 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-04 15:14:58,674 DEBUG send_request_headers.complete
+2026-03-04 15:14:58,674 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-04 15:14:58,674 DEBUG send_request_body.complete
+2026-03-04 15:14:58,674 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-04 15:14:58,801 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39160'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"222cbfb82d705612cfc65077470d4dc7989419e8baad9731629e4af47d7e9a49"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'0CEE:358841:7BC5D7:8E9D28:69A804C6'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Wed, 04 Mar 2026 14:14:58 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-ams21037-AMS'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1772633699.683880,VS0,VE122'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'09e2b1508a27b1979318522539d2cf2d1752772b'), (b'Expires', b'Wed, 04 Mar 2026 14:19:58 GMT'), (b'Source-Age', b'0')])
+2026-03-04 15:14:58,802 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-04 15:14:58,802 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-04 15:14:58,804 DEBUG receive_response_body.complete
+2026-03-04 15:14:58,805 DEBUG response_closed.started
+2026-03-04 15:14:58,805 DEBUG response_closed.complete
+2026-03-04 15:14:58,807 DEBUG Cache is up to date: 3.28.0
+2026-03-04 15:14:58,807 DEBUG close.started
+2026-03-04 15:14:58,807 DEBUG close.complete
+2026-03-04 15:14:58,807 DEBUG Using cached license data
+2026-03-04 15:14:58,807 INFO License cache check complete
+2026-03-04 15:14:58,810 INFO Initializing Fuseki with license RDF data...
+2026-03-04 15:14:58,810 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-04 15:14:58,810 INFO Checking Fuseki connection...
+2026-03-04 15:14:58,816 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-04 15:14:58,817 DEBUG connect_tcp.failed exception=ConnectError(OSError('All connection attempts failed'))
+2026-03-04 15:14:58,817 WARNING Cannot connect to Fuseki server: All connection attempts failed
+2026-03-04 15:14:58,817 WARNING Fuseki server is not accessible
+2026-03-04 15:14:58,817 WARNING ⚠ Fuseki server not available - RDF features will be disabled
+2026-03-04 15:21:21,041 DEBUG Create complete SPDX v3 document for license: My-Custom-1.0, custom=True

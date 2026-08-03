@@ -33,19 +33,21 @@ class FusekiClient:
             password: Fuseki admin password
             timeout: Request timeout in seconds
         """
-        self.fuseki_url = fuseki_url or os.getenv(
-            "FUSEKI_URL", "http://localhost:3030"
-        )
+        self.fuseki_url = fuseki_url or os.getenv("FUSEKI_URL", "http://localhost:3030")
         self.dataset = dataset
-        self.username = username or os.getenv("FUSEKI_USER", "admin")
-        self.password = password or os.getenv("FUSEKI_PASSWORD", "admin")
+        self.username = username or os.getenv("FUSEKI_USER")
+        self.password = password or os.getenv("FUSEKI_PASSWORD")
         self.timeout = timeout
         self.data_endpoint = f"{self.fuseki_url}/{dataset}/data"
         self.query_endpoint = f"{self.fuseki_url}/{dataset}/query"
         self.update_endpoint = f"{self.fuseki_url}/{dataset}/update"
 
-        # Create auth object
-        self.auth = httpx.BasicAuth(self.username, self.password)
+        # Create auth object only when explicitly configured.
+        self.auth = (
+            httpx.BasicAuth(self.username, self.password)
+            if self.username is not None and self.password is not None
+            else None
+        )
 
         logging.info(
             f"Fuseki client initialized: {self.fuseki_url}/{dataset} (user: {self.username})"
@@ -328,4 +330,3 @@ def set_fuseki_client(client: FusekiClient):
     """
     global _fuseki_client
     _fuseki_client = client
-

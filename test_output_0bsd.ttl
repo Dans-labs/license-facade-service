@@ -1,0 +1,67 @@
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix lfs: <https://lfs.labs.dansdemo.nl/api/v1/licenses/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix spdx: <http://spdx.org/rdf/terms#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+lfs:d1b405f5-98e2-5acd-9f7b-531983fb5aad a spdx:License ;
+    rdfs:label "BSD Zero Clause License" ;
+    dcterms:identifier "0BSD" ;
+    dcterms:title "BSD Zero Clause License" ;
+    spdx:crossRef [ a spdx:CrossRef ;
+            dcterms:date "2026-02-20T20:59:24+00:00"^^xsd:dateTime ;
+            spdx:isLive false ;
+            spdx:isValid true ;
+            spdx:isWayBackLink false ;
+            spdx:match "N/A" ;
+            spdx:order 0 ;
+            spdx:url <http://landley.net/toybox/license.html> ],
+        [ a spdx:CrossRef ;
+            dcterms:date "2026-02-20T20:59:24+00:00"^^xsd:dateTime ;
+            spdx:isLive true ;
+            spdx:isValid true ;
+            spdx:isWayBackLink false ;
+            spdx:match "N/A" ;
+            spdx:order 1 ;
+            spdx:url <https://opensource.org/licenses/0BSD> ] ;
+    spdx:isDeprecatedLicenseId false ;
+    spdx:isOsiApproved true ;
+    spdx:licenseId "0BSD" ;
+    spdx:licenseText """Copyright (C) YEAR by AUTHOR EMAIL
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+""" ;
+    spdx:licenseTextHtml """
+      <div class="optional-license-text"> 
+         <p><var class="replaceable-license-text"><span title="can be replaced with the pattern (BSD Zero[ -]Clause|Zero[ -]Clause BSD)( License)?( \\(0BSD\\))?"> BSD Zero Clause License</span></var></p>
+
+      </div>
+      <div class="replaceable-license-text"><span title="can be replaced with the pattern .{0,5000}"> 
+         <p>Copyright (C) YEAR by AUTHOR EMAIL</p>
+
+      </span></div>
+
+      <p>Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is
+         hereby granted.</p>
+
+      <p>THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE
+         INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE
+         LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING
+         FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+         ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</p>
+
+    """ ;
+    spdx:name "BSD Zero Clause License" ;
+    spdx:standardLicenseTemplate """<<beginOptional>><<var;name="title";original="BSD Zero Clause License";match="(BSD Zero[ -]Clause|Zero[ -]Clause BSD)( License)?( \\(0BSD\\))?">>
+
+<<endOptional>> <<var;name="copyright";original="Copyright (C) YEAR by AUTHOR EMAIL  ";match=".{0,5000}">>
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+""" ;
+    rdfs:seeAlso <http://landley.net/toybox/license.html>,
+        <https://opensource.org/licenses/0BSD> .
+

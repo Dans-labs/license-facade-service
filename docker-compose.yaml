@@ -1,12 +1,10 @@
 services:
   fuseki:
-    image: secoresearch/fuseki:latest
+    image: secoresearch/fuseki:4.10.0
     container_name: lfs-fuseki
     environment:
-      ADMIN_PASSWORD: ${FUSEKI_ADMIN_PASSWORD:-admin}
+      ADMIN_PASSWORD: ${FUSEKI_ADMIN_PASSWORD}
       JVM_ARGS: ${FUSEKI_JVM_ARGS:--Xmx2g -Xms1g}
-    ports:
-      - "3030:3030"
     volumes:
       - fuseki-data:/fuseki
     restart: unless-stopped
@@ -16,6 +14,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - lfs-internal
 
   license-facade-service:
     container_name: lfs
@@ -31,10 +31,15 @@ services:
       BASE_DIR: /home/akmi/lfs
       URL_BASE: ${URL_BASE:-https://lfs.labs.dansdemo.nl/api/v1/licenses}
       FUSEKI_URL: ${FUSEKI_URL:-http://fuseki:3030}
-      FUSEKI_USER: ${FUSEKI_USER:-admin}
-      FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
+      FUSEKI_USER: ${FUSEKI_USER:-}
+      FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-}
       FUSEKI_ENABLE: ${FUSEKI_ENABLE:-true}
       FUSEKI_CLEAR_ON_STARTUP: ${FUSEKI_CLEAR_ON_STARTUP:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-false}
+      RELOAD_ENABLE: ${RELOAD_ENABLE:-false}
+      LFS_ADMIN_TOKEN: ${LFS_ADMIN_TOKEN:-}
+      LFS_CURATOR_TOKEN: ${LFS_CURATOR_TOKEN:-}
     ports:
       - "12104:12104"
     volumes:
@@ -45,8 +50,19 @@ services:
       fuseki:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:12104/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - lfs-internal
 
 volumes:
   fuseki-data:
     driver: local
 
+networks:
+  lfs-internal:
+    driver: bridge

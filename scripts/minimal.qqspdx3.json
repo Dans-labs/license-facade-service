@@ -1,0 +1,39 @@
+{
+  "@context": "https://spdx.github.io/spdx-spec/v3.0/model/jsonld/context.json",
+  "@graph": [
+    {
+      "@type": "Bundle",
+      "spdxId": "https://spdx.org/spdxdocs/eb65785c-8e74-4795-a78a-8b0a1044edc4#SPDXRef-DOCUMENT",
+      "creationInfo": {
+        "specVersion": "3.0.0",
+        "created": "2026-03-04T12:51:46.219928+00:00Z",
+        "createdBy": [
+          "https://spdx.org/spdxdocs/eb65785c-8e74-4795-a78a-8b0a1044edc4#creator-6189488c-19b7-48f2-936a-d5ea5cfdcef3"
+        ],
+        "profile": [
+          "core"
+        ]
+      },
+      "name": "Minimal SPDX Document",
+      "element": [
+        "https://spdx.org/spdxdocs/eb65785c-8e74-4795-a78a-8b0a1044edc4#SPDXRef-Package-1"
+      ],
+      "rootElement": [
+        "https://spdx.org/spdxdocs/eb65785c-8e74-4795-a78a-8b0a1044edc4#SPDXRef-Package-1"
+      ]
+    },
+    {
+      "@type": "software_Package",
+      "spdxId": "https://spdx.org/spdxdocs/eb65785c-8e74-4795-a78a-8b0a1044edc4#SPDXRef-Package-1",
+      "name": "minimal-package",
+      "creationInfo": {
+        "specVersion": "3.0.0",
+        "created": "2026-03-04T11:50:31Z",
+        "createdBy": [
+          "https://spdx.org/spdxdocs/eb65785c-8e74-4795-a78a-8b0a1044edc4#creator-6189488c-19b7-48f2-936a-d5ea5cfdcef3"
+        ]
+      },
+      "downloadLocation": "NOASSERTION"
+    }
+  ]
+}

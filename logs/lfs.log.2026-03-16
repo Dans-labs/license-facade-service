@@ -1,0 +1,1998 @@
+2026-03-16 08:18:44,248 INFO Application shutdown
+2026-03-16 13:16:36,334 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-16 13:16:36,668 DEBUG Using selector: KqueueSelector
+2026-03-16 13:16:36,679 INFO Application startup
+2026-03-16 13:16:36,679 INFO Checking for license data updates...
+2026-03-16 13:16:36,716 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:16:36,735 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109f21340>
+2026-03-16 13:16:36,735 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x109f8bb50> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-16 13:16:36,746 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109b665d0>
+2026-03-16 13:16:36,747 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:16:36,748 DEBUG send_request_headers.complete
+2026-03-16 13:16:36,748 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:16:36,748 DEBUG send_request_body.complete
+2026-03-16 13:16:36,748 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:16:36,863 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'75AE:237C9A:13306A:15406E:69B7F0A0'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Mon, 16 Mar 2026 12:16:36 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290041-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1773663397.754092,VS0,VE104'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'75eb16312ed5147895983f3b5538ea7c89a9a08e'), (b'Expires', b'Mon, 16 Mar 2026 12:21:36 GMT'), (b'Source-Age', b'0')])
+2026-03-16 13:16:36,863 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-16 13:16:36,863 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:16:36,864 DEBUG receive_response_body.complete
+2026-03-16 13:16:36,864 DEBUG response_closed.started
+2026-03-16 13:16:36,864 DEBUG response_closed.complete
+2026-03-16 13:16:36,867 DEBUG Cache is up to date: 1ff5448
+2026-03-16 13:16:36,867 DEBUG close.started
+2026-03-16 13:16:36,867 DEBUG close.complete
+2026-03-16 13:16:36,867 DEBUG Using cached license data
+2026-03-16 13:16:36,868 INFO License cache check complete
+2026-03-16 13:16:36,869 INFO Initializing Fuseki with license RDF data...
+2026-03-16 13:16:36,869 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-16 13:16:36,869 INFO Checking Fuseki connection...
+2026-03-16 13:16:36,877 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:16:36,880 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a0437d0>
+2026-03-16 13:16:36,880 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:16:36,880 DEBUG send_request_headers.complete
+2026-03-16 13:16:36,880 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:16:36,881 DEBUG send_request_body.complete
+2026-03-16 13:16:36,881 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:16:36,962 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 16 Mar 2026 12:16:36 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-16 13:16:36,962 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-16 13:16:36,962 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:16:36,962 DEBUG receive_response_body.complete
+2026-03-16 13:16:36,963 DEBUG response_closed.started
+2026-03-16 13:16:36,963 DEBUG response_closed.complete
+2026-03-16 13:16:36,963 DEBUG close.started
+2026-03-16 13:16:36,964 DEBUG close.complete
+2026-03-16 13:16:36,964 INFO ✓ Fuseki server is accessible
+2026-03-16 13:16:36,964 INFO Checking dataset 'licenses'...
+2026-03-16 13:16:36,968 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:16:36,970 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a0fc590>
+2026-03-16 13:16:36,970 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:16:36,971 DEBUG send_request_headers.complete
+2026-03-16 13:16:36,971 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:16:36,971 DEBUG send_request_body.complete
+2026-03-16 13:16:36,971 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:16:37,023 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:16:36 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:16:37 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:16:37,023 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:16:37,023 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:16:37,023 DEBUG receive_response_body.complete
+2026-03-16 13:16:37,023 DEBUG response_closed.started
+2026-03-16 13:16:37,023 DEBUG response_closed.complete
+2026-03-16 13:16:37,023 DEBUG close.started
+2026-03-16 13:16:37,024 DEBUG close.complete
+2026-03-16 13:16:37,024 INFO Creating dataset 'licenses'...
+2026-03-16 13:16:37,028 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:16:37,029 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a0fd490>
+2026-03-16 13:16:37,029 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-16 13:16:37,029 DEBUG send_request_headers.complete
+2026-03-16 13:16:37,029 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-16 13:16:37,030 DEBUG send_request_body.complete
+2026-03-16 13:16:37,030 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-16 13:16:37,047 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:16:37 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:16:37 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:16:37,048 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:16:37,048 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-16 13:16:37,048 DEBUG receive_response_body.complete
+2026-03-16 13:16:37,048 DEBUG response_closed.started
+2026-03-16 13:16:37,048 DEBUG response_closed.complete
+2026-03-16 13:16:37,048 ERROR Failed to create dataset: 401 - 
+2026-03-16 13:16:37,048 DEBUG close.started
+2026-03-16 13:16:37,048 DEBUG close.complete
+2026-03-16 13:16:37,048 ERROR Failed to create dataset 'licenses'
+2026-03-16 13:16:37,048 WARNING ⚠ Fuseki initialization completed with errors: ["Failed to create dataset 'licenses'"]
+2026-03-16 13:17:28,238 DEBUG Licenses endpoint called
+2026-03-16 13:17:28,241 DEBUG Using cached licenses list
+2026-03-16 13:17:28,248 DEBUG Using cached details for 0BSD
+2026-03-16 13:17:28,249 DEBUG Using cached details for 3D-Slicer-1.0
+2026-03-16 13:17:28,249 DEBUG Using cached details for AAL
+2026-03-16 13:17:28,249 DEBUG Using cached details for Abstyles
+2026-03-16 13:17:28,249 DEBUG Using cached details for AdaCore-doc
+2026-03-16 13:17:28,250 DEBUG Using cached details for Adobe-2006
+2026-03-16 13:17:28,250 DEBUG Using cached details for Adobe-Display-PostScript
+2026-03-16 13:17:28,250 DEBUG Using cached details for Adobe-Glyph
+2026-03-16 13:17:28,250 DEBUG Using cached details for Adobe-Utopia
+2026-03-16 13:17:28,250 DEBUG Using cached details for ADSL
+2026-03-16 13:17:28,251 DEBUG Using cached details for Advanced-Cryptics-Dictionary
+2026-03-16 13:17:28,251 DEBUG Using cached details for AFL-1.1
+2026-03-16 13:17:28,251 DEBUG Using cached details for AFL-1.2
+2026-03-16 13:17:28,251 DEBUG Using cached details for AFL-2.0
+2026-03-16 13:17:28,252 DEBUG Using cached details for AFL-2.1
+2026-03-16 13:17:28,252 DEBUG Using cached details for AFL-3.0
+2026-03-16 13:17:28,252 DEBUG Using cached details for Afmparse
+2026-03-16 13:17:28,252 DEBUG Using cached details for AGPL-1.0
+2026-03-16 13:17:28,253 DEBUG Using cached details for AGPL-1.0-only
+2026-03-16 13:17:28,253 DEBUG Using cached details for AGPL-1.0-or-later
+2026-03-16 13:17:28,253 DEBUG Using cached details for AGPL-3.0
+2026-03-16 13:17:28,254 DEBUG Using cached details for AGPL-3.0-only
+2026-03-16 13:17:28,254 DEBUG Using cached details for AGPL-3.0-or-later
+2026-03-16 13:17:28,255 DEBUG Using cached details for Aladdin
+2026-03-16 13:17:28,255 DEBUG Using cached details for ALGLIB-Documentation
+2026-03-16 13:17:28,255 DEBUG Using cached details for AMD-newlib
+2026-03-16 13:17:28,255 DEBUG Using cached details for AMDPLPA
+2026-03-16 13:17:28,255 DEBUG Using cached details for AML
+2026-03-16 13:17:28,256 DEBUG Using cached details for AML-glslang
+2026-03-16 13:17:28,256 DEBUG Using cached details for AMPAS
+2026-03-16 13:17:28,256 DEBUG Using cached details for ANTLR-PD
+2026-03-16 13:17:28,256 DEBUG Using cached details for ANTLR-PD-fallback
+2026-03-16 13:17:28,256 DEBUG Using cached details for any-OSI
+2026-03-16 13:17:28,256 DEBUG Using cached details for any-OSI-perl-modules
+2026-03-16 13:17:28,256 DEBUG Using cached details for Apache-1.0
+2026-03-16 13:17:28,257 DEBUG Using cached details for Apache-1.1
+2026-03-16 13:17:28,257 DEBUG Using cached details for Apache-2.0
+2026-03-16 13:17:28,257 DEBUG Using cached details for APAFML
+2026-03-16 13:17:28,258 DEBUG Using cached details for APL-1.0
+2026-03-16 13:17:28,258 DEBUG Using cached details for App-s2p
+2026-03-16 13:17:28,258 DEBUG Using cached details for APSL-1.0
+2026-03-16 13:17:28,259 DEBUG Using cached details for APSL-1.1
+2026-03-16 13:17:28,259 DEBUG Using cached details for APSL-1.2
+2026-03-16 13:17:28,259 DEBUG Using cached details for APSL-2.0
+2026-03-16 13:17:28,260 DEBUG Using cached details for Arphic-1999
+2026-03-16 13:17:28,260 DEBUG Using cached details for Artistic-1.0
+2026-03-16 13:17:28,260 DEBUG Using cached details for Artistic-1.0-cl8
+2026-03-16 13:17:28,260 DEBUG Using cached details for Artistic-1.0-Perl
+2026-03-16 13:17:28,261 DEBUG Using cached details for Artistic-2.0
+2026-03-16 13:17:28,261 DEBUG Using cached details for Artistic-dist
+2026-03-16 13:17:28,261 INFO Enriched 50/727 licenses
+2026-03-16 13:17:28,262 DEBUG Using cached details for Aspell-RU
+2026-03-16 13:17:28,262 DEBUG Using cached details for ASWF-Digital-Assets-1.0
+2026-03-16 13:17:28,262 DEBUG Using cached details for ASWF-Digital-Assets-1.1
+2026-03-16 13:17:28,262 DEBUG Using cached details for Baekmuk
+2026-03-16 13:17:28,262 DEBUG Using cached details for Bahyph
+2026-03-16 13:17:28,263 DEBUG Using cached details for Barr
+2026-03-16 13:17:28,263 DEBUG Using cached details for bcrypt-Solar-Designer
+2026-03-16 13:17:28,263 DEBUG Using cached details for Beerware
+2026-03-16 13:17:28,263 DEBUG Using cached details for Bitstream-Charter
+2026-03-16 13:17:28,263 DEBUG Using cached details for Bitstream-Vera
+2026-03-16 13:17:28,264 DEBUG Using cached details for BitTorrent-1.0
+2026-03-16 13:17:28,264 DEBUG Using cached details for BitTorrent-1.1
+2026-03-16 13:17:28,264 DEBUG Using cached details for blessing
+2026-03-16 13:17:28,264 DEBUG Using cached details for BlueOak-1.0.0
+2026-03-16 13:17:28,264 DEBUG Using cached details for Boehm-GC
+2026-03-16 13:17:28,264 DEBUG Using cached details for Boehm-GC-without-fee
+2026-03-16 13:17:28,265 DEBUG Using cached details for BOLA-1.1
+2026-03-16 13:17:28,265 DEBUG Using cached details for Borceux
+2026-03-16 13:17:28,265 DEBUG Using cached details for Brian-Gladman-2-Clause
+2026-03-16 13:17:28,265 DEBUG Using cached details for Brian-Gladman-3-Clause
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-1-Clause
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause-Darwin
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause-first-lines
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause-FreeBSD
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause-NetBSD
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause-Patent
+2026-03-16 13:17:28,266 DEBUG Using cached details for BSD-2-Clause-pkgconf-disclaimer
+2026-03-16 13:17:28,267 DEBUG Using cached details for BSD-2-Clause-Views
+2026-03-16 13:17:28,267 DEBUG Using cached details for BSD-3-Clause
+2026-03-16 13:17:28,267 DEBUG Using cached details for BSD-3-Clause-acpica
+2026-03-16 13:17:28,267 DEBUG Using cached details for BSD-3-Clause-Attribution
+2026-03-16 13:17:28,267 DEBUG Using cached details for BSD-3-Clause-Clear
+2026-03-16 13:17:28,267 DEBUG Using cached details for BSD-3-Clause-flex
+2026-03-16 13:17:28,268 DEBUG Using cached details for BSD-3-Clause-HP
+2026-03-16 13:17:28,268 DEBUG Using cached details for BSD-3-Clause-LBNL
+2026-03-16 13:17:28,268 DEBUG Using cached details for BSD-3-Clause-Modification
+2026-03-16 13:17:28,268 DEBUG Using cached details for BSD-3-Clause-No-Military-License
+2026-03-16 13:17:28,268 DEBUG Using cached details for BSD-3-Clause-No-Nuclear-License
+2026-03-16 13:17:28,268 DEBUG Using cached details for BSD-3-Clause-No-Nuclear-License-2014
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-3-Clause-No-Nuclear-Warranty
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-3-Clause-Open-MPI
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-3-Clause-Sun
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-3-Clause-Tso
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-4-Clause
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-4-Clause-Shortened
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-4-Clause-UC
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-4.3RENO
+2026-03-16 13:17:28,269 DEBUG Using cached details for BSD-4.3TAHOE
+2026-03-16 13:17:28,270 DEBUG Using cached details for BSD-Advertising-Acknowledgement
+2026-03-16 13:17:28,270 INFO Enriched 100/727 licenses
+2026-03-16 13:17:28,270 DEBUG Using cached details for BSD-Attribution-HPND-disclaimer
+2026-03-16 13:17:28,270 DEBUG Using cached details for BSD-Inferno-Nettverk
+2026-03-16 13:17:28,270 DEBUG Using cached details for BSD-Mark-Modifications
+2026-03-16 13:17:28,270 DEBUG Using cached details for BSD-Protection
+2026-03-16 13:17:28,270 DEBUG Using cached details for BSD-Source-beginning-file
+2026-03-16 13:17:28,271 DEBUG Using cached details for BSD-Source-Code
+2026-03-16 13:17:28,271 DEBUG Using cached details for BSD-Systemics
+2026-03-16 13:17:28,271 DEBUG Using cached details for BSD-Systemics-W3Works
+2026-03-16 13:17:28,271 DEBUG Using cached details for BSL-1.0
+2026-03-16 13:17:28,271 DEBUG Using cached details for Buddy
+2026-03-16 13:17:28,271 DEBUG Using cached details for BUSL-1.1
+2026-03-16 13:17:28,272 DEBUG Using cached details for bzip2-1.0.5
+2026-03-16 13:17:28,272 DEBUG Using cached details for bzip2-1.0.6
+2026-03-16 13:17:28,272 DEBUG Using cached details for C-UDA-1.0
+2026-03-16 13:17:28,272 DEBUG Using cached details for CAL-1.0
+2026-03-16 13:17:28,273 DEBUG Using cached details for CAL-1.0-Combined-Work-Exception
+2026-03-16 13:17:28,273 DEBUG Using cached details for Caldera
+2026-03-16 13:17:28,273 DEBUG Using cached details for Caldera-no-preamble
+2026-03-16 13:17:28,273 DEBUG Using cached details for CAPEC-tou
+2026-03-16 13:17:28,274 DEBUG Using cached details for Catharon
+2026-03-16 13:17:28,274 DEBUG Using cached details for CATOSL-1.1
+2026-03-16 13:17:28,274 DEBUG Using cached details for CC-BY-1.0
+2026-03-16 13:17:28,275 DEBUG Using cached details for CC-BY-2.0
+2026-03-16 13:17:28,275 DEBUG Using cached details for CC-BY-2.5
+2026-03-16 13:17:28,275 DEBUG Using cached details for CC-BY-2.5-AU
+2026-03-16 13:17:28,276 DEBUG Using cached details for CC-BY-3.0
+2026-03-16 13:17:28,276 DEBUG Using cached details for CC-BY-3.0-AT
+2026-03-16 13:17:28,277 DEBUG Using cached details for CC-BY-3.0-AU
+2026-03-16 13:17:28,277 DEBUG Using cached details for CC-BY-3.0-DE
+2026-03-16 13:17:28,277 DEBUG Using cached details for CC-BY-3.0-IGO
+2026-03-16 13:17:28,278 DEBUG Using cached details for CC-BY-3.0-NL
+2026-03-16 13:17:28,278 DEBUG Using cached details for CC-BY-3.0-US
+2026-03-16 13:17:28,278 DEBUG Using cached details for CC-BY-4.0
+2026-03-16 13:17:28,279 DEBUG Using cached details for CC-BY-NC-1.0
+2026-03-16 13:17:28,279 DEBUG Using cached details for CC-BY-NC-2.0
+2026-03-16 13:17:28,279 DEBUG Using cached details for CC-BY-NC-2.5
+2026-03-16 13:17:28,280 DEBUG Using cached details for CC-BY-NC-3.0
+2026-03-16 13:17:28,280 DEBUG Using cached details for CC-BY-NC-3.0-DE
+2026-03-16 13:17:28,281 DEBUG Using cached details for CC-BY-NC-4.0
+2026-03-16 13:17:28,281 DEBUG Using cached details for CC-BY-NC-ND-1.0
+2026-03-16 13:17:28,281 DEBUG Using cached details for CC-BY-NC-ND-2.0
+2026-03-16 13:17:28,282 DEBUG Using cached details for CC-BY-NC-ND-2.5
+2026-03-16 13:17:28,282 DEBUG Using cached details for CC-BY-NC-ND-3.0
+2026-03-16 13:17:28,282 DEBUG Using cached details for CC-BY-NC-ND-3.0-DE
+2026-03-16 13:17:28,283 DEBUG Using cached details for CC-BY-NC-ND-3.0-IGO
+2026-03-16 13:17:28,283 DEBUG Using cached details for CC-BY-NC-ND-4.0
+2026-03-16 13:17:28,283 DEBUG Using cached details for CC-BY-NC-SA-1.0
+2026-03-16 13:17:28,284 DEBUG Using cached details for CC-BY-NC-SA-2.0
+2026-03-16 13:17:28,284 DEBUG Using cached details for CC-BY-NC-SA-2.0-DE
+2026-03-16 13:17:28,284 DEBUG Using cached details for CC-BY-NC-SA-2.0-FR
+2026-03-16 13:17:28,284 INFO Enriched 150/727 licenses
+2026-03-16 13:17:28,285 DEBUG Using cached details for CC-BY-NC-SA-2.0-UK
+2026-03-16 13:17:28,285 DEBUG Using cached details for CC-BY-NC-SA-2.5
+2026-03-16 13:17:28,285 DEBUG Using cached details for CC-BY-NC-SA-3.0
+2026-03-16 13:17:28,286 DEBUG Using cached details for CC-BY-NC-SA-3.0-DE
+2026-03-16 13:17:28,286 DEBUG Using cached details for CC-BY-NC-SA-3.0-IGO
+2026-03-16 13:17:28,287 DEBUG Using cached details for CC-BY-NC-SA-4.0
+2026-03-16 13:17:28,287 DEBUG Using cached details for CC-BY-ND-1.0
+2026-03-16 13:17:28,287 DEBUG Using cached details for CC-BY-ND-2.0
+2026-03-16 13:17:28,288 DEBUG Using cached details for CC-BY-ND-2.5
+2026-03-16 13:17:28,288 DEBUG Using cached details for CC-BY-ND-3.0
+2026-03-16 13:17:28,289 DEBUG Using cached details for CC-BY-ND-3.0-DE
+2026-03-16 13:17:28,289 DEBUG Using cached details for CC-BY-ND-4.0
+2026-03-16 13:17:28,289 DEBUG Using cached details for CC-BY-SA-1.0
+2026-03-16 13:17:28,290 DEBUG Using cached details for CC-BY-SA-2.0
+2026-03-16 13:17:28,290 DEBUG Using cached details for CC-BY-SA-2.0-UK
+2026-03-16 13:17:28,290 DEBUG Using cached details for CC-BY-SA-2.1-JP
+2026-03-16 13:17:28,291 DEBUG Using cached details for CC-BY-SA-2.5
+2026-03-16 13:17:28,291 DEBUG Using cached details for CC-BY-SA-3.0
+2026-03-16 13:17:28,292 DEBUG Using cached details for CC-BY-SA-3.0-AT
+2026-03-16 13:17:28,292 DEBUG Using cached details for CC-BY-SA-3.0-DE
+2026-03-16 13:17:28,292 DEBUG Using cached details for CC-BY-SA-3.0-IGO
+2026-03-16 13:17:28,293 DEBUG Using cached details for CC-BY-SA-4.0
+2026-03-16 13:17:28,293 DEBUG Using cached details for CC-PDDC
+2026-03-16 13:17:28,293 DEBUG Using cached details for CC-PDM-1.0
+2026-03-16 13:17:28,293 DEBUG Using cached details for CC-SA-1.0
+2026-03-16 13:17:28,294 DEBUG Using cached details for CC0-1.0
+2026-03-16 13:17:28,294 DEBUG Using cached details for CDDL-1.0
+2026-03-16 13:17:28,294 DEBUG Using cached details for CDDL-1.1
+2026-03-16 13:17:28,294 DEBUG Using cached details for CDL-1.0
+2026-03-16 13:17:28,295 DEBUG Using cached details for CDLA-Permissive-1.0
+2026-03-16 13:17:28,295 DEBUG Using cached details for CDLA-Permissive-2.0
+2026-03-16 13:17:28,295 DEBUG Using cached details for CDLA-Sharing-1.0
+2026-03-16 13:17:28,296 DEBUG Using cached details for CECILL-1.0
+2026-03-16 13:17:28,296 DEBUG Using cached details for CECILL-1.1
+2026-03-16 13:17:28,297 DEBUG Using cached details for CECILL-2.0
+2026-03-16 13:17:28,297 DEBUG Using cached details for CECILL-2.1
+2026-03-16 13:17:28,297 DEBUG Using cached details for CECILL-B
+2026-03-16 13:17:28,298 DEBUG Using cached details for CECILL-C
+2026-03-16 13:17:28,298 DEBUG Using cached details for CERN-OHL-1.1
+2026-03-16 13:17:28,298 DEBUG Using cached details for CERN-OHL-1.2
+2026-03-16 13:17:28,299 DEBUG Using cached details for CERN-OHL-P-2.0
+2026-03-16 13:17:28,299 DEBUG Using cached details for CERN-OHL-S-2.0
+2026-03-16 13:17:28,299 DEBUG Using cached details for CERN-OHL-W-2.0
+2026-03-16 13:17:28,299 DEBUG Using cached details for CFITSIO
+2026-03-16 13:17:28,300 DEBUG Using cached details for check-cvs
+2026-03-16 13:17:28,300 DEBUG Using cached details for checkmk
+2026-03-16 13:17:28,300 DEBUG Using cached details for ClArtistic
+2026-03-16 13:17:28,300 DEBUG Using cached details for Clips
+2026-03-16 13:17:28,300 DEBUG Using cached details for CMU-Mach
+2026-03-16 13:17:28,301 DEBUG Using cached details for CMU-Mach-nodoc
+2026-03-16 13:17:28,301 INFO Enriched 200/727 licenses
+2026-03-16 13:17:28,301 DEBUG Using cached details for CNRI-Jython
+2026-03-16 13:17:28,301 DEBUG Using cached details for CNRI-Python
+2026-03-16 13:17:28,301 DEBUG Using cached details for CNRI-Python-GPL-Compatible
+2026-03-16 13:17:28,302 DEBUG Using cached details for COIL-1.0
+2026-03-16 13:17:28,302 DEBUG Using cached details for Community-Spec-1.0
+2026-03-16 13:17:28,302 DEBUG Using cached details for Condor-1.1
+2026-03-16 13:17:28,302 DEBUG Using cached details for copyleft-next-0.3.0
+2026-03-16 13:17:28,303 DEBUG Using cached details for copyleft-next-0.3.1
+2026-03-16 13:17:28,303 DEBUG Using cached details for Cornell-Lossless-JPEG
+2026-03-16 13:17:28,303 DEBUG Using cached details for CPAL-1.0
+2026-03-16 13:17:28,304 DEBUG Using cached details for CPL-1.0
+2026-03-16 13:17:28,304 DEBUG Using cached details for CPOL-1.02
+2026-03-16 13:17:28,304 DEBUG Using cached details for Cronyx
+2026-03-16 13:17:28,304 DEBUG Using cached details for Crossword
+2026-03-16 13:17:28,305 DEBUG Using cached details for CryptoSwift
+2026-03-16 13:17:28,305 DEBUG Using cached details for CrystalStacker
+2026-03-16 13:17:28,305 DEBUG Using cached details for CUA-OPL-1.0
+2026-03-16 13:17:28,305 DEBUG Using cached details for Cube
+2026-03-16 13:17:28,306 DEBUG Using cached details for curl
+2026-03-16 13:17:28,306 DEBUG Using cached details for cve-tou
+2026-03-16 13:17:28,306 DEBUG Using cached details for D-FSL-1.0
+2026-03-16 13:17:28,306 DEBUG Using cached details for DEC-3-Clause
+2026-03-16 13:17:28,306 DEBUG Using cached details for diffmark
+2026-03-16 13:17:28,307 DEBUG Using cached details for DL-DE-BY-2.0
+2026-03-16 13:17:28,307 DEBUG Using cached details for DL-DE-ZERO-2.0
+2026-03-16 13:17:28,307 DEBUG Using cached details for DOC
+2026-03-16 13:17:28,307 DEBUG Using cached details for DocBook-DTD
+2026-03-16 13:17:28,307 DEBUG Using cached details for DocBook-Schema
+2026-03-16 13:17:28,307 DEBUG Using cached details for DocBook-Stylesheet
+2026-03-16 13:17:28,307 DEBUG Using cached details for DocBook-XML
+2026-03-16 13:17:28,308 DEBUG Using cached details for Dotseqn
+2026-03-16 13:17:28,308 DEBUG Using cached details for DRL-1.0
+2026-03-16 13:17:28,308 DEBUG Using cached details for DRL-1.1
+2026-03-16 13:17:28,309 DEBUG Using cached details for DSDP
+2026-03-16 13:17:28,309 DEBUG Using cached details for dtoa
+2026-03-16 13:17:28,309 DEBUG Using cached details for dvipdfm
+2026-03-16 13:17:28,309 DEBUG Using cached details for ECL-1.0
+2026-03-16 13:17:28,310 DEBUG Using cached details for ECL-2.0
+2026-03-16 13:17:28,310 DEBUG Using cached details for eCos-2.0
+2026-03-16 13:17:28,310 DEBUG Using cached details for EFL-1.0
+2026-03-16 13:17:28,310 DEBUG Using cached details for EFL-2.0
+2026-03-16 13:17:28,310 DEBUG Using cached details for eGenix
+2026-03-16 13:17:28,310 DEBUG Using cached details for Elastic-2.0
+2026-03-16 13:17:28,311 DEBUG Using cached details for Entessa
+2026-03-16 13:17:28,311 DEBUG Using cached details for EPICS
+2026-03-16 13:17:28,311 DEBUG Using cached details for EPL-1.0
+2026-03-16 13:17:28,311 DEBUG Using cached details for EPL-2.0
+2026-03-16 13:17:28,312 DEBUG Using cached details for ErlPL-1.1
+2026-03-16 13:17:28,312 DEBUG Using cached details for ESA-PL-permissive-2.4
+2026-03-16 13:17:28,313 DEBUG Using cached details for ESA-PL-strong-copyleft-2.4
+2026-03-16 13:17:28,313 INFO Enriched 250/727 licenses
+2026-03-16 13:17:28,313 DEBUG Using cached details for ESA-PL-weak-copyleft-2.4
+2026-03-16 13:17:28,313 DEBUG Using cached details for etalab-2.0
+2026-03-16 13:17:28,314 DEBUG Using cached details for EUDatagrid
+2026-03-16 13:17:28,314 DEBUG Using cached details for EUPL-1.0
+2026-03-16 13:17:28,314 DEBUG Using cached details for EUPL-1.1
+2026-03-16 13:17:28,315 DEBUG Using cached details for EUPL-1.2
+2026-03-16 13:17:28,315 DEBUG Using cached details for Eurosym
+2026-03-16 13:17:28,315 DEBUG Using cached details for Fair
+2026-03-16 13:17:28,315 DEBUG Using cached details for FBM
+2026-03-16 13:17:28,315 DEBUG Using cached details for FDK-AAC
+2026-03-16 13:17:28,315 DEBUG Using cached details for Ferguson-Twofish
+2026-03-16 13:17:28,315 DEBUG Using cached details for Frameworx-1.0
+2026-03-16 13:17:28,316 DEBUG Using cached details for FreeBSD-DOC
+2026-03-16 13:17:28,316 DEBUG Using cached details for FreeImage
+2026-03-16 13:17:28,316 DEBUG Using cached details for FSFAP
+2026-03-16 13:17:28,316 DEBUG Using cached details for FSFAP-no-warranty-disclaimer
+2026-03-16 13:17:28,316 DEBUG Using cached details for FSFUL
+2026-03-16 13:17:28,316 DEBUG Using cached details for FSFULLR
+2026-03-16 13:17:28,316 DEBUG Using cached details for FSFULLRSD
+2026-03-16 13:17:28,317 DEBUG Using cached details for FSFULLRWD
+2026-03-16 13:17:28,317 DEBUG Using cached details for FSL-1.1-ALv2
+2026-03-16 13:17:28,317 DEBUG Using cached details for FSL-1.1-MIT
+2026-03-16 13:17:28,317 DEBUG Using cached details for FTL
+2026-03-16 13:17:28,317 DEBUG Using cached details for Furuseth
+2026-03-16 13:17:28,318 DEBUG Using cached details for fwlw
+2026-03-16 13:17:28,318 DEBUG Using cached details for Game-Programming-Gems
+2026-03-16 13:17:28,318 DEBUG Using cached details for GCR-docs
+2026-03-16 13:17:28,318 DEBUG Using cached details for GD
+2026-03-16 13:17:28,318 DEBUG Using cached details for generic-xts
+2026-03-16 13:17:28,319 DEBUG Using cached details for GFDL-1.1
+2026-03-16 13:17:28,319 DEBUG Using cached details for GFDL-1.1-invariants-only
+2026-03-16 13:17:28,319 DEBUG Using cached details for GFDL-1.1-invariants-or-later
+2026-03-16 13:17:28,320 DEBUG Using cached details for GFDL-1.1-no-invariants-only
+2026-03-16 13:17:28,320 DEBUG Using cached details for GFDL-1.1-no-invariants-or-later
+2026-03-16 13:17:28,321 DEBUG Using cached details for GFDL-1.1-only
+2026-03-16 13:17:28,321 DEBUG Using cached details for GFDL-1.1-or-later
+2026-03-16 13:17:28,321 DEBUG Using cached details for GFDL-1.2
+2026-03-16 13:17:28,322 DEBUG Using cached details for GFDL-1.2-invariants-only
+2026-03-16 13:17:28,322 DEBUG Using cached details for GFDL-1.2-invariants-or-later
+2026-03-16 13:17:28,322 DEBUG Using cached details for GFDL-1.2-no-invariants-only
+2026-03-16 13:17:28,323 DEBUG Using cached details for GFDL-1.2-no-invariants-or-later
+2026-03-16 13:17:28,323 DEBUG Using cached details for GFDL-1.2-only
+2026-03-16 13:17:28,323 DEBUG Using cached details for GFDL-1.2-or-later
+2026-03-16 13:17:28,324 DEBUG Using cached details for GFDL-1.3
+2026-03-16 13:17:28,324 DEBUG Using cached details for GFDL-1.3-invariants-only
+2026-03-16 13:17:28,324 DEBUG Using cached details for GFDL-1.3-invariants-or-later
+2026-03-16 13:17:28,325 DEBUG Using cached details for GFDL-1.3-no-invariants-only
+2026-03-16 13:17:28,325 DEBUG Using cached details for GFDL-1.3-no-invariants-or-later
+2026-03-16 13:17:28,325 DEBUG Using cached details for GFDL-1.3-only
+2026-03-16 13:17:28,326 DEBUG Using cached details for GFDL-1.3-or-later
+2026-03-16 13:17:28,326 INFO Enriched 300/727 licenses
+2026-03-16 13:17:28,326 DEBUG Using cached details for Giftware
+2026-03-16 13:17:28,326 DEBUG Using cached details for GL2PS
+2026-03-16 13:17:28,326 DEBUG Using cached details for Glide
+2026-03-16 13:17:28,327 DEBUG Using cached details for Glulxe
+2026-03-16 13:17:28,327 DEBUG Using cached details for GLWTPL
+2026-03-16 13:17:28,327 DEBUG Using cached details for gnuplot
+2026-03-16 13:17:28,327 DEBUG Using cached details for GPL-1.0
+2026-03-16 13:17:28,327 DEBUG Using cached details for GPL-1.0+
+2026-03-16 13:17:28,327 DEBUG Using cached details for GPL-1.0-only
+2026-03-16 13:17:28,328 DEBUG Using cached details for GPL-1.0-or-later
+2026-03-16 13:17:28,328 DEBUG Using cached details for GPL-2.0
+2026-03-16 13:17:28,329 DEBUG Using cached details for GPL-2.0+
+2026-03-16 13:17:28,329 DEBUG Using cached details for GPL-2.0-only
+2026-03-16 13:17:28,329 DEBUG Using cached details for GPL-2.0-or-later
+2026-03-16 13:17:28,329 DEBUG Using cached details for GPL-2.0-with-autoconf-exception
+2026-03-16 13:17:28,330 DEBUG Using cached details for GPL-2.0-with-bison-exception
+2026-03-16 13:17:28,330 DEBUG Using cached details for GPL-2.0-with-classpath-exception
+2026-03-16 13:17:28,330 DEBUG Using cached details for GPL-2.0-with-font-exception
+2026-03-16 13:17:28,330 DEBUG Using cached details for GPL-2.0-with-GCC-exception
+2026-03-16 13:17:28,331 DEBUG Using cached details for GPL-3.0
+2026-03-16 13:17:28,331 DEBUG Using cached details for GPL-3.0+
+2026-03-16 13:17:28,332 DEBUG Using cached details for GPL-3.0-only
+2026-03-16 13:17:28,332 DEBUG Using cached details for GPL-3.0-or-later
+2026-03-16 13:17:28,332 DEBUG Using cached details for GPL-3.0-with-autoconf-exception
+2026-03-16 13:17:28,332 DEBUG Using cached details for GPL-3.0-with-GCC-exception
+2026-03-16 13:17:28,333 DEBUG Using cached details for Graphics-Gems
+2026-03-16 13:17:28,333 DEBUG Using cached details for gSOAP-1.3b
+2026-03-16 13:17:28,333 DEBUG Using cached details for gtkbook
+2026-03-16 13:17:28,333 DEBUG Using cached details for Gutmann
+2026-03-16 13:17:28,333 DEBUG Using cached details for HaskellReport
+2026-03-16 13:17:28,333 DEBUG Using cached details for HDF5
+2026-03-16 13:17:28,334 DEBUG Using cached details for hdparm
+2026-03-16 13:17:28,334 DEBUG Using cached details for HIDAPI
+2026-03-16 13:17:28,334 DEBUG Using cached details for Hippocratic-2.1
+2026-03-16 13:17:28,334 DEBUG Using cached details for HP-1986
+2026-03-16 13:17:28,334 DEBUG Using cached details for HP-1989
+2026-03-16 13:17:28,334 DEBUG Using cached details for HPND
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-DEC
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-doc
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-doc-sell
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-export-US
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-export-US-acknowledgement
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-export-US-modify
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-export2-US
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-Fenneberg-Livingston
+2026-03-16 13:17:28,335 DEBUG Using cached details for HPND-INRIA-IMAG
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-Intel
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-Kevlin-Henney
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-Markus-Kuhn
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-merchantability-variant
+2026-03-16 13:17:28,336 INFO Enriched 350/727 licenses
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-MIT-disclaimer
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-Netrek
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-Pbmplus
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-sell-MIT-disclaimer-xserver
+2026-03-16 13:17:28,336 DEBUG Using cached details for HPND-sell-regexpr
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-sell-variant
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-sell-variant-critical-systems
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-sell-variant-MIT-disclaimer
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-sell-variant-MIT-disclaimer-rev
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-SMC
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-UC
+2026-03-16 13:17:28,337 DEBUG Using cached details for HPND-UC-export-US
+2026-03-16 13:17:28,337 DEBUG Using cached details for HTMLTIDY
+2026-03-16 13:17:28,337 DEBUG Using cached details for hyphen-bulgarian
+2026-03-16 13:17:28,337 DEBUG Using cached details for IBM-pibs
+2026-03-16 13:17:28,337 DEBUG Using cached details for ICU
+2026-03-16 13:17:28,338 DEBUG Using cached details for IEC-Code-Components-EULA
+2026-03-16 13:17:28,338 DEBUG Using cached details for IJG
+2026-03-16 13:17:28,338 DEBUG Using cached details for IJG-short
+2026-03-16 13:17:28,338 DEBUG Using cached details for ImageMagick
+2026-03-16 13:17:28,338 DEBUG Using cached details for iMatix
+2026-03-16 13:17:28,338 DEBUG Using cached details for Imlib2
+2026-03-16 13:17:28,339 DEBUG Using cached details for Info-ZIP
+2026-03-16 13:17:28,339 DEBUG Using cached details for Inner-Net-2.0
+2026-03-16 13:17:28,339 DEBUG Using cached details for InnoSetup
+2026-03-16 13:17:28,339 DEBUG Using cached details for Intel
+2026-03-16 13:17:28,339 DEBUG Using cached details for Intel-ACPI
+2026-03-16 13:17:28,340 DEBUG Using cached details for Interbase-1.0
+2026-03-16 13:17:28,340 DEBUG Using cached details for IPA
+2026-03-16 13:17:28,340 DEBUG Using cached details for IPL-1.0
+2026-03-16 13:17:28,340 DEBUG Using cached details for ISC
+2026-03-16 13:17:28,340 DEBUG Using cached details for ISC-Veillard
+2026-03-16 13:17:28,341 DEBUG Using cached details for ISO-permission
+2026-03-16 13:17:28,341 DEBUG Using cached details for Jam
+2026-03-16 13:17:28,341 DEBUG Using cached details for JasPer-2.0
+2026-03-16 13:17:28,341 DEBUG Using cached details for jove
+2026-03-16 13:17:28,341 DEBUG Using cached details for JPL-image
+2026-03-16 13:17:28,341 DEBUG Using cached details for JPNIC
+2026-03-16 13:17:28,341 DEBUG Using cached details for JSON
+2026-03-16 13:17:28,341 DEBUG Using cached details for Kastrup
+2026-03-16 13:17:28,341 DEBUG Using cached details for Kazlib
+2026-03-16 13:17:28,342 DEBUG Using cached details for Knuth-CTAN
+2026-03-16 13:17:28,342 DEBUG Using cached details for LAL-1.2
+2026-03-16 13:17:28,342 DEBUG Using cached details for LAL-1.3
+2026-03-16 13:17:28,342 DEBUG Using cached details for Latex2e
+2026-03-16 13:17:28,342 DEBUG Using cached details for Latex2e-translated-notice
+2026-03-16 13:17:28,342 DEBUG Using cached details for Leptonica
+2026-03-16 13:17:28,343 DEBUG Using cached details for LGPL-2.0
+2026-03-16 13:17:28,343 DEBUG Using cached details for LGPL-2.0+
+2026-03-16 13:17:28,343 DEBUG Using cached details for LGPL-2.0-only
+2026-03-16 13:17:28,343 INFO Enriched 400/727 licenses
+2026-03-16 13:17:28,344 DEBUG Using cached details for LGPL-2.0-or-later
+2026-03-16 13:17:28,344 DEBUG Using cached details for LGPL-2.1
+2026-03-16 13:17:28,345 DEBUG Using cached details for LGPL-2.1+
+2026-03-16 13:17:28,345 DEBUG Using cached details for LGPL-2.1-only
+2026-03-16 13:17:28,345 DEBUG Using cached details for LGPL-2.1-or-later
+2026-03-16 13:17:28,346 DEBUG Using cached details for LGPL-3.0
+2026-03-16 13:17:28,346 DEBUG Using cached details for LGPL-3.0+
+2026-03-16 13:17:28,348 DEBUG Using cached details for LGPL-3.0-only
+2026-03-16 13:17:28,348 DEBUG Using cached details for LGPL-3.0-or-later
+2026-03-16 13:17:28,349 DEBUG Using cached details for LGPLLR
+2026-03-16 13:17:28,349 DEBUG Using cached details for Libpng
+2026-03-16 13:17:28,349 DEBUG Using cached details for libpng-1.6.35
+2026-03-16 13:17:28,349 DEBUG Using cached details for libpng-2.0
+2026-03-16 13:17:28,349 DEBUG Using cached details for libselinux-1.0
+2026-03-16 13:17:28,350 DEBUG Using cached details for libtiff
+2026-03-16 13:17:28,350 DEBUG Using cached details for libutil-David-Nugent
+2026-03-16 13:17:28,350 DEBUG Using cached details for LiLiQ-P-1.1
+2026-03-16 13:17:28,350 DEBUG Using cached details for LiLiQ-R-1.1
+2026-03-16 13:17:28,351 DEBUG Using cached details for LiLiQ-Rplus-1.1
+2026-03-16 13:17:28,351 DEBUG Using cached details for Linux-man-pages-1-para
+2026-03-16 13:17:28,351 DEBUG Using cached details for Linux-man-pages-copyleft
+2026-03-16 13:17:28,351 DEBUG Using cached details for Linux-man-pages-copyleft-2-para
+2026-03-16 13:17:28,352 DEBUG Using cached details for Linux-man-pages-copyleft-var
+2026-03-16 13:17:28,352 DEBUG Using cached details for Linux-OpenIB
+2026-03-16 13:17:28,352 DEBUG Using cached details for LOOP
+2026-03-16 13:17:28,352 DEBUG Using cached details for LPD-document
+2026-03-16 13:17:28,352 DEBUG Using cached details for LPL-1.0
+2026-03-16 13:17:28,352 DEBUG Using cached details for LPL-1.02
+2026-03-16 13:17:28,353 DEBUG Using cached details for LPPL-1.0
+2026-03-16 13:17:28,353 DEBUG Using cached details for LPPL-1.1
+2026-03-16 13:17:28,353 DEBUG Using cached details for LPPL-1.2
+2026-03-16 13:17:28,354 DEBUG Using cached details for LPPL-1.3a
+2026-03-16 13:17:28,354 DEBUG Using cached details for LPPL-1.3c
+2026-03-16 13:17:28,354 DEBUG Using cached details for lsof
+2026-03-16 13:17:28,354 DEBUG Using cached details for Lucida-Bitmap-Fonts
+2026-03-16 13:17:28,354 DEBUG Using cached details for LZMA-SDK-9.11-to-9.20
+2026-03-16 13:17:28,354 DEBUG Using cached details for LZMA-SDK-9.22
+2026-03-16 13:17:28,354 DEBUG Using cached details for Mackerras-3-Clause
+2026-03-16 13:17:28,355 DEBUG Using cached details for Mackerras-3-Clause-acknowledgment
+2026-03-16 13:17:28,355 DEBUG Using cached details for magaz
+2026-03-16 13:17:28,355 DEBUG Using cached details for mailprio
+2026-03-16 13:17:28,355 DEBUG Using cached details for MakeIndex
+2026-03-16 13:17:28,355 DEBUG Using cached details for man2html
+2026-03-16 13:17:28,355 DEBUG Using cached details for Martin-Birgmeier
+2026-03-16 13:17:28,355 DEBUG Using cached details for McPhee-slideshow
+2026-03-16 13:17:28,355 DEBUG Using cached details for metamail
+2026-03-16 13:17:28,355 DEBUG Using cached details for Minpack
+2026-03-16 13:17:28,355 DEBUG Using cached details for MIPS
+2026-03-16 13:17:28,355 DEBUG Using cached details for MirOS
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT
+2026-03-16 13:17:28,356 INFO Enriched 450/727 licenses
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-0
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-advertising
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-Click
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-CMU
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-enna
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-feh
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-Festival
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-Khronos-old
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-Modern-Variant
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-open-group
+2026-03-16 13:17:28,356 DEBUG Using cached details for MIT-STK
+2026-03-16 13:17:28,357 DEBUG Using cached details for MIT-testregex
+2026-03-16 13:17:28,357 DEBUG Using cached details for MIT-Wu
+2026-03-16 13:17:28,357 DEBUG Using cached details for MITNFA
+2026-03-16 13:17:28,357 DEBUG Using cached details for MMIXware
+2026-03-16 13:17:28,357 DEBUG Using cached details for MMPL-1.0.1
+2026-03-16 13:17:28,357 DEBUG Using cached details for Motosoto
+2026-03-16 13:17:28,358 DEBUG Using cached details for MPEG-SSG
+2026-03-16 13:17:28,358 DEBUG Using cached details for mpi-permissive
+2026-03-16 13:17:28,358 DEBUG Using cached details for mpich2
+2026-03-16 13:17:28,358 DEBUG Using cached details for MPL-1.0
+2026-03-16 13:17:28,358 DEBUG Using cached details for MPL-1.1
+2026-03-16 13:17:28,359 DEBUG Using cached details for MPL-2.0
+2026-03-16 13:17:28,359 DEBUG Using cached details for MPL-2.0-no-copyleft-exception
+2026-03-16 13:17:28,359 DEBUG Using cached details for mplus
+2026-03-16 13:17:28,359 DEBUG Using cached details for MS-LPL
+2026-03-16 13:17:28,359 DEBUG Using cached details for MS-PL
+2026-03-16 13:17:28,360 DEBUG Using cached details for MS-RL
+2026-03-16 13:17:28,360 DEBUG Using cached details for MTLL
+2026-03-16 13:17:28,360 DEBUG Using cached details for MulanPSL-1.0
+2026-03-16 13:17:28,360 DEBUG Using cached details for MulanPSL-2.0
+2026-03-16 13:17:28,360 DEBUG Using cached details for Multics
+2026-03-16 13:17:28,360 DEBUG Using cached details for Mup
+2026-03-16 13:17:28,361 DEBUG Using cached details for NAIST-2003
+2026-03-16 13:17:28,361 DEBUG Using cached details for NASA-1.3
+2026-03-16 13:17:28,361 DEBUG Using cached details for Naumen
+2026-03-16 13:17:28,361 DEBUG Using cached details for NBPL-1.0
+2026-03-16 13:17:28,362 DEBUG Using cached details for NCBI-PD
+2026-03-16 13:17:28,362 DEBUG Using cached details for NCGL-UK-2.0
+2026-03-16 13:17:28,362 DEBUG Using cached details for NCL
+2026-03-16 13:17:28,362 DEBUG Using cached details for NCSA
+2026-03-16 13:17:28,362 DEBUG Using cached details for Net-SNMP
+2026-03-16 13:17:28,362 DEBUG Using cached details for NetCDF
+2026-03-16 13:17:28,362 DEBUG Using cached details for Newsletr
+2026-03-16 13:17:28,362 DEBUG Using cached details for NGPL
+2026-03-16 13:17:28,363 DEBUG Using cached details for ngrep
+2026-03-16 13:17:28,363 DEBUG Using cached details for NICTA-1.0
+2026-03-16 13:17:28,363 DEBUG Using cached details for NIST-PD
+2026-03-16 13:17:28,363 DEBUG Using cached details for NIST-PD-fallback
+2026-03-16 13:17:28,363 DEBUG Using cached details for NIST-PD-TNT
+2026-03-16 13:17:28,363 INFO Enriched 500/727 licenses
+2026-03-16 13:17:28,363 DEBUG Using cached details for NIST-Software
+2026-03-16 13:17:28,364 DEBUG Using cached details for NLOD-1.0
+2026-03-16 13:17:28,364 DEBUG Using cached details for NLOD-2.0
+2026-03-16 13:17:28,364 DEBUG Using cached details for NLPL
+2026-03-16 13:17:28,364 DEBUG Using cached details for Nokia
+2026-03-16 13:17:28,365 DEBUG Using cached details for NOSL
+2026-03-16 13:17:28,365 DEBUG Using cached details for Noweb
+2026-03-16 13:17:28,365 DEBUG Using cached details for NPL-1.0
+2026-03-16 13:17:28,365 DEBUG Using cached details for NPL-1.1
+2026-03-16 13:17:28,366 DEBUG Using cached details for NPOSL-3.0
+2026-03-16 13:17:28,366 DEBUG Using cached details for NRL
+2026-03-16 13:17:28,366 DEBUG Using cached details for NTIA-PD
+2026-03-16 13:17:28,366 DEBUG Using cached details for NTP
+2026-03-16 13:17:28,366 DEBUG Using cached details for NTP-0
+2026-03-16 13:17:28,366 DEBUG Using cached details for Nunit
+2026-03-16 13:17:28,366 DEBUG Using cached details for O-UDA-1.0
+2026-03-16 13:17:28,366 DEBUG Using cached details for OAR
+2026-03-16 13:17:28,367 DEBUG Using cached details for OCCT-PL
+2026-03-16 13:17:28,367 DEBUG Using cached details for OCLC-2.0
+2026-03-16 13:17:28,367 DEBUG Using cached details for ODbL-1.0
+2026-03-16 13:17:28,368 DEBUG Using cached details for ODC-By-1.0
+2026-03-16 13:17:28,368 DEBUG Using cached details for OFFIS
+2026-03-16 13:17:28,368 DEBUG Using cached details for OFL-1.0
+2026-03-16 13:17:28,368 DEBUG Using cached details for OFL-1.0-no-RFN
+2026-03-16 13:17:28,368 DEBUG Using cached details for OFL-1.0-RFN
+2026-03-16 13:17:28,368 DEBUG Using cached details for OFL-1.1
+2026-03-16 13:17:28,369 DEBUG Using cached details for OFL-1.1-no-RFN
+2026-03-16 13:17:28,369 DEBUG Using cached details for OFL-1.1-RFN
+2026-03-16 13:17:28,369 DEBUG Using cached details for OGC-1.0
+2026-03-16 13:17:28,369 DEBUG Using cached details for OGDL-Taiwan-1.0
+2026-03-16 13:17:28,369 DEBUG Using cached details for OGL-Canada-2.0
+2026-03-16 13:17:28,369 DEBUG Using cached details for OGL-UK-1.0
+2026-03-16 13:17:28,370 DEBUG Using cached details for OGL-UK-2.0
+2026-03-16 13:17:28,370 DEBUG Using cached details for OGL-UK-3.0
+2026-03-16 13:17:28,370 DEBUG Using cached details for OGTSL
+2026-03-16 13:17:28,370 DEBUG Using cached details for OLDAP-1.1
+2026-03-16 13:17:28,370 DEBUG Using cached details for OLDAP-1.2
+2026-03-16 13:17:28,370 DEBUG Using cached details for OLDAP-1.3
+2026-03-16 13:17:28,370 DEBUG Using cached details for OLDAP-1.4
+2026-03-16 13:17:28,370 DEBUG Using cached details for OLDAP-2.0
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.0.1
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.1
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.2
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.2.1
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.2.2
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.3
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.4
+2026-03-16 13:17:28,371 DEBUG Using cached details for OLDAP-2.5
+2026-03-16 13:17:28,372 DEBUG Using cached details for OLDAP-2.6
+2026-03-16 13:17:28,372 DEBUG Using cached details for OLDAP-2.7
+2026-03-16 13:17:28,372 INFO Enriched 550/727 licenses
+2026-03-16 13:17:28,372 DEBUG Using cached details for OLDAP-2.8
+2026-03-16 13:17:28,372 DEBUG Using cached details for OLFL-1.3
+2026-03-16 13:17:28,372 DEBUG Using cached details for OML
+2026-03-16 13:17:28,372 DEBUG Using cached details for OpenMDW-1.0
+2026-03-16 13:17:28,372 DEBUG Using cached details for OpenPBS-2.3
+2026-03-16 13:17:28,373 DEBUG Using cached details for OpenSSL
+2026-03-16 13:17:28,373 DEBUG Using cached details for OpenSSL-standalone
+2026-03-16 13:17:28,373 DEBUG Using cached details for OpenVision
+2026-03-16 13:17:28,373 DEBUG Using cached details for OPL-1.0
+2026-03-16 13:17:28,373 DEBUG Using cached details for OPL-UK-3.0
+2026-03-16 13:17:28,373 DEBUG Using cached details for OPUBL-1.0
+2026-03-16 13:17:28,374 DEBUG Using cached details for OSC-1.0
+2026-03-16 13:17:28,374 DEBUG Using cached details for OSET-PL-2.1
+2026-03-16 13:17:28,374 DEBUG Using cached details for OSL-1.0
+2026-03-16 13:17:28,374 DEBUG Using cached details for OSL-1.1
+2026-03-16 13:17:28,374 DEBUG Using cached details for OSL-2.0
+2026-03-16 13:17:28,375 DEBUG Using cached details for OSL-2.1
+2026-03-16 13:17:28,375 DEBUG Using cached details for OSL-3.0
+2026-03-16 13:17:28,375 DEBUG Using cached details for OSSP
+2026-03-16 13:17:28,375 DEBUG Using cached details for PADL
+2026-03-16 13:17:28,375 DEBUG Using cached details for ParaType-Free-Font-1.3
+2026-03-16 13:17:28,375 DEBUG Using cached details for Parity-6.0.0
+2026-03-16 13:17:28,375 DEBUG Using cached details for Parity-7.0.0
+2026-03-16 13:17:28,376 DEBUG Using cached details for PDDL-1.0
+2026-03-16 13:17:28,376 DEBUG Using cached details for PHP-3.0
+2026-03-16 13:17:28,376 DEBUG Using cached details for PHP-3.01
+2026-03-16 13:17:28,376 DEBUG Using cached details for Pixar
+2026-03-16 13:17:28,376 DEBUG Using cached details for pkgconf
+2026-03-16 13:17:28,377 DEBUG Using cached details for Plexus
+2026-03-16 13:17:28,377 DEBUG Using cached details for pnmstitch
+2026-03-16 13:17:28,377 DEBUG Using cached details for PolyForm-Noncommercial-1.0.0
+2026-03-16 13:17:28,377 DEBUG Using cached details for PolyForm-Small-Business-1.0.0
+2026-03-16 13:17:28,377 DEBUG Using cached details for PostgreSQL
+2026-03-16 13:17:28,378 DEBUG Using cached details for PPL
+2026-03-16 13:17:28,378 DEBUG Using cached details for PSF-2.0
+2026-03-16 13:17:28,378 DEBUG Using cached details for psfrag
+2026-03-16 13:17:28,378 DEBUG Using cached details for psutils
+2026-03-16 13:17:28,378 DEBUG Using cached details for Python-2.0
+2026-03-16 13:17:28,379 DEBUG Using cached details for Python-2.0.1
+2026-03-16 13:17:28,379 DEBUG Using cached details for python-ldap
+2026-03-16 13:17:28,379 DEBUG Using cached details for Qhull
+2026-03-16 13:17:28,379 DEBUG Using cached details for QPL-1.0
+2026-03-16 13:17:28,380 DEBUG Using cached details for QPL-1.0-INRIA-2004
+2026-03-16 13:17:28,380 DEBUG Using cached details for radvd
+2026-03-16 13:17:28,380 DEBUG Using cached details for Rdisc
+2026-03-16 13:17:28,380 DEBUG Using cached details for RHeCos-1.1
+2026-03-16 13:17:28,381 DEBUG Using cached details for RPL-1.1
+2026-03-16 13:17:28,381 DEBUG Using cached details for RPL-1.5
+2026-03-16 13:17:28,382 DEBUG Using cached details for RPSL-1.0
+2026-03-16 13:17:28,382 DEBUG Using cached details for RSA-MD
+2026-03-16 13:17:28,382 INFO Enriched 600/727 licenses
+2026-03-16 13:17:28,382 DEBUG Using cached details for RSCPL
+2026-03-16 13:17:28,382 DEBUG Using cached details for Ruby
+2026-03-16 13:17:28,382 DEBUG Using cached details for Ruby-pty
+2026-03-16 13:17:28,383 DEBUG Using cached details for SAX-PD
+2026-03-16 13:17:28,383 DEBUG Using cached details for SAX-PD-2.0
+2026-03-16 13:17:28,383 DEBUG Using cached details for Saxpath
+2026-03-16 13:17:28,383 DEBUG Using cached details for SCEA
+2026-03-16 13:17:28,383 DEBUG Using cached details for SchemeReport
+2026-03-16 13:17:28,384 DEBUG Using cached details for Sendmail
+2026-03-16 13:17:28,384 DEBUG Using cached details for Sendmail-8.23
+2026-03-16 13:17:28,384 DEBUG Using cached details for Sendmail-Open-Source-1.1
+2026-03-16 13:17:28,384 DEBUG Using cached details for SGI-B-1.0
+2026-03-16 13:17:28,384 DEBUG Using cached details for SGI-B-1.1
+2026-03-16 13:17:28,385 DEBUG Using cached details for SGI-B-2.0
+2026-03-16 13:17:28,385 DEBUG Using cached details for SGI-OpenGL
+2026-03-16 13:17:28,385 DEBUG Using cached details for SGMLUG-PM
+2026-03-16 13:17:28,385 DEBUG Using cached details for SGP4
+2026-03-16 13:17:28,385 DEBUG Using cached details for SHL-0.5
+2026-03-16 13:17:28,385 DEBUG Using cached details for SHL-0.51
+2026-03-16 13:17:28,386 DEBUG Using cached details for SimPL-2.0
+2026-03-16 13:17:28,386 DEBUG Using cached details for SISSL
+2026-03-16 13:17:28,386 DEBUG Using cached details for SISSL-1.2
+2026-03-16 13:17:28,386 DEBUG Using cached details for SL
+2026-03-16 13:17:28,386 DEBUG Using cached details for Sleepycat
+2026-03-16 13:17:28,387 DEBUG Using cached details for SMAIL-GPL
+2026-03-16 13:17:28,387 DEBUG Using cached details for SMLNJ
+2026-03-16 13:17:28,387 DEBUG Using cached details for SMPPL
+2026-03-16 13:17:28,387 DEBUG Using cached details for SNIA
+2026-03-16 13:17:28,387 DEBUG Using cached details for snprintf
+2026-03-16 13:17:28,388 DEBUG Using cached details for SOFA
+2026-03-16 13:17:28,388 DEBUG Using cached details for softSurfer
+2026-03-16 13:17:28,388 DEBUG Using cached details for Soundex
+2026-03-16 13:17:28,388 DEBUG Using cached details for Spencer-86
+2026-03-16 13:17:28,389 DEBUG Using cached details for Spencer-94
+2026-03-16 13:17:28,389 DEBUG Using cached details for Spencer-99
+2026-03-16 13:17:28,389 DEBUG Using cached details for SPL-1.0
+2026-03-16 13:17:28,389 DEBUG Using cached details for ssh-keyscan
+2026-03-16 13:17:28,390 DEBUG Using cached details for SSH-OpenSSH
+2026-03-16 13:17:28,390 DEBUG Using cached details for SSH-short
+2026-03-16 13:17:28,390 DEBUG Using cached details for SSLeay-standalone
+2026-03-16 13:17:28,390 DEBUG Using cached details for SSPL-1.0
+2026-03-16 13:17:28,390 DEBUG Using cached details for StandardML-NJ
+2026-03-16 13:17:28,391 DEBUG Using cached details for SugarCRM-1.1.3
+2026-03-16 13:17:28,391 DEBUG Using cached details for SUL-1.0
+2026-03-16 13:17:28,391 DEBUG Using cached details for Sun-PPP
+2026-03-16 13:17:28,391 DEBUG Using cached details for Sun-PPP-2000
+2026-03-16 13:17:28,391 DEBUG Using cached details for SunPro
+2026-03-16 13:17:28,391 DEBUG Using cached details for SWL
+2026-03-16 13:17:28,391 DEBUG Using cached details for swrule
+2026-03-16 13:17:28,391 DEBUG Using cached details for Symlinks
+2026-03-16 13:17:28,391 INFO Enriched 650/727 licenses
+2026-03-16 13:17:28,391 DEBUG Using cached details for TAPR-OHL-1.0
+2026-03-16 13:17:28,392 DEBUG Using cached details for TCL
+2026-03-16 13:17:28,392 DEBUG Using cached details for TCP-wrappers
+2026-03-16 13:17:28,392 DEBUG Using cached details for TekHVC
+2026-03-16 13:17:28,392 DEBUG Using cached details for TermReadKey
+2026-03-16 13:17:28,392 DEBUG Using cached details for TGPPL-1.0
+2026-03-16 13:17:28,392 DEBUG Using cached details for ThirdEye
+2026-03-16 13:17:28,392 DEBUG Using cached details for threeparttable
+2026-03-16 13:17:28,392 DEBUG Using cached details for TMate
+2026-03-16 13:17:28,393 DEBUG Using cached details for TORQUE-1.1
+2026-03-16 13:17:28,393 DEBUG Using cached details for TOSL
+2026-03-16 13:17:28,393 DEBUG Using cached details for TPDL
+2026-03-16 13:17:28,393 DEBUG Using cached details for TPL-1.0
+2026-03-16 13:17:28,393 DEBUG Using cached details for TrustedQSL
+2026-03-16 13:17:28,393 DEBUG Using cached details for TTWL
+2026-03-16 13:17:28,394 DEBUG Using cached details for TTYP0
+2026-03-16 13:17:28,394 DEBUG Using cached details for TU-Berlin-1.0
+2026-03-16 13:17:28,394 DEBUG Using cached details for TU-Berlin-2.0
+2026-03-16 13:17:28,394 DEBUG Using cached details for Ubuntu-font-1.0
+2026-03-16 13:17:28,394 DEBUG Using cached details for UCAR
+2026-03-16 13:17:28,394 DEBUG Using cached details for UCL-1.0
+2026-03-16 13:17:28,394 DEBUG Using cached details for ulem
+2026-03-16 13:17:28,394 DEBUG Using cached details for UMich-Merit
+2026-03-16 13:17:28,395 DEBUG Using cached details for Unicode-3.0
+2026-03-16 13:17:28,395 DEBUG Using cached details for Unicode-DFS-2015
+2026-03-16 13:17:28,395 DEBUG Using cached details for Unicode-DFS-2016
+2026-03-16 13:17:28,395 DEBUG Using cached details for Unicode-TOU
+2026-03-16 13:17:28,395 DEBUG Using cached details for UnixCrypt
+2026-03-16 13:17:28,395 DEBUG Using cached details for Unlicense
+2026-03-16 13:17:28,396 DEBUG Using cached details for Unlicense-libtelnet
+2026-03-16 13:17:28,396 DEBUG Using cached details for Unlicense-libwhirlpool
+2026-03-16 13:17:28,396 DEBUG Using cached details for UnRAR
+2026-03-16 13:17:28,396 DEBUG Using cached details for UPL-1.0
+2026-03-16 13:17:28,396 DEBUG Using cached details for URT-RLE
+2026-03-16 13:17:28,396 DEBUG Using cached details for Vim
+2026-03-16 13:17:28,397 DEBUG Using cached details for Vixie-Cron
+2026-03-16 13:17:28,397 DEBUG Using cached details for VOSTROM
+2026-03-16 13:17:28,397 DEBUG Using cached details for VSL-1.0
+2026-03-16 13:17:28,397 DEBUG Using cached details for W3C
+2026-03-16 13:17:28,397 DEBUG Using cached details for W3C-19980720
+2026-03-16 13:17:28,397 DEBUG Using cached details for W3C-20150513
+2026-03-16 13:17:28,397 DEBUG Using cached details for w3m
+2026-03-16 13:17:28,398 DEBUG Using cached details for Watcom-1.0
+2026-03-16 13:17:28,398 DEBUG Using cached details for Widget-Workshop
+2026-03-16 13:17:28,398 DEBUG Using cached details for WordNet
+2026-03-16 13:17:28,398 DEBUG Using cached details for Wsuipa
+2026-03-16 13:17:28,398 DEBUG Using cached details for WTFNMFPL
+2026-03-16 13:17:28,398 DEBUG Using cached details for WTFPL
+2026-03-16 13:17:28,399 DEBUG Using cached details for wwl
+2026-03-16 13:17:28,399 DEBUG Using cached details for wxWindows
+2026-03-16 13:17:28,399 INFO Enriched 700/727 licenses
+2026-03-16 13:17:28,399 DEBUG Using cached details for X11
+2026-03-16 13:17:28,399 DEBUG Using cached details for X11-distribute-modifications-variant
+2026-03-16 13:17:28,399 DEBUG Using cached details for X11-no-permit-persons
+2026-03-16 13:17:28,399 DEBUG Using cached details for X11-swapped
+2026-03-16 13:17:28,399 DEBUG Using cached details for Xdebug-1.03
+2026-03-16 13:17:28,399 DEBUG Using cached details for Xerox
+2026-03-16 13:17:28,399 DEBUG Using cached details for Xfig
+2026-03-16 13:17:28,399 DEBUG Using cached details for XFree86-1.1
+2026-03-16 13:17:28,400 DEBUG Using cached details for xinetd
+2026-03-16 13:17:28,400 DEBUG Using cached details for xkeyboard-config-Zinoviev
+2026-03-16 13:17:28,400 DEBUG Using cached details for xlock
+2026-03-16 13:17:28,400 DEBUG Using cached details for Xnet
+2026-03-16 13:17:28,400 DEBUG Using cached details for xpp
+2026-03-16 13:17:28,400 DEBUG Using cached details for XSkat
+2026-03-16 13:17:28,400 DEBUG Using cached details for xzoom
+2026-03-16 13:17:28,400 DEBUG Using cached details for YPL-1.0
+2026-03-16 13:17:28,401 DEBUG Using cached details for YPL-1.1
+2026-03-16 13:17:28,401 DEBUG Using cached details for Zed
+2026-03-16 13:17:28,401 DEBUG Using cached details for Zeeff
+2026-03-16 13:17:28,401 DEBUG Using cached details for Zend-2.0
+2026-03-16 13:17:28,401 DEBUG Using cached details for Zimbra-1.3
+2026-03-16 13:17:28,401 DEBUG Using cached details for Zimbra-1.4
+2026-03-16 13:17:28,401 DEBUG Using cached details for Zlib
+2026-03-16 13:17:28,401 DEBUG Using cached details for zlib-acknowledgement
+2026-03-16 13:17:28,402 DEBUG Using cached details for ZPL-1.1
+2026-03-16 13:17:28,402 DEBUG Using cached details for ZPL-2.0
+2026-03-16 13:17:28,402 DEBUG Using cached details for ZPL-2.1
+2026-03-16 13:17:28,402 INFO Returning 727 enriched licenses
+2026-03-16 13:22:58,718 DEBUG Get license JSON-LD endpoint called with id: d1b405f5-98e2-5acd-9f7b-531983fb5aad
+2026-03-16 13:22:58,721 DEBUG Using cached licenses list
+2026-03-16 13:22:58,721 DEBUG Searching by UUID: d1b405f5-98e2-5acd-9f7b-531983fb5aad
+2026-03-16 13:22:58,721 DEBUG Found license by UUID: 0BSD
+2026-03-16 13:22:58,721 DEBUG Using cached details for 0BSD
+2026-03-16 13:23:27,349 DEBUG Get license endpoint called with id: d1b405f5-98e2-5acd-9f7b-531983fb5aad
+2026-03-16 13:23:27,353 DEBUG Using cached licenses list
+2026-03-16 13:23:27,353 DEBUG Searching by UUID: d1b405f5-98e2-5acd-9f7b-531983fb5aad
+2026-03-16 13:23:27,353 DEBUG Found license by UUID: 0BSD
+2026-03-16 13:23:27,355 DEBUG Using cached details for 0BSD
+2026-03-16 13:24:35,149 INFO Application shutdown
+2026-03-16 13:24:35,800 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-16 13:24:36,134 DEBUG Using selector: KqueueSelector
+2026-03-16 13:24:36,143 INFO Application startup
+2026-03-16 13:24:36,143 INFO Checking for license data updates...
+2026-03-16 13:24:36,175 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:24:36,193 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1088a2600>
+2026-03-16 13:24:36,193 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x1088576d0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-16 13:24:36,203 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108850c80>
+2026-03-16 13:24:36,204 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:24:36,204 DEBUG send_request_headers.complete
+2026-03-16 13:24:36,204 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:24:36,204 DEBUG send_request_body.complete
+2026-03-16 13:24:36,204 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:24:36,340 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'75AE:237C9A:13306A:15406E:69B7F0A0'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Mon, 16 Mar 2026 12:24:36 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290020-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1773663876.211314,VS0,VE129'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'5faf52423eb31cea12b163e19ca0363809171b42'), (b'Expires', b'Mon, 16 Mar 2026 12:29:36 GMT'), (b'Source-Age', b'0')])
+2026-03-16 13:24:36,341 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-16 13:24:36,341 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:24:36,345 DEBUG receive_response_body.complete
+2026-03-16 13:24:36,345 DEBUG response_closed.started
+2026-03-16 13:24:36,345 DEBUG response_closed.complete
+2026-03-16 13:24:36,348 DEBUG Cache is up to date: 1ff5448
+2026-03-16 13:24:36,348 DEBUG close.started
+2026-03-16 13:24:36,348 DEBUG close.complete
+2026-03-16 13:24:36,348 DEBUG Using cached license data
+2026-03-16 13:24:36,348 INFO License cache check complete
+2026-03-16 13:24:36,349 INFO Initializing Fuseki with license RDF data...
+2026-03-16 13:24:36,349 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-16 13:24:36,349 INFO Checking Fuseki connection...
+2026-03-16 13:24:36,356 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:24:36,358 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10891ae10>
+2026-03-16 13:24:36,358 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:24:36,359 DEBUG send_request_headers.complete
+2026-03-16 13:24:36,359 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:24:36,359 DEBUG send_request_body.complete
+2026-03-16 13:24:36,359 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:24:36,378 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 16 Mar 2026 12:24:36 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-16 13:24:36,379 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-16 13:24:36,379 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:24:36,379 DEBUG receive_response_body.complete
+2026-03-16 13:24:36,379 DEBUG response_closed.started
+2026-03-16 13:24:36,379 DEBUG response_closed.complete
+2026-03-16 13:24:36,380 DEBUG close.started
+2026-03-16 13:24:36,380 DEBUG close.complete
+2026-03-16 13:24:36,380 INFO ✓ Fuseki server is accessible
+2026-03-16 13:24:36,380 INFO Checking dataset 'licenses'...
+2026-03-16 13:24:36,387 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:24:36,389 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10891bc50>
+2026-03-16 13:24:36,390 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:24:36,390 DEBUG send_request_headers.complete
+2026-03-16 13:24:36,390 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:24:36,390 DEBUG send_request_body.complete
+2026-03-16 13:24:36,390 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:24:36,409 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:24:36 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:24:36 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:24:36,409 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:24:36,409 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:24:36,409 DEBUG receive_response_body.complete
+2026-03-16 13:24:36,409 DEBUG response_closed.started
+2026-03-16 13:24:36,409 DEBUG response_closed.complete
+2026-03-16 13:24:36,409 DEBUG close.started
+2026-03-16 13:24:36,410 DEBUG close.complete
+2026-03-16 13:24:36,410 INFO Creating dataset 'licenses'...
+2026-03-16 13:24:36,415 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:24:36,416 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10898cb60>
+2026-03-16 13:24:36,417 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-16 13:24:36,417 DEBUG send_request_headers.complete
+2026-03-16 13:24:36,417 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-16 13:24:36,417 DEBUG send_request_body.complete
+2026-03-16 13:24:36,417 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-16 13:24:36,434 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:24:36 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:24:36 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:24:36,434 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:24:36,434 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-16 13:24:36,435 DEBUG receive_response_body.complete
+2026-03-16 13:24:36,435 DEBUG response_closed.started
+2026-03-16 13:24:36,435 DEBUG response_closed.complete
+2026-03-16 13:24:36,435 ERROR Failed to create dataset: 401 - 
+2026-03-16 13:24:36,435 DEBUG close.started
+2026-03-16 13:24:36,435 DEBUG close.complete
+2026-03-16 13:24:36,435 ERROR Failed to create dataset 'licenses'
+2026-03-16 13:24:36,435 WARNING ⚠ Fuseki initialization completed with errors: ["Failed to create dataset 'licenses'"]
+2026-03-16 13:39:52,345 INFO Application shutdown
+2026-03-16 13:45:15,479 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-16 13:45:15,785 DEBUG Using selector: KqueueSelector
+2026-03-16 13:45:15,794 INFO Application startup
+2026-03-16 13:45:15,794 INFO Checking for license data updates...
+2026-03-16 13:45:15,820 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:45:15,833 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108c46ed0>
+2026-03-16 13:45:15,833 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x108bff6d0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-16 13:45:15,844 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x1081eb410>
+2026-03-16 13:45:15,845 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:15,845 DEBUG send_request_headers.complete
+2026-03-16 13:45:15,845 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:45:15,845 DEBUG send_request_body.complete
+2026-03-16 13:45:15,845 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:15,980 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'75AE:237C9A:13306A:15406E:69B7F0A0'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Mon, 16 Mar 2026 12:45:15 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290055-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1773665116.853843,VS0,VE125'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'446b2a5098f46f49c4138bb8b942c1a6653f7299'), (b'Expires', b'Mon, 16 Mar 2026 12:50:15 GMT'), (b'Source-Age', b'0')])
+2026-03-16 13:45:15,980 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-16 13:45:15,980 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:45:15,981 DEBUG receive_response_body.complete
+2026-03-16 13:45:15,982 DEBUG response_closed.started
+2026-03-16 13:45:15,982 DEBUG response_closed.complete
+2026-03-16 13:45:15,984 DEBUG Cache is up to date: 1ff5448
+2026-03-16 13:45:15,984 DEBUG close.started
+2026-03-16 13:45:15,984 DEBUG close.complete
+2026-03-16 13:45:15,984 DEBUG Using cached license data
+2026-03-16 13:45:15,984 INFO License cache check complete
+2026-03-16 13:45:15,986 INFO Initializing Fuseki with license RDF data...
+2026-03-16 13:45:15,986 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-16 13:45:15,986 INFO Checking Fuseki connection...
+2026-03-16 13:45:15,990 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:45:15,992 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108bc7da0>
+2026-03-16 13:45:15,992 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:15,992 DEBUG send_request_headers.complete
+2026-03-16 13:45:15,992 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:45:15,992 DEBUG send_request_body.complete
+2026-03-16 13:45:15,992 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:16,011 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 16 Mar 2026 12:45:16 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-16 13:45:16,011 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-16 13:45:16,011 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:45:16,011 DEBUG receive_response_body.complete
+2026-03-16 13:45:16,012 DEBUG response_closed.started
+2026-03-16 13:45:16,012 DEBUG response_closed.complete
+2026-03-16 13:45:16,012 DEBUG close.started
+2026-03-16 13:45:16,012 DEBUG close.complete
+2026-03-16 13:45:16,012 INFO ✓ Fuseki server is accessible
+2026-03-16 13:45:16,012 INFO Checking dataset 'licenses'...
+2026-03-16 13:45:16,016 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:45:16,017 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108d383e0>
+2026-03-16 13:45:16,017 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:16,017 DEBUG send_request_headers.complete
+2026-03-16 13:45:16,017 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:45:16,017 DEBUG send_request_body.complete
+2026-03-16 13:45:16,017 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:16,033 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:45:16 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:45:16 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:45:16,033 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:45:16,033 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:45:16,033 DEBUG receive_response_body.complete
+2026-03-16 13:45:16,034 DEBUG response_closed.started
+2026-03-16 13:45:16,034 DEBUG response_closed.complete
+2026-03-16 13:45:16,034 DEBUG close.started
+2026-03-16 13:45:16,034 DEBUG close.complete
+2026-03-16 13:45:16,034 INFO Creating dataset 'licenses'...
+2026-03-16 13:45:16,038 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:45:16,039 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108d392b0>
+2026-03-16 13:45:16,039 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-16 13:45:16,039 DEBUG send_request_headers.complete
+2026-03-16 13:45:16,039 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-16 13:45:16,039 DEBUG send_request_body.complete
+2026-03-16 13:45:16,039 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-16 13:45:16,057 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:45:16 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:45:16 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:45:16,058 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:45:16,058 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-16 13:45:16,058 DEBUG receive_response_body.complete
+2026-03-16 13:45:16,058 DEBUG response_closed.started
+2026-03-16 13:45:16,058 DEBUG response_closed.complete
+2026-03-16 13:45:16,058 ERROR Failed to create dataset: 401 - 
+2026-03-16 13:45:16,058 DEBUG close.started
+2026-03-16 13:45:16,058 DEBUG close.complete
+2026-03-16 13:45:16,058 ERROR Failed to create dataset 'licenses'
+2026-03-16 13:45:16,058 WARNING ⚠ Fuseki initialization completed with errors: ["Failed to create dataset 'licenses'"]
+2026-03-16 13:45:33,410 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:45:33,413 DEBUG Using cached licenses list
+2026-03-16 13:45:33,413 DEBUG Searching by license ID: taxonomy
+2026-03-16 13:45:53,974 INFO Application shutdown
+2026-03-16 13:45:54,578 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-16 13:45:54,956 DEBUG Using selector: KqueueSelector
+2026-03-16 13:45:54,967 INFO Application startup
+2026-03-16 13:45:54,968 INFO Checking for license data updates...
+2026-03-16 13:45:55,010 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:45:55,033 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108a43560>
+2026-03-16 13:45:55,033 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x1089fb6d0> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-16 13:45:55,046 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108994320>
+2026-03-16 13:45:55,047 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:55,048 DEBUG send_request_headers.complete
+2026-03-16 13:45:55,048 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:45:55,048 DEBUG send_request_body.complete
+2026-03-16 13:45:55,048 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:55,054 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'75AE:237C9A:13306A:15406E:69B7F0A0'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Mon, 16 Mar 2026 12:45:55 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290044-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'1'), (b'X-Timer', b'S1773665155.056557,VS0,VE1'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'08afec7fd8647d2f4226bfc555f589d661f1698b'), (b'Expires', b'Mon, 16 Mar 2026 12:50:55 GMT'), (b'Source-Age', b'39')])
+2026-03-16 13:45:55,054 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-16 13:45:55,054 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:45:55,060 DEBUG receive_response_body.complete
+2026-03-16 13:45:55,060 DEBUG response_closed.started
+2026-03-16 13:45:55,060 DEBUG response_closed.complete
+2026-03-16 13:45:55,063 DEBUG Cache is up to date: 1ff5448
+2026-03-16 13:45:55,063 DEBUG close.started
+2026-03-16 13:45:55,064 DEBUG close.complete
+2026-03-16 13:45:55,064 DEBUG Using cached license data
+2026-03-16 13:45:55,064 INFO License cache check complete
+2026-03-16 13:45:55,065 INFO Initializing Fuseki with license RDF data...
+2026-03-16 13:45:55,066 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-16 13:45:55,066 INFO Checking Fuseki connection...
+2026-03-16 13:45:55,070 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:45:55,072 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108ab3620>
+2026-03-16 13:45:55,073 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:55,073 DEBUG send_request_headers.complete
+2026-03-16 13:45:55,074 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:45:55,074 DEBUG send_request_body.complete
+2026-03-16 13:45:55,074 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:55,094 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 16 Mar 2026 12:45:55 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-16 13:45:55,094 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-16 13:45:55,094 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:45:55,094 DEBUG receive_response_body.complete
+2026-03-16 13:45:55,094 DEBUG response_closed.started
+2026-03-16 13:45:55,119 DEBUG response_closed.complete
+2026-03-16 13:45:55,120 DEBUG close.started
+2026-03-16 13:45:55,120 DEBUG close.complete
+2026-03-16 13:45:55,120 INFO ✓ Fuseki server is accessible
+2026-03-16 13:45:55,120 INFO Checking dataset 'licenses'...
+2026-03-16 13:45:55,124 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:45:55,125 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b344d0>
+2026-03-16 13:45:55,125 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:55,125 DEBUG send_request_headers.complete
+2026-03-16 13:45:55,125 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:45:55,125 DEBUG send_request_body.complete
+2026-03-16 13:45:55,125 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:45:55,147 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:45:55 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:45:55 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:45:55,148 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:45:55,148 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:45:55,148 DEBUG receive_response_body.complete
+2026-03-16 13:45:55,148 DEBUG response_closed.started
+2026-03-16 13:45:55,148 DEBUG response_closed.complete
+2026-03-16 13:45:55,148 DEBUG close.started
+2026-03-16 13:45:55,148 DEBUG close.complete
+2026-03-16 13:45:55,148 INFO Creating dataset 'licenses'...
+2026-03-16 13:45:55,153 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:45:55,154 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x108b353d0>
+2026-03-16 13:45:55,155 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-16 13:45:55,155 DEBUG send_request_headers.complete
+2026-03-16 13:45:55,155 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-16 13:45:55,155 DEBUG send_request_body.complete
+2026-03-16 13:45:55,155 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-16 13:45:55,172 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:45:55 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:45:55 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:45:55,172 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:45:55,172 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-16 13:45:55,172 DEBUG receive_response_body.complete
+2026-03-16 13:45:55,173 DEBUG response_closed.started
+2026-03-16 13:45:55,173 DEBUG response_closed.complete
+2026-03-16 13:45:55,173 ERROR Failed to create dataset: 401 - 
+2026-03-16 13:45:55,173 DEBUG close.started
+2026-03-16 13:45:55,173 DEBUG close.complete
+2026-03-16 13:45:55,173 ERROR Failed to create dataset 'licenses'
+2026-03-16 13:45:55,173 WARNING ⚠ Fuseki initialization completed with errors: ["Failed to create dataset 'licenses'"]
+2026-03-16 13:45:57,595 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:45:57,600 DEBUG Using cached licenses list
+2026-03-16 13:45:57,600 DEBUG Searching by license ID: taxonomy
+2026-03-16 13:46:01,852 INFO Application shutdown
+2026-03-16 13:46:09,020 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-16 13:46:10,276 DEBUG Using selector: KqueueSelector
+2026-03-16 13:46:10,319 INFO Application startup
+2026-03-16 13:46:11,999 INFO Checking for license data updates...
+2026-03-16 13:46:12,029 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:46:12,041 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10caa6600>
+2026-03-16 13:46:12,041 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10ca53950> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-16 13:46:12,054 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10c9bfec0>
+2026-03-16 13:46:12,055 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:46:12,055 DEBUG send_request_headers.complete
+2026-03-16 13:46:12,055 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:46:12,056 DEBUG send_request_body.complete
+2026-03-16 13:46:12,056 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:46:12,066 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'75AE:237C9A:13306A:15406E:69B7F0A0'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Mon, 16 Mar 2026 12:46:12 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290033-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'1'), (b'X-Timer', b'S1773665172.064421,VS0,VE1'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'39c50e717aedcb7d6a5346868af1209e393f54e9'), (b'Expires', b'Mon, 16 Mar 2026 12:51:12 GMT'), (b'Source-Age', b'56')])
+2026-03-16 13:46:12,068 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-16 13:46:12,068 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:46:12,078 DEBUG receive_response_body.complete
+2026-03-16 13:46:12,078 DEBUG response_closed.started
+2026-03-16 13:46:12,078 DEBUG response_closed.complete
+2026-03-16 13:46:12,080 DEBUG Cache is up to date: 1ff5448
+2026-03-16 13:46:12,081 DEBUG close.started
+2026-03-16 13:46:12,081 DEBUG close.complete
+2026-03-16 13:46:12,082 DEBUG Using cached license data
+2026-03-16 13:46:12,082 INFO License cache check complete
+2026-03-16 13:46:12,083 INFO Initializing Fuseki with license RDF data...
+2026-03-16 13:46:12,083 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-16 13:46:12,083 INFO Checking Fuseki connection...
+2026-03-16 13:46:12,089 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:46:12,092 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10cb1e900>
+2026-03-16 13:46:12,092 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:46:12,093 DEBUG send_request_headers.complete
+2026-03-16 13:46:12,093 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:46:12,093 DEBUG send_request_body.complete
+2026-03-16 13:46:12,093 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:46:12,111 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 16 Mar 2026 12:46:12 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-16 13:46:12,111 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-16 13:46:12,111 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:46:12,112 DEBUG receive_response_body.complete
+2026-03-16 13:46:12,112 DEBUG response_closed.started
+2026-03-16 13:46:12,112 DEBUG response_closed.complete
+2026-03-16 13:46:12,113 DEBUG close.started
+2026-03-16 13:46:12,113 DEBUG close.complete
+2026-03-16 13:46:12,114 INFO ✓ Fuseki server is accessible
+2026-03-16 13:46:12,114 INFO Checking dataset 'licenses'...
+2026-03-16 13:46:12,119 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:46:12,121 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10cb1f980>
+2026-03-16 13:46:12,121 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:46:12,121 DEBUG send_request_headers.complete
+2026-03-16 13:46:12,121 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:46:12,122 DEBUG send_request_body.complete
+2026-03-16 13:46:12,122 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:46:12,136 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:46:12 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:46:12 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:46:12,136 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:46:12,136 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:46:12,137 DEBUG receive_response_body.complete
+2026-03-16 13:46:12,137 DEBUG response_closed.started
+2026-03-16 13:46:12,137 DEBUG response_closed.complete
+2026-03-16 13:46:12,138 DEBUG close.started
+2026-03-16 13:46:12,138 DEBUG close.complete
+2026-03-16 13:46:12,138 INFO Creating dataset 'licenses'...
+2026-03-16 13:46:12,143 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:46:12,145 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10cb9c890>
+2026-03-16 13:46:12,146 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-16 13:46:12,146 DEBUG send_request_headers.complete
+2026-03-16 13:46:12,146 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-16 13:46:12,146 DEBUG send_request_body.complete
+2026-03-16 13:46:12,146 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-16 13:46:12,161 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:46:12 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:46:12 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:46:12,161 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:46:12,162 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-16 13:46:12,162 DEBUG receive_response_body.complete
+2026-03-16 13:46:12,162 DEBUG response_closed.started
+2026-03-16 13:46:12,162 DEBUG response_closed.complete
+2026-03-16 13:46:12,163 ERROR Failed to create dataset: 401 - 
+2026-03-16 13:46:12,163 DEBUG close.started
+2026-03-16 13:46:12,164 DEBUG close.complete
+2026-03-16 13:46:12,164 ERROR Failed to create dataset 'licenses'
+2026-03-16 13:46:12,164 WARNING ⚠ Fuseki initialization completed with errors: ["Failed to create dataset 'licenses'"]
+2026-03-16 13:46:30,619 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:46:30,624 DEBUG Using cached licenses list
+2026-03-16 13:46:30,624 DEBUG Searching by license ID: taxonomy
+2026-03-16 13:47:20,305 INFO Application shutdown
+2026-03-16 13:47:35,917 INFO =====Starting server with 16 workers on port 12104 =====
+2026-03-16 13:47:37,230 DEBUG Using selector: KqueueSelector
+2026-03-16 13:47:37,278 INFO Application startup
+2026-03-16 13:47:37,278 INFO Checking for license data updates...
+2026-03-16 13:47:37,325 DEBUG connect_tcp.started host='raw.githubusercontent.com' port=443 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:47:37,338 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a0b5c10>
+2026-03-16 13:47:37,338 DEBUG start_tls.started ssl_context=<ssl.SSLContext object at 0x10a063550> server_hostname='raw.githubusercontent.com' timeout=10.0
+2026-03-16 13:47:37,348 DEBUG start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x109a06ea0>
+2026-03-16 13:47:37,349 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:47:37,349 DEBUG send_request_headers.complete
+2026-03-16 13:47:37,349 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:47:37,349 DEBUG send_request_body.complete
+2026-03-16 13:47:37,349 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:47:37,359 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Connection', b'keep-alive'), (b'Content-Length', b'39158'), (b'Cache-Control', b'max-age=300'), (b'Content-Security-Policy', b"default-src 'none'; style-src 'unsafe-inline'; sandbox"), (b'Content-Type', b'text/plain; charset=utf-8'), (b'ETag', b'W/"c3af7db832b82876343b5691caa2a05abd00d2d48642b81c3fc795cfd70346b0"'), (b'Strict-Transport-Security', b'max-age=31536000'), (b'X-Content-Type-Options', b'nosniff'), (b'X-Frame-Options', b'deny'), (b'X-XSS-Protection', b'1; mode=block'), (b'X-GitHub-Request-Id', b'75AE:237C9A:13306A:15406E:69B7F0A0'), (b'Content-Encoding', b'gzip'), (b'Accept-Ranges', b'bytes'), (b'Date', b'Mon, 16 Mar 2026 12:47:37 GMT'), (b'Via', b'1.1 varnish'), (b'X-Served-By', b'cache-rtm-ehrd2290041-RTM'), (b'X-Cache', b'HIT'), (b'X-Cache-Hits', b'0'), (b'X-Timer', b'S1773665257.358538,VS0,VE1'), (b'Vary', b'Authorization,Accept-Encoding'), (b'Access-Control-Allow-Origin', b'*'), (b'Cross-Origin-Resource-Policy', b'cross-origin'), (b'X-Fastly-Request-ID', b'8bb7255703c0b6169003ce22d4c7dcc991b20791'), (b'Expires', b'Mon, 16 Mar 2026 12:52:37 GMT'), (b'Source-Age', b'141')])
+2026-03-16 13:47:37,360 INFO HTTP Request: GET https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json "HTTP/1.1 200 OK"
+2026-03-16 13:47:37,360 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:47:37,370 DEBUG receive_response_body.complete
+2026-03-16 13:47:37,370 DEBUG response_closed.started
+2026-03-16 13:47:37,370 DEBUG response_closed.complete
+2026-03-16 13:47:37,373 DEBUG Cache is up to date: 1ff5448
+2026-03-16 13:47:37,373 DEBUG close.started
+2026-03-16 13:47:37,373 DEBUG close.complete
+2026-03-16 13:47:37,373 DEBUG Using cached license data
+2026-03-16 13:47:37,373 INFO License cache check complete
+2026-03-16 13:47:37,375 INFO Initializing Fuseki with license RDF data...
+2026-03-16 13:47:37,375 INFO Fuseki client initialized: http://localhost:3030/licenses (user: admin)
+2026-03-16 13:47:37,376 INFO Checking Fuseki connection...
+2026-03-16 13:47:37,381 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:47:37,383 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a1264e0>
+2026-03-16 13:47:37,383 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:47:37,384 DEBUG send_request_headers.complete
+2026-03-16 13:47:37,384 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:47:37,384 DEBUG send_request_body.complete
+2026-03-16 13:47:37,384 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:47:37,402 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 16 Mar 2026 12:47:37 GMT'), (b'Vary', b'Origin'), (b'Cache-Control', b'must-revalidate,no-cache,no-store'), (b'Pragma', b'no-cache'), (b'Content-Type', b'text/plain;charset=utf-8'), (b'Content-Length', b'31')])
+2026-03-16 13:47:37,402 INFO HTTP Request: GET http://localhost:3030/$/ping "HTTP/1.1 200 OK"
+2026-03-16 13:47:37,402 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:47:37,402 DEBUG receive_response_body.complete
+2026-03-16 13:47:37,403 DEBUG response_closed.started
+2026-03-16 13:47:37,403 DEBUG response_closed.complete
+2026-03-16 13:47:37,404 DEBUG close.started
+2026-03-16 13:47:37,404 DEBUG close.complete
+2026-03-16 13:47:37,404 INFO ✓ Fuseki server is accessible
+2026-03-16 13:47:37,404 INFO Checking dataset 'licenses'...
+2026-03-16 13:47:37,409 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=5.0 socket_options=None
+2026-03-16 13:47:37,411 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a127350>
+2026-03-16 13:47:37,412 DEBUG send_request_headers.started request=<Request [b'GET']>
+2026-03-16 13:47:37,412 DEBUG send_request_headers.complete
+2026-03-16 13:47:37,412 DEBUG send_request_body.started request=<Request [b'GET']>
+2026-03-16 13:47:37,412 DEBUG send_request_body.complete
+2026-03-16 13:47:37,412 DEBUG receive_response_headers.started request=<Request [b'GET']>
+2026-03-16 13:47:37,425 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:47:37 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:47:37 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:47:37,425 INFO HTTP Request: GET http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:47:37,426 DEBUG receive_response_body.started request=<Request [b'GET']>
+2026-03-16 13:47:37,426 DEBUG receive_response_body.complete
+2026-03-16 13:47:37,426 DEBUG response_closed.started
+2026-03-16 13:47:37,426 DEBUG response_closed.complete
+2026-03-16 13:47:37,427 DEBUG close.started
+2026-03-16 13:47:37,427 DEBUG close.complete
+2026-03-16 13:47:37,428 INFO Creating dataset 'licenses'...
+2026-03-16 13:47:37,433 DEBUG connect_tcp.started host='localhost' port=3030 local_address=None timeout=10.0 socket_options=None
+2026-03-16 13:47:37,435 DEBUG connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x10a138230>
+2026-03-16 13:47:37,435 DEBUG send_request_headers.started request=<Request [b'POST']>
+2026-03-16 13:47:37,436 DEBUG send_request_headers.complete
+2026-03-16 13:47:37,436 DEBUG send_request_body.started request=<Request [b'POST']>
+2026-03-16 13:47:37,436 DEBUG send_request_body.complete
+2026-03-16 13:47:37,436 DEBUG receive_response_headers.started request=<Request [b'POST']>
+2026-03-16 13:47:37,450 DEBUG receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Unauthorized', [(b'Date', b'Mon, 16 Mar 2026 12:47:37 GMT'), (b'Vary', b'Origin'), (b'Set-Cookie', b'rememberMe=deleteMe; Path=/; Max-Age=0; Expires=Sun, 15-Mar-2026 12:47:37 GMT; SameSite=lax'), (b'WWW-Authenticate', b'BASIC realm="application"'), (b'Content-Length', b'0')])
+2026-03-16 13:47:37,450 INFO HTTP Request: POST http://localhost:3030/$/datasets "HTTP/1.1 401 Unauthorized"
+2026-03-16 13:47:37,450 DEBUG receive_response_body.started request=<Request [b'POST']>
+2026-03-16 13:47:37,451 DEBUG receive_response_body.complete
+2026-03-16 13:47:37,451 DEBUG response_closed.started
+2026-03-16 13:47:37,451 DEBUG response_closed.complete
+2026-03-16 13:47:37,452 ERROR Failed to create dataset: 401 - 
+2026-03-16 13:47:37,452 DEBUG close.started
+2026-03-16 13:47:37,452 DEBUG close.complete
+2026-03-16 13:47:37,452 ERROR Failed to create dataset 'licenses'
+2026-03-16 13:47:37,452 WARNING ⚠ Fuseki initialization completed with errors: ["Failed to create dataset 'licenses'"]
+2026-03-16 13:48:39,618 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:48:39,622 DEBUG Using cached licenses list
+2026-03-16 13:48:39,622 DEBUG Searching by license ID: taxonomy
+2026-03-16 13:48:40,387 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:48:40,390 DEBUG Using cached licenses list
+2026-03-16 13:48:40,391 DEBUG Searching by license ID: taxonomy
+2026-03-16 13:48:40,883 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:48:40,887 DEBUG Using cached licenses list
+2026-03-16 13:48:40,887 DEBUG Searching by license ID: taxonomy
+2026-03-16 13:48:41,076 DEBUG Get license endpoint called with id: taxonomy
+2026-03-16 13:48:41,079 DEBUG Using cached licenses list
+2026-03-16 13:48:41,079 DEBUG Searching by license ID: taxonomy
+2026-03-16 14:28:48,080 DEBUG Licenses endpoint called
+2026-03-16 14:28:48,084 DEBUG Using cached licenses list
+2026-03-16 14:28:48,094 DEBUG Using cached details for 0BSD
+2026-03-16 14:28:48,095 DEBUG Using cached details for 3D-Slicer-1.0
+2026-03-16 14:28:48,095 DEBUG Using cached details for AAL
+2026-03-16 14:28:48,095 DEBUG Using cached details for Abstyles
+2026-03-16 14:28:48,096 DEBUG Using cached details for AdaCore-doc
+2026-03-16 14:28:48,096 DEBUG Using cached details for Adobe-2006
+2026-03-16 14:28:48,097 DEBUG Using cached details for Adobe-Display-PostScript
+2026-03-16 14:28:48,097 DEBUG Using cached details for Adobe-Glyph
+2026-03-16 14:28:48,098 DEBUG Using cached details for Adobe-Utopia
+2026-03-16 14:28:48,098 DEBUG Using cached details for ADSL
+2026-03-16 14:28:48,098 DEBUG Using cached details for Advanced-Cryptics-Dictionary
+2026-03-16 14:28:48,099 DEBUG Using cached details for AFL-1.1
+2026-03-16 14:28:48,100 DEBUG Using cached details for AFL-1.2
+2026-03-16 14:28:48,100 DEBUG Using cached details for AFL-2.0
+2026-03-16 14:28:48,101 DEBUG Using cached details for AFL-2.1
+2026-03-16 14:28:48,101 DEBUG Using cached details for AFL-3.0
+2026-03-16 14:28:48,102 DEBUG Using cached details for Afmparse
+2026-03-16 14:28:48,102 DEBUG Using cached details for AGPL-1.0
+2026-03-16 14:28:48,103 DEBUG Using cached details for AGPL-1.0-only
+2026-03-16 14:28:48,103 DEBUG Using cached details for AGPL-1.0-or-later
+2026-03-16 14:28:48,104 DEBUG Using cached details for AGPL-3.0
+2026-03-16 14:28:48,105 DEBUG Using cached details for AGPL-3.0-only
+2026-03-16 14:28:48,106 DEBUG Using cached details for AGPL-3.0-or-later
+2026-03-16 14:28:48,106 DEBUG Using cached details for Aladdin
+2026-03-16 14:28:48,107 DEBUG Using cached details for ALGLIB-Documentation
+2026-03-16 14:28:48,107 DEBUG Using cached details for AMD-newlib
+2026-03-16 14:28:48,108 DEBUG Using cached details for AMDPLPA
+2026-03-16 14:28:48,108 DEBUG Using cached details for AML
+2026-03-16 14:28:48,108 DEBUG Using cached details for AML-glslang
+2026-03-16 14:28:48,109 DEBUG Using cached details for AMPAS
+2026-03-16 14:28:48,109 DEBUG Using cached details for ANTLR-PD
+2026-03-16 14:28:48,109 DEBUG Using cached details for ANTLR-PD-fallback
+2026-03-16 14:28:48,110 DEBUG Using cached details for any-OSI
+2026-03-16 14:28:48,110 DEBUG Using cached details for any-OSI-perl-modules
+2026-03-16 14:28:48,111 DEBUG Using cached details for Apache-1.0
+2026-03-16 14:28:48,111 DEBUG Using cached details for Apache-1.1
+2026-03-16 14:28:48,111 DEBUG Using cached details for Apache-2.0
+2026-03-16 14:28:48,112 DEBUG Using cached details for APAFML
+2026-03-16 14:28:48,113 DEBUG Using cached details for APL-1.0
+2026-03-16 14:28:48,113 DEBUG Using cached details for App-s2p
+2026-03-16 14:28:48,113 DEBUG Using cached details for APSL-1.0
+2026-03-16 14:28:48,114 DEBUG Using cached details for APSL-1.1
+2026-03-16 14:28:48,115 DEBUG Using cached details for APSL-1.2
+2026-03-16 14:28:48,115 DEBUG Using cached details for APSL-2.0
+2026-03-16 14:28:48,116 DEBUG Using cached details for Arphic-1999
+2026-03-16 14:28:48,116 DEBUG Using cached details for Artistic-1.0
+2026-03-16 14:28:48,117 DEBUG Using cached details for Artistic-1.0-cl8
+2026-03-16 14:28:48,117 DEBUG Using cached details for Artistic-1.0-Perl
+2026-03-16 14:28:48,118 DEBUG Using cached details for Artistic-2.0
+2026-03-16 14:28:48,118 DEBUG Using cached details for Artistic-dist
+2026-03-16 14:28:48,118 INFO Enriched 50/727 licenses
+2026-03-16 14:28:48,119 DEBUG Using cached details for Aspell-RU
+2026-03-16 14:28:48,119 DEBUG Using cached details for ASWF-Digital-Assets-1.0
+2026-03-16 14:28:48,120 DEBUG Using cached details for ASWF-Digital-Assets-1.1
+2026-03-16 14:28:48,120 DEBUG Using cached details for Baekmuk
+2026-03-16 14:28:48,120 DEBUG Using cached details for Bahyph
+2026-03-16 14:28:48,121 DEBUG Using cached details for Barr
+2026-03-16 14:28:48,121 DEBUG Using cached details for bcrypt-Solar-Designer
+2026-03-16 14:28:48,121 DEBUG Using cached details for Beerware
+2026-03-16 14:28:48,121 DEBUG Using cached details for Bitstream-Charter
+2026-03-16 14:28:48,122 DEBUG Using cached details for Bitstream-Vera
+2026-03-16 14:28:48,122 DEBUG Using cached details for BitTorrent-1.0
+2026-03-16 14:28:48,123 DEBUG Using cached details for BitTorrent-1.1
+2026-03-16 14:28:48,123 DEBUG Using cached details for blessing
+2026-03-16 14:28:48,124 DEBUG Using cached details for BlueOak-1.0.0
+2026-03-16 14:28:48,124 DEBUG Using cached details for Boehm-GC
+2026-03-16 14:28:48,124 DEBUG Using cached details for Boehm-GC-without-fee
+2026-03-16 14:28:48,125 DEBUG Using cached details for BOLA-1.1
+2026-03-16 14:28:48,125 DEBUG Using cached details for Borceux
+2026-03-16 14:28:48,125 DEBUG Using cached details for Brian-Gladman-2-Clause
+2026-03-16 14:28:48,126 DEBUG Using cached details for Brian-Gladman-3-Clause
+2026-03-16 14:28:48,126 DEBUG Using cached details for BSD-1-Clause
+2026-03-16 14:28:48,126 DEBUG Using cached details for BSD-2-Clause
+2026-03-16 14:28:48,127 DEBUG Using cached details for BSD-2-Clause-Darwin
+2026-03-16 14:28:48,127 DEBUG Using cached details for BSD-2-Clause-first-lines
+2026-03-16 14:28:48,127 DEBUG Using cached details for BSD-2-Clause-FreeBSD
+2026-03-16 14:28:48,127 DEBUG Using cached details for BSD-2-Clause-NetBSD
+2026-03-16 14:28:48,128 DEBUG Using cached details for BSD-2-Clause-Patent
+2026-03-16 14:28:48,128 DEBUG Using cached details for BSD-2-Clause-pkgconf-disclaimer
+2026-03-16 14:28:48,128 DEBUG Using cached details for BSD-2-Clause-Views
+2026-03-16 14:28:48,129 DEBUG Using cached details for BSD-3-Clause
+2026-03-16 14:28:48,129 DEBUG Using cached details for BSD-3-Clause-acpica
+2026-03-16 14:28:48,129 DEBUG Using cached details for BSD-3-Clause-Attribution
+2026-03-16 14:28:48,130 DEBUG Using cached details for BSD-3-Clause-Clear
+2026-03-16 14:28:48,130 DEBUG Using cached details for BSD-3-Clause-flex
+2026-03-16 14:28:48,130 DEBUG Using cached details for BSD-3-Clause-HP
+2026-03-16 14:28:48,131 DEBUG Using cached details for BSD-3-Clause-LBNL
+2026-03-16 14:28:48,131 DEBUG Using cached details for BSD-3-Clause-Modification
+2026-03-16 14:28:48,131 DEBUG Using cached details for BSD-3-Clause-No-Military-License
+2026-03-16 14:28:48,131 DEBUG Using cached details for BSD-3-Clause-No-Nuclear-License
+2026-03-16 14:28:48,132 DEBUG Using cached details for BSD-3-Clause-No-Nuclear-License-2014
+2026-03-16 14:28:48,132 DEBUG Using cached details for BSD-3-Clause-No-Nuclear-Warranty
+2026-03-16 14:28:48,132 DEBUG Using cached details for BSD-3-Clause-Open-MPI
+2026-03-16 14:28:48,133 DEBUG Using cached details for BSD-3-Clause-Sun
+2026-03-16 14:28:48,133 DEBUG Using cached details for BSD-3-Clause-Tso
+2026-03-16 14:28:48,133 DEBUG Using cached details for BSD-4-Clause
+2026-03-16 14:28:48,134 DEBUG Using cached details for BSD-4-Clause-Shortened
+2026-03-16 14:28:48,134 DEBUG Using cached details for BSD-4-Clause-UC
+2026-03-16 14:28:48,134 DEBUG Using cached details for BSD-4.3RENO
+2026-03-16 14:28:48,134 DEBUG Using cached details for BSD-4.3TAHOE
+2026-03-16 14:28:48,135 DEBUG Using cached details for BSD-Advertising-Acknowledgement
+2026-03-16 14:28:48,135 INFO Enriched 100/727 licenses
+2026-03-16 14:28:48,135 DEBUG Using cached details for BSD-Attribution-HPND-disclaimer
+2026-03-16 14:28:48,136 DEBUG Using cached details for BSD-Inferno-Nettverk
+2026-03-16 14:28:48,136 DEBUG Using cached details for BSD-Mark-Modifications
+2026-03-16 14:28:48,136 DEBUG Using cached details for BSD-Protection
+2026-03-16 14:28:48,137 DEBUG Using cached details for BSD-Source-beginning-file
+2026-03-16 14:28:48,137 DEBUG Using cached details for BSD-Source-Code
+2026-03-16 14:28:48,137 DEBUG Using cached details for BSD-Systemics
+2026-03-16 14:28:48,138 DEBUG Using cached details for BSD-Systemics-W3Works
+2026-03-16 14:28:48,138 DEBUG Using cached details for BSL-1.0
+2026-03-16 14:28:48,138 DEBUG Using cached details for Buddy
+2026-03-16 14:28:48,139 DEBUG Using cached details for BUSL-1.1
+2026-03-16 14:28:48,139 DEBUG Using cached details for bzip2-1.0.5
+2026-03-16 14:28:48,139 DEBUG Using cached details for bzip2-1.0.6
+2026-03-16 14:28:48,140 DEBUG Using cached details for C-UDA-1.0
+2026-03-16 14:28:48,140 DEBUG Using cached details for CAL-1.0
+2026-03-16 14:28:48,141 DEBUG Using cached details for CAL-1.0-Combined-Work-Exception
+2026-03-16 14:28:48,142 DEBUG Using cached details for Caldera
+2026-03-16 14:28:48,142 DEBUG Using cached details for Caldera-no-preamble
+2026-03-16 14:28:48,142 DEBUG Using cached details for CAPEC-tou
+2026-03-16 14:28:48,143 DEBUG Using cached details for Catharon
+2026-03-16 14:28:48,143 DEBUG Using cached details for CATOSL-1.1
+2026-03-16 14:28:48,144 DEBUG Using cached details for CC-BY-1.0
+2026-03-16 14:28:48,144 DEBUG Using cached details for CC-BY-2.0
+2026-03-16 14:28:48,145 DEBUG Using cached details for CC-BY-2.5
+2026-03-16 14:28:48,145 DEBUG Using cached details for CC-BY-2.5-AU
+2026-03-16 14:28:48,146 DEBUG Using cached details for CC-BY-3.0
+2026-03-16 14:28:48,147 DEBUG Using cached details for CC-BY-3.0-AT
+2026-03-16 14:28:48,147 DEBUG Using cached details for CC-BY-3.0-AU
+2026-03-16 14:28:48,148 DEBUG Using cached details for CC-BY-3.0-DE
+2026-03-16 14:28:48,149 DEBUG Using cached details for CC-BY-3.0-IGO
+2026-03-16 14:28:48,149 DEBUG Using cached details for CC-BY-3.0-NL
+2026-03-16 14:28:48,150 DEBUG Using cached details for CC-BY-3.0-US
+2026-03-16 14:28:48,150 DEBUG Using cached details for CC-BY-4.0
+2026-03-16 14:28:48,151 DEBUG Using cached details for CC-BY-NC-1.0
+2026-03-16 14:28:48,151 DEBUG Using cached details for CC-BY-NC-2.0
+2026-03-16 14:28:48,152 DEBUG Using cached details for CC-BY-NC-2.5
+2026-03-16 14:28:48,153 DEBUG Using cached details for CC-BY-NC-3.0
+2026-03-16 14:28:48,153 DEBUG Using cached details for CC-BY-NC-3.0-DE
+2026-03-16 14:28:48,154 DEBUG Using cached details for CC-BY-NC-4.0
+2026-03-16 14:28:48,154 DEBUG Using cached details for CC-BY-NC-ND-1.0
+2026-03-16 14:28:48,155 DEBUG Using cached details for CC-BY-NC-ND-2.0
+2026-03-16 14:28:48,155 DEBUG Using cached details for CC-BY-NC-ND-2.5
+2026-03-16 14:28:48,156 DEBUG Using cached details for CC-BY-NC-ND-3.0
+2026-03-16 14:28:48,157 DEBUG Using cached details for CC-BY-NC-ND-3.0-DE
+2026-03-16 14:28:48,157 DEBUG Using cached details for CC-BY-NC-ND-3.0-IGO
+2026-03-16 14:28:48,158 DEBUG Using cached details for CC-BY-NC-ND-4.0
+2026-03-16 14:28:48,158 DEBUG Using cached details for CC-BY-NC-SA-1.0
+2026-03-16 14:28:48,159 DEBUG Using cached details for CC-BY-NC-SA-2.0
+2026-03-16 14:28:48,160 DEBUG Using cached details for CC-BY-NC-SA-2.0-DE
+2026-03-16 14:28:48,160 DEBUG Using cached details for CC-BY-NC-SA-2.0-FR
+2026-03-16 14:28:48,160 INFO Enriched 150/727 licenses
+2026-03-16 14:28:48,161 DEBUG Using cached details for CC-BY-NC-SA-2.0-UK
+2026-03-16 14:28:48,161 DEBUG Using cached details for CC-BY-NC-SA-2.5
+2026-03-16 14:28:48,162 DEBUG Using cached details for CC-BY-NC-SA-3.0
+2026-03-16 14:28:48,163 DEBUG Using cached details for CC-BY-NC-SA-3.0-DE
+2026-03-16 14:28:48,163 DEBUG Using cached details for CC-BY-NC-SA-3.0-IGO
+2026-03-16 14:28:48,164 DEBUG Using cached details for CC-BY-NC-SA-4.0
+2026-03-16 14:28:48,164 DEBUG Using cached details for CC-BY-ND-1.0
+2026-03-16 14:28:48,165 DEBUG Using cached details for CC-BY-ND-2.0
+2026-03-16 14:28:48,166 DEBUG Using cached details for CC-BY-ND-2.5
+2026-03-16 14:28:48,166 DEBUG Using cached details for CC-BY-ND-3.0
+2026-03-16 14:28:48,167 DEBUG Using cached details for CC-BY-ND-3.0-DE
+2026-03-16 14:28:48,168 DEBUG Using cached details for CC-BY-ND-4.0
+2026-03-16 14:28:48,168 DEBUG Using cached details for CC-BY-SA-1.0
+2026-03-16 14:28:48,169 DEBUG Using cached details for CC-BY-SA-2.0
+2026-03-16 14:28:48,169 DEBUG Using cached details for CC-BY-SA-2.0-UK
+2026-03-16 14:28:48,170 DEBUG Using cached details for CC-BY-SA-2.1-JP
+2026-03-16 14:28:48,170 DEBUG Using cached details for CC-BY-SA-2.5
+2026-03-16 14:28:48,171 DEBUG Using cached details for CC-BY-SA-3.0
+2026-03-16 14:28:48,172 DEBUG Using cached details for CC-BY-SA-3.0-AT
+2026-03-16 14:28:48,172 DEBUG Using cached details for CC-BY-SA-3.0-DE
+2026-03-16 14:28:48,173 DEBUG Using cached details for CC-BY-SA-3.0-IGO
+2026-03-16 14:28:48,174 DEBUG Using cached details for CC-BY-SA-4.0
+2026-03-16 14:28:48,174 DEBUG Using cached details for CC-PDDC
+2026-03-16 14:28:48,174 DEBUG Using cached details for CC-PDM-1.0
+2026-03-16 14:28:48,175 DEBUG Using cached details for CC-SA-1.0
+2026-03-16 14:28:48,175 DEBUG Using cached details for CC0-1.0
+2026-03-16 14:28:48,176 DEBUG Using cached details for CDDL-1.0
+2026-03-16 14:28:48,176 DEBUG Using cached details for CDDL-1.1
+2026-03-16 14:28:48,177 DEBUG Using cached details for CDL-1.0
+2026-03-16 14:28:48,177 DEBUG Using cached details for CDLA-Permissive-1.0
+2026-03-16 14:28:48,178 DEBUG Using cached details for CDLA-Permissive-2.0
+2026-03-16 14:28:48,178 DEBUG Using cached details for CDLA-Sharing-1.0
+2026-03-16 14:28:48,179 DEBUG Using cached details for CECILL-1.0
+2026-03-16 14:28:48,180 DEBUG Using cached details for CECILL-1.1
+2026-03-16 14:28:48,180 DEBUG Using cached details for CECILL-2.0
+2026-03-16 14:28:48,181 DEBUG Using cached details for CECILL-2.1
+2026-03-16 14:28:48,182 DEBUG Using cached details for CECILL-B
+2026-03-16 14:28:48,182 DEBUG Using cached details for CECILL-C
+2026-03-16 14:28:48,183 DEBUG Using cached details for CERN-OHL-1.1
+2026-03-16 14:28:48,183 DEBUG Using cached details for CERN-OHL-1.2
+2026-03-16 14:28:48,184 DEBUG Using cached details for CERN-OHL-P-2.0
+2026-03-16 14:28:48,184 DEBUG Using cached details for CERN-OHL-S-2.0
+2026-03-16 14:28:48,185 DEBUG Using cached details for CERN-OHL-W-2.0
+2026-03-16 14:28:48,185 DEBUG Using cached details for CFITSIO
+2026-03-16 14:28:48,186 DEBUG Using cached details for check-cvs
+2026-03-16 14:28:48,186 DEBUG Using cached details for checkmk
+2026-03-16 14:28:48,186 DEBUG Using cached details for ClArtistic
+2026-03-16 14:28:48,187 DEBUG Using cached details for Clips
+2026-03-16 14:28:48,187 DEBUG Using cached details for CMU-Mach
+2026-03-16 14:28:48,187 DEBUG Using cached details for CMU-Mach-nodoc
+2026-03-16 14:28:48,188 INFO Enriched 200/727 licenses
+2026-03-16 14:28:48,188 DEBUG Using cached details for CNRI-Jython
+2026-03-16 14:28:48,188 DEBUG Using cached details for CNRI-Python
+2026-03-16 14:28:48,189 DEBUG Using cached details for CNRI-Python-GPL-Compatible
+2026-03-16 14:28:48,189 DEBUG Using cached details for COIL-1.0
+2026-03-16 14:28:48,190 DEBUG Using cached details for Community-Spec-1.0
+2026-03-16 14:28:48,190 DEBUG Using cached details for Condor-1.1
+2026-03-16 14:28:48,191 DEBUG Using cached details for copyleft-next-0.3.0
+2026-03-16 14:28:48,191 DEBUG Using cached details for copyleft-next-0.3.1
+2026-03-16 14:28:48,192 DEBUG Using cached details for Cornell-Lossless-JPEG
+2026-03-16 14:28:48,192 DEBUG Using cached details for CPAL-1.0
+2026-03-16 14:28:48,193 DEBUG Using cached details for CPL-1.0
+2026-03-16 14:28:48,194 DEBUG Using cached details for CPOL-1.02
+2026-03-16 14:28:48,194 DEBUG Using cached details for Cronyx
+2026-03-16 14:28:48,194 DEBUG Using cached details for Crossword
+2026-03-16 14:28:48,195 DEBUG Using cached details for CryptoSwift
+2026-03-16 14:28:48,195 DEBUG Using cached details for CrystalStacker
+2026-03-16 14:28:48,196 DEBUG Using cached details for CUA-OPL-1.0
+2026-03-16 14:28:48,196 DEBUG Using cached details for Cube
+2026-03-16 14:28:48,197 DEBUG Using cached details for curl
+2026-03-16 14:28:48,197 DEBUG Using cached details for cve-tou
+2026-03-16 14:28:48,197 DEBUG Using cached details for D-FSL-1.0
+2026-03-16 14:28:48,198 DEBUG Using cached details for DEC-3-Clause
+2026-03-16 14:28:48,198 DEBUG Using cached details for diffmark
+2026-03-16 14:28:48,199 DEBUG Using cached details for DL-DE-BY-2.0
+2026-03-16 14:28:48,199 DEBUG Using cached details for DL-DE-ZERO-2.0
+2026-03-16 14:28:48,199 DEBUG Using cached details for DOC
+2026-03-16 14:28:48,200 DEBUG Using cached details for DocBook-DTD
+2026-03-16 14:28:48,200 DEBUG Using cached details for DocBook-Schema
+2026-03-16 14:28:48,200 DEBUG Using cached details for DocBook-Stylesheet
+2026-03-16 14:28:48,201 DEBUG Using cached details for DocBook-XML
+2026-03-16 14:28:48,201 DEBUG Using cached details for Dotseqn
+2026-03-16 14:28:48,201 DEBUG Using cached details for DRL-1.0
+2026-03-16 14:28:48,202 DEBUG Using cached details for DRL-1.1
+2026-03-16 14:28:48,202 DEBUG Using cached details for DSDP
+2026-03-16 14:28:48,202 DEBUG Using cached details for dtoa
+2026-03-16 14:28:48,202 DEBUG Using cached details for dvipdfm
+2026-03-16 14:28:48,203 DEBUG Using cached details for ECL-1.0
+2026-03-16 14:28:48,203 DEBUG Using cached details for ECL-2.0
+2026-03-16 14:28:48,204 DEBUG Using cached details for eCos-2.0
+2026-03-16 14:28:48,204 DEBUG Using cached details for EFL-1.0
+2026-03-16 14:28:48,204 DEBUG Using cached details for EFL-2.0
+2026-03-16 14:28:48,205 DEBUG Using cached details for eGenix
+2026-03-16 14:28:48,205 DEBUG Using cached details for Elastic-2.0
+2026-03-16 14:28:48,205 DEBUG Using cached details for Entessa
+2026-03-16 14:28:48,206 DEBUG Using cached details for EPICS
+2026-03-16 14:28:48,206 DEBUG Using cached details for EPL-1.0
+2026-03-16 14:28:48,207 DEBUG Using cached details for EPL-2.0
+2026-03-16 14:28:48,208 DEBUG Using cached details for ErlPL-1.1
+2026-03-16 14:28:48,208 DEBUG Using cached details for ESA-PL-permissive-2.4
+2026-03-16 14:28:48,209 DEBUG Using cached details for ESA-PL-strong-copyleft-2.4
+2026-03-16 14:28:48,209 INFO Enriched 250/727 licenses
+2026-03-16 14:28:48,210 DEBUG Using cached details for ESA-PL-weak-copyleft-2.4
+2026-03-16 14:28:48,210 DEBUG Using cached details for etalab-2.0
+2026-03-16 14:28:48,210 DEBUG Using cached details for EUDatagrid
+2026-03-16 14:28:48,211 DEBUG Using cached details for EUPL-1.0
+2026-03-16 14:28:48,212 DEBUG Using cached details for EUPL-1.1
+2026-03-16 14:28:48,212 DEBUG Using cached details for EUPL-1.2
+2026-03-16 14:28:48,212 DEBUG Using cached details for Eurosym
+2026-03-16 14:28:48,213 DEBUG Using cached details for Fair
+2026-03-16 14:28:48,213 DEBUG Using cached details for FBM
+2026-03-16 14:28:48,213 DEBUG Using cached details for FDK-AAC
+2026-03-16 14:28:48,214 DEBUG Using cached details for Ferguson-Twofish
+2026-03-16 14:28:48,214 DEBUG Using cached details for Frameworx-1.0
+2026-03-16 14:28:48,215 DEBUG Using cached details for FreeBSD-DOC
+2026-03-16 14:28:48,215 DEBUG Using cached details for FreeImage
+2026-03-16 14:28:48,216 DEBUG Using cached details for FSFAP
+2026-03-16 14:28:48,216 DEBUG Using cached details for FSFAP-no-warranty-disclaimer
+2026-03-16 14:28:48,216 DEBUG Using cached details for FSFUL
+2026-03-16 14:28:48,216 DEBUG Using cached details for FSFULLR
+2026-03-16 14:28:48,217 DEBUG Using cached details for FSFULLRSD
+2026-03-16 14:28:48,217 DEBUG Using cached details for FSFULLRWD
+2026-03-16 14:28:48,217 DEBUG Using cached details for FSL-1.1-ALv2
+2026-03-16 14:28:48,218 DEBUG Using cached details for FSL-1.1-MIT
+2026-03-16 14:28:48,218 DEBUG Using cached details for FTL
+2026-03-16 14:28:48,219 DEBUG Using cached details for Furuseth
+2026-03-16 14:28:48,219 DEBUG Using cached details for fwlw
+2026-03-16 14:28:48,219 DEBUG Using cached details for Game-Programming-Gems
+2026-03-16 14:28:48,219 DEBUG Using cached details for GCR-docs
+2026-03-16 14:28:48,220 DEBUG Using cached details for GD
+2026-03-16 14:28:48,220 DEBUG Using cached details for generic-xts
+2026-03-16 14:28:48,221 DEBUG Using cached details for GFDL-1.1
+2026-03-16 14:28:48,221 DEBUG Using cached details for GFDL-1.1-invariants-only
+2026-03-16 14:28:48,222 DEBUG Using cached details for GFDL-1.1-invariants-or-later
+2026-03-16 14:28:48,223 DEBUG Using cached details for GFDL-1.1-no-invariants-only
+2026-03-16 14:28:48,223 DEBUG Using cached details for GFDL-1.1-no-invariants-or-later
+2026-03-16 14:28:48,224 DEBUG Using cached details for GFDL-1.1-only
+2026-03-16 14:28:48,224 DEBUG Using cached details for GFDL-1.1-or-later
+2026-03-16 14:28:48,225 DEBUG Using cached details for GFDL-1.2
+2026-03-16 14:28:48,226 DEBUG Using cached details for GFDL-1.2-invariants-only
+2026-03-16 14:28:48,226 DEBUG Using cached details for GFDL-1.2-invariants-or-later
+2026-03-16 14:28:48,227 DEBUG Using cached details for GFDL-1.2-no-invariants-only
+2026-03-16 14:28:48,227 DEBUG Using cached details for GFDL-1.2-no-invariants-or-later
+2026-03-16 14:28:48,228 DEBUG Using cached details for GFDL-1.2-only
+2026-03-16 14:28:48,229 DEBUG Using cached details for GFDL-1.2-or-later
+2026-03-16 14:28:48,229 DEBUG Using cached details for GFDL-1.3
+2026-03-16 14:28:48,230 DEBUG Using cached details for GFDL-1.3-invariants-only
+2026-03-16 14:28:48,231 DEBUG Using cached details for GFDL-1.3-invariants-or-later
+2026-03-16 14:28:48,231 DEBUG Using cached details for GFDL-1.3-no-invariants-only
+2026-03-16 14:28:48,232 DEBUG Using cached details for GFDL-1.3-no-invariants-or-later
+2026-03-16 14:28:48,232 DEBUG Using cached details for GFDL-1.3-only
+2026-03-16 14:28:48,233 DEBUG Using cached details for GFDL-1.3-or-later
+2026-03-16 14:28:48,233 INFO Enriched 300/727 licenses
+2026-03-16 14:28:48,233 DEBUG Using cached details for Giftware
+2026-03-16 14:28:48,234 DEBUG Using cached details for GL2PS
+2026-03-16 14:28:48,234 DEBUG Using cached details for Glide
+2026-03-16 14:28:48,235 DEBUG Using cached details for Glulxe
+2026-03-16 14:28:48,235 DEBUG Using cached details for GLWTPL
+2026-03-16 14:28:48,235 DEBUG Using cached details for gnuplot
+2026-03-16 14:28:48,236 DEBUG Using cached details for GPL-1.0
+2026-03-16 14:28:48,236 DEBUG Using cached details for GPL-1.0+
+2026-03-16 14:28:48,237 DEBUG Using cached details for GPL-1.0-only
+2026-03-16 14:28:48,237 DEBUG Using cached details for GPL-1.0-or-later
+2026-03-16 14:28:48,238 DEBUG Using cached details for GPL-2.0
+2026-03-16 14:28:48,239 DEBUG Using cached details for GPL-2.0+
+2026-03-16 14:28:48,239 DEBUG Using cached details for GPL-2.0-only
+2026-03-16 14:28:48,240 DEBUG Using cached details for GPL-2.0-or-later
+2026-03-16 14:28:48,240 DEBUG Using cached details for GPL-2.0-with-autoconf-exception
+2026-03-16 14:28:48,240 DEBUG Using cached details for GPL-2.0-with-bison-exception
+2026-03-16 14:28:48,241 DEBUG Using cached details for GPL-2.0-with-classpath-exception
+2026-03-16 14:28:48,241 DEBUG Using cached details for GPL-2.0-with-font-exception
+2026-03-16 14:28:48,241 DEBUG Using cached details for GPL-2.0-with-GCC-exception
+2026-03-16 14:28:48,242 DEBUG Using cached details for GPL-3.0
+2026-03-16 14:28:48,243 DEBUG Using cached details for GPL-3.0+
+2026-03-16 14:28:48,243 DEBUG Using cached details for GPL-3.0-only
+2026-03-16 14:28:48,244 DEBUG Using cached details for GPL-3.0-or-later
+2026-03-16 14:28:48,245 DEBUG Using cached details for GPL-3.0-with-autoconf-exception
+2026-03-16 14:28:48,245 DEBUG Using cached details for GPL-3.0-with-GCC-exception
+2026-03-16 14:28:48,246 DEBUG Using cached details for Graphics-Gems
+2026-03-16 14:28:48,246 DEBUG Using cached details for gSOAP-1.3b
+2026-03-16 14:28:48,247 DEBUG Using cached details for gtkbook
+2026-03-16 14:28:48,247 DEBUG Using cached details for Gutmann
+2026-03-16 14:28:48,247 DEBUG Using cached details for HaskellReport
+2026-03-16 14:28:48,248 DEBUG Using cached details for HDF5
+2026-03-16 14:28:48,248 DEBUG Using cached details for hdparm
+2026-03-16 14:28:48,248 DEBUG Using cached details for HIDAPI
+2026-03-16 14:28:48,249 DEBUG Using cached details for Hippocratic-2.1
+2026-03-16 14:28:48,249 DEBUG Using cached details for HP-1986
+2026-03-16 14:28:48,249 DEBUG Using cached details for HP-1989
+2026-03-16 14:28:48,250 DEBUG Using cached details for HPND
+2026-03-16 14:28:48,250 DEBUG Using cached details for HPND-DEC
+2026-03-16 14:28:48,250 DEBUG Using cached details for HPND-doc
+2026-03-16 14:28:48,251 DEBUG Using cached details for HPND-doc-sell
+2026-03-16 14:28:48,251 DEBUG Using cached details for HPND-export-US
+2026-03-16 14:28:48,251 DEBUG Using cached details for HPND-export-US-acknowledgement
+2026-03-16 14:28:48,252 DEBUG Using cached details for HPND-export-US-modify
+2026-03-16 14:28:48,252 DEBUG Using cached details for HPND-export2-US
+2026-03-16 14:28:48,252 DEBUG Using cached details for HPND-Fenneberg-Livingston
+2026-03-16 14:28:48,252 DEBUG Using cached details for HPND-INRIA-IMAG
+2026-03-16 14:28:48,253 DEBUG Using cached details for HPND-Intel
+2026-03-16 14:28:48,253 DEBUG Using cached details for HPND-Kevlin-Henney
+2026-03-16 14:28:48,253 DEBUG Using cached details for HPND-Markus-Kuhn
+2026-03-16 14:28:48,254 DEBUG Using cached details for HPND-merchantability-variant
+2026-03-16 14:28:48,254 INFO Enriched 350/727 licenses
+2026-03-16 14:28:48,254 DEBUG Using cached details for HPND-MIT-disclaimer
+2026-03-16 14:28:48,254 DEBUG Using cached details for HPND-Netrek
+2026-03-16 14:28:48,254 DEBUG Using cached details for HPND-Pbmplus
+2026-03-16 14:28:48,255 DEBUG Using cached details for HPND-sell-MIT-disclaimer-xserver
+2026-03-16 14:28:48,255 DEBUG Using cached details for HPND-sell-regexpr
+2026-03-16 14:28:48,256 DEBUG Using cached details for HPND-sell-variant
+2026-03-16 14:28:48,256 DEBUG Using cached details for HPND-sell-variant-critical-systems
+2026-03-16 14:28:48,256 DEBUG Using cached details for HPND-sell-variant-MIT-disclaimer
+2026-03-16 14:28:48,256 DEBUG Using cached details for HPND-sell-variant-MIT-disclaimer-rev
+2026-03-16 14:28:48,257 DEBUG Using cached details for HPND-SMC
+2026-03-16 14:28:48,257 DEBUG Using cached details for HPND-UC
+2026-03-16 14:28:48,257 DEBUG Using cached details for HPND-UC-export-US
+2026-03-16 14:28:48,257 DEBUG Using cached details for HTMLTIDY
+2026-03-16 14:28:48,258 DEBUG Using cached details for hyphen-bulgarian
+2026-03-16 14:28:48,258 DEBUG Using cached details for IBM-pibs
+2026-03-16 14:28:48,258 DEBUG Using cached details for ICU
+2026-03-16 14:28:48,259 DEBUG Using cached details for IEC-Code-Components-EULA
+2026-03-16 14:28:48,259 DEBUG Using cached details for IJG
+2026-03-16 14:28:48,259 DEBUG Using cached details for IJG-short
+2026-03-16 14:28:48,260 DEBUG Using cached details for ImageMagick
+2026-03-16 14:28:48,260 DEBUG Using cached details for iMatix
+2026-03-16 14:28:48,261 DEBUG Using cached details for Imlib2
+2026-03-16 14:28:48,261 DEBUG Using cached details for Info-ZIP
+2026-03-16 14:28:48,261 DEBUG Using cached details for Inner-Net-2.0
+2026-03-16 14:28:48,262 DEBUG Using cached details for InnoSetup
+2026-03-16 14:28:48,262 DEBUG Using cached details for Intel
+2026-03-16 14:28:48,262 DEBUG Using cached details for Intel-ACPI
+2026-03-16 14:28:48,263 DEBUG Using cached details for Interbase-1.0
+2026-03-16 14:28:48,264 DEBUG Using cached details for IPA
+2026-03-16 14:28:48,264 DEBUG Using cached details for IPL-1.0
+2026-03-16 14:28:48,264 DEBUG Using cached details for ISC
+2026-03-16 14:28:48,265 DEBUG Using cached details for ISC-Veillard
+2026-03-16 14:28:48,265 DEBUG Using cached details for ISO-permission
+2026-03-16 14:28:48,265 DEBUG Using cached details for Jam
+2026-03-16 14:28:48,266 DEBUG Using cached details for JasPer-2.0
+2026-03-16 14:28:48,266 DEBUG Using cached details for jove
+2026-03-16 14:28:48,266 DEBUG Using cached details for JPL-image
+2026-03-16 14:28:48,266 DEBUG Using cached details for JPNIC
+2026-03-16 14:28:48,267 DEBUG Using cached details for JSON
+2026-03-16 14:28:48,267 DEBUG Using cached details for Kastrup
+2026-03-16 14:28:48,267 DEBUG Using cached details for Kazlib
+2026-03-16 14:28:48,268 DEBUG Using cached details for Knuth-CTAN
+2026-03-16 14:28:48,268 DEBUG Using cached details for LAL-1.2
+2026-03-16 14:28:48,269 DEBUG Using cached details for LAL-1.3
+2026-03-16 14:28:48,269 DEBUG Using cached details for Latex2e
+2026-03-16 14:28:48,269 DEBUG Using cached details for Latex2e-translated-notice
+2026-03-16 14:28:48,270 DEBUG Using cached details for Leptonica
+2026-03-16 14:28:48,270 DEBUG Using cached details for LGPL-2.0
+2026-03-16 14:28:48,271 DEBUG Using cached details for LGPL-2.0+
+2026-03-16 14:28:48,271 DEBUG Using cached details for LGPL-2.0-only
+2026-03-16 14:28:48,271 INFO Enriched 400/727 licenses
+2026-03-16 14:28:48,272 DEBUG Using cached details for LGPL-2.0-or-later
+2026-03-16 14:28:48,273 DEBUG Using cached details for LGPL-2.1
+2026-03-16 14:28:48,273 DEBUG Using cached details for LGPL-2.1+
+2026-03-16 14:28:48,274 DEBUG Using cached details for LGPL-2.1-only
+2026-03-16 14:28:48,275 DEBUG Using cached details for LGPL-2.1-or-later
+2026-03-16 14:28:48,275 DEBUG Using cached details for LGPL-3.0
+2026-03-16 14:28:48,276 DEBUG Using cached details for LGPL-3.0+
+2026-03-16 14:28:48,277 DEBUG Using cached details for LGPL-3.0-only
+2026-03-16 14:28:48,278 DEBUG Using cached details for LGPL-3.0-or-later
+2026-03-16 14:28:48,278 DEBUG Using cached details for LGPLLR
+2026-03-16 14:28:48,279 DEBUG Using cached details for Libpng
+2026-03-16 14:28:48,279 DEBUG Using cached details for libpng-1.6.35
+2026-03-16 14:28:48,280 DEBUG Using cached details for libpng-2.0
+2026-03-16 14:28:48,280 DEBUG Using cached details for libselinux-1.0
+2026-03-16 14:28:48,280 DEBUG Using cached details for libtiff
+2026-03-16 14:28:48,280 DEBUG Using cached details for libutil-David-Nugent
+2026-03-16 14:28:48,281 DEBUG Using cached details for LiLiQ-P-1.1
+2026-03-16 14:28:48,281 DEBUG Using cached details for LiLiQ-R-1.1
+2026-03-16 14:28:48,282 DEBUG Using cached details for LiLiQ-Rplus-1.1
+2026-03-16 14:28:48,283 DEBUG Using cached details for Linux-man-pages-1-para
+2026-03-16 14:28:48,284 DEBUG Using cached details for Linux-man-pages-copyleft
+2026-03-16 14:28:48,284 DEBUG Using cached details for Linux-man-pages-copyleft-2-para
+2026-03-16 14:28:48,285 DEBUG Using cached details for Linux-man-pages-copyleft-var
+2026-03-16 14:28:48,285 DEBUG Using cached details for Linux-OpenIB
+2026-03-16 14:28:48,286 DEBUG Using cached details for LOOP
+2026-03-16 14:28:48,286 DEBUG Using cached details for LPD-document
+2026-03-16 14:28:48,286 DEBUG Using cached details for LPL-1.0
+2026-03-16 14:28:48,287 DEBUG Using cached details for LPL-1.02
+2026-03-16 14:28:48,288 DEBUG Using cached details for LPPL-1.0
+2026-03-16 14:28:48,288 DEBUG Using cached details for LPPL-1.1
+2026-03-16 14:28:48,289 DEBUG Using cached details for LPPL-1.2
+2026-03-16 14:28:48,290 DEBUG Using cached details for LPPL-1.3a
+2026-03-16 14:28:48,290 DEBUG Using cached details for LPPL-1.3c
+2026-03-16 14:28:48,291 DEBUG Using cached details for lsof
+2026-03-16 14:28:48,291 DEBUG Using cached details for Lucida-Bitmap-Fonts
+2026-03-16 14:28:48,291 DEBUG Using cached details for LZMA-SDK-9.11-to-9.20
+2026-03-16 14:28:48,291 DEBUG Using cached details for LZMA-SDK-9.22
+2026-03-16 14:28:48,292 DEBUG Using cached details for Mackerras-3-Clause
+2026-03-16 14:28:48,292 DEBUG Using cached details for Mackerras-3-Clause-acknowledgment
+2026-03-16 14:28:48,293 DEBUG Using cached details for magaz
+2026-03-16 14:28:48,293 DEBUG Using cached details for mailprio
+2026-03-16 14:28:48,293 DEBUG Using cached details for MakeIndex
+2026-03-16 14:28:48,294 DEBUG Using cached details for man2html
+2026-03-16 14:28:48,295 DEBUG Using cached details for Martin-Birgmeier
+2026-03-16 14:28:48,295 DEBUG Using cached details for McPhee-slideshow
+2026-03-16 14:28:48,296 DEBUG Using cached details for metamail
+2026-03-16 14:28:48,296 DEBUG Using cached details for Minpack
+2026-03-16 14:28:48,296 DEBUG Using cached details for MIPS
+2026-03-16 14:28:48,297 DEBUG Using cached details for MirOS
+2026-03-16 14:28:48,297 DEBUG Using cached details for MIT
+2026-03-16 14:28:48,297 INFO Enriched 450/727 licenses
+2026-03-16 14:28:48,298 DEBUG Using cached details for MIT-0
+2026-03-16 14:28:48,298 DEBUG Using cached details for MIT-advertising
+2026-03-16 14:28:48,298 DEBUG Using cached details for MIT-Click
+2026-03-16 14:28:48,299 DEBUG Using cached details for MIT-CMU
+2026-03-16 14:28:48,299 DEBUG Using cached details for MIT-enna
+2026-03-16 14:28:48,299 DEBUG Using cached details for MIT-feh
+2026-03-16 14:28:48,300 DEBUG Using cached details for MIT-Festival
+2026-03-16 14:28:48,300 DEBUG Using cached details for MIT-Khronos-old
+2026-03-16 14:28:48,301 DEBUG Using cached details for MIT-Modern-Variant
+2026-03-16 14:28:48,301 DEBUG Using cached details for MIT-open-group
+2026-03-16 14:28:48,301 DEBUG Using cached details for MIT-STK
+2026-03-16 14:28:48,302 DEBUG Using cached details for MIT-testregex
+2026-03-16 14:28:48,302 DEBUG Using cached details for MIT-Wu
+2026-03-16 14:28:48,302 DEBUG Using cached details for MITNFA
+2026-03-16 14:28:48,303 DEBUG Using cached details for MMIXware
+2026-03-16 14:28:48,303 DEBUG Using cached details for MMPL-1.0.1
+2026-03-16 14:28:48,304 DEBUG Using cached details for Motosoto
+2026-03-16 14:28:48,304 DEBUG Using cached details for MPEG-SSG
+2026-03-16 14:28:48,304 DEBUG Using cached details for mpi-permissive
+2026-03-16 14:28:48,305 DEBUG Using cached details for mpich2
+2026-03-16 14:28:48,305 DEBUG Using cached details for MPL-1.0
+2026-03-16 14:28:48,306 DEBUG Using cached details for MPL-1.1
+2026-03-16 14:28:48,306 DEBUG Using cached details for MPL-2.0
+2026-03-16 14:28:48,307 DEBUG Using cached details for MPL-2.0-no-copyleft-exception
+2026-03-16 14:28:48,307 DEBUG Using cached details for mplus
+2026-03-16 14:28:48,308 DEBUG Using cached details for MS-LPL
+2026-03-16 14:28:48,308 DEBUG Using cached details for MS-PL
+2026-03-16 14:28:48,308 DEBUG Using cached details for MS-RL
+2026-03-16 14:28:48,309 DEBUG Using cached details for MTLL
+2026-03-16 14:28:48,309 DEBUG Using cached details for MulanPSL-1.0
+2026-03-16 14:28:48,310 DEBUG Using cached details for MulanPSL-2.0
+2026-03-16 14:28:48,310 DEBUG Using cached details for Multics
+2026-03-16 14:28:48,310 DEBUG Using cached details for Mup
+2026-03-16 14:28:48,311 DEBUG Using cached details for NAIST-2003
+2026-03-16 14:28:48,311 DEBUG Using cached details for NASA-1.3
+2026-03-16 14:28:48,311 DEBUG Using cached details for Naumen
+2026-03-16 14:28:48,312 DEBUG Using cached details for NBPL-1.0
+2026-03-16 14:28:48,312 DEBUG Using cached details for NCBI-PD
+2026-03-16 14:28:48,313 DEBUG Using cached details for NCGL-UK-2.0
+2026-03-16 14:28:48,313 DEBUG Using cached details for NCL
+2026-03-16 14:28:48,313 DEBUG Using cached details for NCSA
+2026-03-16 14:28:48,314 DEBUG Using cached details for Net-SNMP
+2026-03-16 14:28:48,314 DEBUG Using cached details for NetCDF
+2026-03-16 14:28:48,314 DEBUG Using cached details for Newsletr
+2026-03-16 14:28:48,315 DEBUG Using cached details for NGPL
+2026-03-16 14:28:48,315 DEBUG Using cached details for ngrep
+2026-03-16 14:28:48,315 DEBUG Using cached details for NICTA-1.0
+2026-03-16 14:28:48,316 DEBUG Using cached details for NIST-PD
+2026-03-16 14:28:48,316 DEBUG Using cached details for NIST-PD-fallback
+2026-03-16 14:28:48,316 DEBUG Using cached details for NIST-PD-TNT
+2026-03-16 14:28:48,316 INFO Enriched 500/727 licenses
+2026-03-16 14:28:48,317 DEBUG Using cached details for NIST-Software
+2026-03-16 14:28:48,317 DEBUG Using cached details for NLOD-1.0
+2026-03-16 14:28:48,318 DEBUG Using cached details for NLOD-2.0
+2026-03-16 14:28:48,318 DEBUG Using cached details for NLPL
+2026-03-16 14:28:48,319 DEBUG Using cached details for Nokia
+2026-03-16 14:28:48,319 DEBUG Using cached details for NOSL
+2026-03-16 14:28:48,319 DEBUG Using cached details for Noweb
+2026-03-16 14:28:48,320 DEBUG Using cached details for NPL-1.0
+2026-03-16 14:28:48,321 DEBUG Using cached details for NPL-1.1
+2026-03-16 14:28:48,321 DEBUG Using cached details for NPOSL-3.0
+2026-03-16 14:28:48,322 DEBUG Using cached details for NRL
+2026-03-16 14:28:48,322 DEBUG Using cached details for NTIA-PD
+2026-03-16 14:28:48,322 DEBUG Using cached details for NTP
+2026-03-16 14:28:48,323 DEBUG Using cached details for NTP-0
+2026-03-16 14:28:48,323 DEBUG Using cached details for Nunit
+2026-03-16 14:28:48,323 DEBUG Using cached details for O-UDA-1.0
+2026-03-16 14:28:48,323 DEBUG Using cached details for OAR
+2026-03-16 14:28:48,324 DEBUG Using cached details for OCCT-PL
+2026-03-16 14:28:48,324 DEBUG Using cached details for OCLC-2.0
+2026-03-16 14:28:48,325 DEBUG Using cached details for ODbL-1.0
+2026-03-16 14:28:48,326 DEBUG Using cached details for ODC-By-1.0
+2026-03-16 14:28:48,326 DEBUG Using cached details for OFFIS
+2026-03-16 14:28:48,326 DEBUG Using cached details for OFL-1.0
+2026-03-16 14:28:48,327 DEBUG Using cached details for OFL-1.0-no-RFN
+2026-03-16 14:28:48,327 DEBUG Using cached details for OFL-1.0-RFN
+2026-03-16 14:28:48,327 DEBUG Using cached details for OFL-1.1
+2026-03-16 14:28:48,328 DEBUG Using cached details for OFL-1.1-no-RFN
+2026-03-16 14:28:48,328 DEBUG Using cached details for OFL-1.1-RFN
+2026-03-16 14:28:48,328 DEBUG Using cached details for OGC-1.0
+2026-03-16 14:28:48,329 DEBUG Using cached details for OGDL-Taiwan-1.0
+2026-03-16 14:28:48,329 DEBUG Using cached details for OGL-Canada-2.0
+2026-03-16 14:28:48,329 DEBUG Using cached details for OGL-UK-1.0
+2026-03-16 14:28:48,330 DEBUG Using cached details for OGL-UK-2.0
+2026-03-16 14:28:48,330 DEBUG Using cached details for OGL-UK-3.0
+2026-03-16 14:28:48,331 DEBUG Using cached details for OGTSL
+2026-03-16 14:28:48,331 DEBUG Using cached details for OLDAP-1.1
+2026-03-16 14:28:48,331 DEBUG Using cached details for OLDAP-1.2
+2026-03-16 14:28:48,332 DEBUG Using cached details for OLDAP-1.3
+2026-03-16 14:28:48,332 DEBUG Using cached details for OLDAP-1.4
+2026-03-16 14:28:48,332 DEBUG Using cached details for OLDAP-2.0
+2026-03-16 14:28:48,332 DEBUG Using cached details for OLDAP-2.0.1
+2026-03-16 14:28:48,333 DEBUG Using cached details for OLDAP-2.1
+2026-03-16 14:28:48,333 DEBUG Using cached details for OLDAP-2.2
+2026-03-16 14:28:48,333 DEBUG Using cached details for OLDAP-2.2.1
+2026-03-16 14:28:48,334 DEBUG Using cached details for OLDAP-2.2.2
+2026-03-16 14:28:48,334 DEBUG Using cached details for OLDAP-2.3
+2026-03-16 14:28:48,334 DEBUG Using cached details for OLDAP-2.4
+2026-03-16 14:28:48,335 DEBUG Using cached details for OLDAP-2.5
+2026-03-16 14:28:48,335 DEBUG Using cached details for OLDAP-2.6
+2026-03-16 14:28:48,335 DEBUG Using cached details for OLDAP-2.7
+2026-03-16 14:28:48,335 INFO Enriched 550/727 licenses
+2026-03-16 14:28:48,335 DEBUG Using cached details for OLDAP-2.8
+2026-03-16 14:28:48,336 DEBUG Using cached details for OLFL-1.3
+2026-03-16 14:28:48,336 DEBUG Using cached details for OML
+2026-03-16 14:28:48,336 DEBUG Using cached details for OpenMDW-1.0
+2026-03-16 14:28:48,337 DEBUG Using cached details for OpenPBS-2.3
+2026-03-16 14:28:48,337 DEBUG Using cached details for OpenSSL
+2026-03-16 14:28:48,338 DEBUG Using cached details for OpenSSL-standalone
+2026-03-16 14:28:48,338 DEBUG Using cached details for OpenVision
+2026-03-16 14:28:48,338 DEBUG Using cached details for OPL-1.0
+2026-03-16 14:28:48,339 DEBUG Using cached details for OPL-UK-3.0
+2026-03-16 14:28:48,339 DEBUG Using cached details for OPUBL-1.0
+2026-03-16 14:28:48,339 DEBUG Using cached details for OSC-1.0
+2026-03-16 14:28:48,340 DEBUG Using cached details for OSET-PL-2.1
+2026-03-16 14:28:48,340 DEBUG Using cached details for OSL-1.0
+2026-03-16 14:28:48,341 DEBUG Using cached details for OSL-1.1
+2026-03-16 14:28:48,341 DEBUG Using cached details for OSL-2.0
+2026-03-16 14:28:48,342 DEBUG Using cached details for OSL-2.1
+2026-03-16 14:28:48,342 DEBUG Using cached details for OSL-3.0
+2026-03-16 14:28:48,342 DEBUG Using cached details for OSSP
+2026-03-16 14:28:48,343 DEBUG Using cached details for PADL
+2026-03-16 14:28:48,343 DEBUG Using cached details for ParaType-Free-Font-1.3
+2026-03-16 14:28:48,343 DEBUG Using cached details for Parity-6.0.0
+2026-03-16 14:28:48,344 DEBUG Using cached details for Parity-7.0.0
+2026-03-16 14:28:48,344 DEBUG Using cached details for PDDL-1.0
+2026-03-16 14:28:48,345 DEBUG Using cached details for PHP-3.0
+2026-03-16 14:28:48,345 DEBUG Using cached details for PHP-3.01
+2026-03-16 14:28:48,345 DEBUG Using cached details for Pixar
+2026-03-16 14:28:48,346 DEBUG Using cached details for pkgconf
+2026-03-16 14:28:48,346 DEBUG Using cached details for Plexus
+2026-03-16 14:28:48,346 DEBUG Using cached details for pnmstitch
+2026-03-16 14:28:48,347 DEBUG Using cached details for PolyForm-Noncommercial-1.0.0
+2026-03-16 14:28:48,347 DEBUG Using cached details for PolyForm-Small-Business-1.0.0
+2026-03-16 14:28:48,348 DEBUG Using cached details for PostgreSQL
+2026-03-16 14:28:48,348 DEBUG Using cached details for PPL
+2026-03-16 14:28:48,349 DEBUG Using cached details for PSF-2.0
+2026-03-16 14:28:48,349 DEBUG Using cached details for psfrag
+2026-03-16 14:28:48,350 DEBUG Using cached details for psutils
+2026-03-16 14:28:48,350 DEBUG Using cached details for Python-2.0
+2026-03-16 14:28:48,351 DEBUG Using cached details for Python-2.0.1
+2026-03-16 14:28:48,352 DEBUG Using cached details for python-ldap
+2026-03-16 14:28:48,352 DEBUG Using cached details for Qhull
+2026-03-16 14:28:48,352 DEBUG Using cached details for QPL-1.0
+2026-03-16 14:28:48,353 DEBUG Using cached details for QPL-1.0-INRIA-2004
+2026-03-16 14:28:48,353 DEBUG Using cached details for radvd
+2026-03-16 14:28:48,353 DEBUG Using cached details for Rdisc
+2026-03-16 14:28:48,354 DEBUG Using cached details for RHeCos-1.1
+2026-03-16 14:28:48,355 DEBUG Using cached details for RPL-1.1
+2026-03-16 14:28:48,356 DEBUG Using cached details for RPL-1.5
+2026-03-16 14:28:48,356 DEBUG Using cached details for RPSL-1.0
+2026-03-16 14:28:48,357 DEBUG Using cached details for RSA-MD
+2026-03-16 14:28:48,357 INFO Enriched 600/727 licenses
+2026-03-16 14:28:48,357 DEBUG Using cached details for RSCPL
+2026-03-16 14:28:48,358 DEBUG Using cached details for Ruby
+2026-03-16 14:28:48,358 DEBUG Using cached details for Ruby-pty
+2026-03-16 14:28:48,359 DEBUG Using cached details for SAX-PD
+2026-03-16 14:28:48,359 DEBUG Using cached details for SAX-PD-2.0
+2026-03-16 14:28:48,359 DEBUG Using cached details for Saxpath
+2026-03-16 14:28:48,360 DEBUG Using cached details for SCEA
+2026-03-16 14:28:48,360 DEBUG Using cached details for SchemeReport
+2026-03-16 14:28:48,360 DEBUG Using cached details for Sendmail
+2026-03-16 14:28:48,361 DEBUG Using cached details for Sendmail-8.23
+2026-03-16 14:28:48,361 DEBUG Using cached details for Sendmail-Open-Source-1.1
+2026-03-16 14:28:48,362 DEBUG Using cached details for SGI-B-1.0
+2026-03-16 14:28:48,362 DEBUG Using cached details for SGI-B-1.1
+2026-03-16 14:28:48,362 DEBUG Using cached details for SGI-B-2.0
+2026-03-16 14:28:48,363 DEBUG Using cached details for SGI-OpenGL
+2026-03-16 14:28:48,363 DEBUG Using cached details for SGMLUG-PM
+2026-03-16 14:28:48,363 DEBUG Using cached details for SGP4
+2026-03-16 14:28:48,364 DEBUG Using cached details for SHL-0.5
+2026-03-16 14:28:48,364 DEBUG Using cached details for SHL-0.51
+2026-03-16 14:28:48,365 DEBUG Using cached details for SimPL-2.0
+2026-03-16 14:28:48,365 DEBUG Using cached details for SISSL
+2026-03-16 14:28:48,365 DEBUG Using cached details for SISSL-1.2
+2026-03-16 14:28:48,366 DEBUG Using cached details for SL
+2026-03-16 14:28:48,366 DEBUG Using cached details for Sleepycat
+2026-03-16 14:28:48,367 DEBUG Using cached details for SMAIL-GPL
+2026-03-16 14:28:48,367 DEBUG Using cached details for SMLNJ
+2026-03-16 14:28:48,367 DEBUG Using cached details for SMPPL
+2026-03-16 14:28:48,368 DEBUG Using cached details for SNIA
+2026-03-16 14:28:48,368 DEBUG Using cached details for snprintf
+2026-03-16 14:28:48,369 DEBUG Using cached details for SOFA
+2026-03-16 14:28:48,369 DEBUG Using cached details for softSurfer
+2026-03-16 14:28:48,369 DEBUG Using cached details for Soundex
+2026-03-16 14:28:48,370 DEBUG Using cached details for Spencer-86
+2026-03-16 14:28:48,370 DEBUG Using cached details for Spencer-94
+2026-03-16 14:28:48,371 DEBUG Using cached details for Spencer-99
+2026-03-16 14:28:48,371 DEBUG Using cached details for SPL-1.0
+2026-03-16 14:28:48,372 DEBUG Using cached details for ssh-keyscan
+2026-03-16 14:28:48,372 DEBUG Using cached details for SSH-OpenSSH
+2026-03-16 14:28:48,372 DEBUG Using cached details for SSH-short
+2026-03-16 14:28:48,373 DEBUG Using cached details for SSLeay-standalone
+2026-03-16 14:28:48,373 DEBUG Using cached details for SSPL-1.0
+2026-03-16 14:28:48,374 DEBUG Using cached details for StandardML-NJ
+2026-03-16 14:28:48,374 DEBUG Using cached details for SugarCRM-1.1.3
+2026-03-16 14:28:48,374 DEBUG Using cached details for SUL-1.0
+2026-03-16 14:28:48,375 DEBUG Using cached details for Sun-PPP
+2026-03-16 14:28:48,375 DEBUG Using cached details for Sun-PPP-2000
+2026-03-16 14:28:48,375 DEBUG Using cached details for SunPro
+2026-03-16 14:28:48,376 DEBUG Using cached details for SWL
+2026-03-16 14:28:48,376 DEBUG Using cached details for swrule
+2026-03-16 14:28:48,376 DEBUG Using cached details for Symlinks
+2026-03-16 14:28:48,376 INFO Enriched 650/727 licenses
+2026-03-16 14:28:48,377 DEBUG Using cached details for TAPR-OHL-1.0
+2026-03-16 14:28:48,377 DEBUG Using cached details for TCL
+2026-03-16 14:28:48,377 DEBUG Using cached details for TCP-wrappers
+2026-03-16 14:28:48,378 DEBUG Using cached details for TekHVC
+2026-03-16 14:28:48,378 DEBUG Using cached details for TermReadKey
+2026-03-16 14:28:48,378 DEBUG Using cached details for TGPPL-1.0
+2026-03-16 14:28:48,379 DEBUG Using cached details for ThirdEye
+2026-03-16 14:28:48,379 DEBUG Using cached details for threeparttable
+2026-03-16 14:28:48,379 DEBUG Using cached details for TMate
+2026-03-16 14:28:48,380 DEBUG Using cached details for TORQUE-1.1
+2026-03-16 14:28:48,380 DEBUG Using cached details for TOSL
+2026-03-16 14:28:48,380 DEBUG Using cached details for TPDL
+2026-03-16 14:28:48,381 DEBUG Using cached details for TPL-1.0
+2026-03-16 14:28:48,381 DEBUG Using cached details for TrustedQSL
+2026-03-16 14:28:48,382 DEBUG Using cached details for TTWL
+2026-03-16 14:28:48,382 DEBUG Using cached details for TTYP0
+2026-03-16 14:28:48,382 DEBUG Using cached details for TU-Berlin-1.0
+2026-03-16 14:28:48,382 DEBUG Using cached details for TU-Berlin-2.0
+2026-03-16 14:28:48,383 DEBUG Using cached details for Ubuntu-font-1.0
+2026-03-16 14:28:48,383 DEBUG Using cached details for UCAR
+2026-03-16 14:28:48,384 DEBUG Using cached details for UCL-1.0
+2026-03-16 14:28:48,384 DEBUG Using cached details for ulem
+2026-03-16 14:28:48,384 DEBUG Using cached details for UMich-Merit
+2026-03-16 14:28:48,385 DEBUG Using cached details for Unicode-3.0
+2026-03-16 14:28:48,385 DEBUG Using cached details for Unicode-DFS-2015
+2026-03-16 14:28:48,385 DEBUG Using cached details for Unicode-DFS-2016
+2026-03-16 14:28:48,386 DEBUG Using cached details for Unicode-TOU
+2026-03-16 14:28:48,386 DEBUG Using cached details for UnixCrypt
+2026-03-16 14:28:48,386 DEBUG Using cached details for Unlicense
+2026-03-16 14:28:48,387 DEBUG Using cached details for Unlicense-libtelnet
+2026-03-16 14:28:48,387 DEBUG Using cached details for Unlicense-libwhirlpool
+2026-03-16 14:28:48,387 DEBUG Using cached details for UnRAR
+2026-03-16 14:28:48,388 DEBUG Using cached details for UPL-1.0
+2026-03-16 14:28:48,388 DEBUG Using cached details for URT-RLE
+2026-03-16 14:28:48,389 DEBUG Using cached details for Vim
+2026-03-16 14:28:48,389 DEBUG Using cached details for Vixie-Cron
+2026-03-16 14:28:48,389 DEBUG Using cached details for VOSTROM
+2026-03-16 14:28:48,390 DEBUG Using cached details for VSL-1.0
+2026-03-16 14:28:48,390 DEBUG Using cached details for W3C
+2026-03-16 14:28:48,390 DEBUG Using cached details for W3C-19980720
+2026-03-16 14:28:48,391 DEBUG Using cached details for W3C-20150513
+2026-03-16 14:28:48,391 DEBUG Using cached details for w3m
+2026-03-16 14:28:48,391 DEBUG Using cached details for Watcom-1.0
+2026-03-16 14:28:48,392 DEBUG Using cached details for Widget-Workshop
+2026-03-16 14:28:48,392 DEBUG Using cached details for WordNet
+2026-03-16 14:28:48,392 DEBUG Using cached details for Wsuipa
+2026-03-16 14:28:48,393 DEBUG Using cached details for WTFNMFPL
+2026-03-16 14:28:48,393 DEBUG Using cached details for WTFPL
+2026-03-16 14:28:48,393 DEBUG Using cached details for wwl
+2026-03-16 14:28:48,394 DEBUG Using cached details for wxWindows
+2026-03-16 14:28:48,394 INFO Enriched 700/727 licenses
+2026-03-16 14:28:48,394 DEBUG Using cached details for X11
+2026-03-16 14:28:48,394 DEBUG Using cached details for X11-distribute-modifications-variant
+2026-03-16 14:28:48,394 DEBUG Using cached details for X11-no-permit-persons
+2026-03-16 14:28:48,395 DEBUG Using cached details for X11-swapped
+2026-03-16 14:28:48,395 DEBUG Using cached details for Xdebug-1.03
+2026-03-16 14:28:48,395 DEBUG Using cached details for Xerox
+2026-03-16 14:28:48,396 DEBUG Using cached details for Xfig
+2026-03-16 14:28:48,396 DEBUG Using cached details for XFree86-1.1
+2026-03-16 14:28:48,396 DEBUG Using cached details for xinetd
+2026-03-16 14:28:48,396 DEBUG Using cached details for xkeyboard-config-Zinoviev
+2026-03-16 14:28:48,397 DEBUG Using cached details for xlock
+2026-03-16 14:28:48,397 DEBUG Using cached details for Xnet
+2026-03-16 14:28:48,397 DEBUG Using cached details for xpp
+2026-03-16 14:28:48,398 DEBUG Using cached details for XSkat
+2026-03-16 14:28:48,398 DEBUG Using cached details for xzoom
+2026-03-16 14:28:48,398 DEBUG Using cached details for YPL-1.0
+2026-03-16 14:28:48,399 DEBUG Using cached details for YPL-1.1
+2026-03-16 14:28:48,399 DEBUG Using cached details for Zed
+2026-03-16 14:28:48,399 DEBUG Using cached details for Zeeff
+2026-03-16 14:28:48,400 DEBUG Using cached details for Zend-2.0
+2026-03-16 14:28:48,400 DEBUG Using cached details for Zimbra-1.3
+2026-03-16 14:28:48,401 DEBUG Using cached details for Zimbra-1.4
+2026-03-16 14:28:48,401 DEBUG Using cached details for Zlib
+2026-03-16 14:28:48,401 DEBUG Using cached details for zlib-acknowledgement
+2026-03-16 14:28:48,402 DEBUG Using cached details for ZPL-1.1
+2026-03-16 14:28:48,402 DEBUG Using cached details for ZPL-2.0
+2026-03-16 14:28:48,402 DEBUG Using cached details for ZPL-2.1
+2026-03-16 14:28:48,403 INFO Returning 727 enriched licenses
+2026-03-16 14:30:10,066 DEBUG Get license JSON endpoint called with id: d1b405f5-98e2-5acd-9f7b-531983fb5aad
+2026-03-16 14:30:10,069 DEBUG Using cached licenses list
+2026-03-16 14:30:10,070 DEBUG Searching by UUID: d1b405f5-98e2-5acd-9f7b-531983fb5aad
+2026-03-16 14:30:10,070 DEBUG Found license by UUID: 0BSD
+2026-03-16 14:30:10,071 DEBUG Using cached details for 0BSD

@@ -3,7 +3,7 @@
 api_prefix = "/api/v1"
 expose_port = 12104
 
-reload_enable = true
+reload_enable = false
 
 
 
@@ -11,7 +11,7 @@ reload_enable = true
 log_level = 10
 log_file = "@format {env[BASE_DIR]}/logs/lfs.log"
 log_format = '%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s'
-cors_origins = ["*"]
+cors_origins = []
 
 db_dialect="postgresql+psycopg2"
 
