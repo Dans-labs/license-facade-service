@@ -1,8 +1,11 @@
 from src.license_facade_service.db.models.federation import (
     FederationChangeEvent,
     FederationConflictRecord,
+    FederationInboundEvent,
     FederationNodeIdentityState,
+    FederationPeerAuditLog,
     FederationPeerCursor,
+    FederationPeerSigningKey,
     FederationRecord,
     FederationRecordAlias,
     FederationRecordProvenance,
@@ -15,8 +18,11 @@ from src.license_facade_service.db.models.federation import (
 __all__ = [
     "FederationChangeEvent",
     "FederationConflictRecord",
+    "FederationInboundEvent",
     "FederationNodeIdentityState",
+    "FederationPeerAuditLog",
     "FederationPeerCursor",
+    "FederationPeerSigningKey",
     "FederationRecord",
     "FederationRecordAlias",
     "FederationRecordProvenance",

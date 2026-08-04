@@ -58,6 +58,19 @@ class FederationTrustedPeer(Base):
     peer_name: Mapped[str] = mapped_column(String(256), nullable=False)
     operator_name: Mapped[str | None] = mapped_column(String(256))
     trust_status: Mapped[str] = mapped_column(String(32), nullable=False, default="trusted")
+    sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allow_private_network: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    allowed_hostnames: Mapped[str | None] = mapped_column(Text)
+    allowed_cidrs: Mapped[str | None] = mapped_column(Text)
+    enrollment_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="strict")
+    expected_key_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    expected_key_kid: Mapped[str | None] = mapped_column(String(128))
+    last_sync_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sync_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sync_status: Mapped[str | None] = mapped_column(String(32))
+    last_sync_error_code: Mapped[str | None] = mapped_column(String(128))
+    last_sync_error_detail: Mapped[str | None] = mapped_column(Text)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -78,6 +91,14 @@ class FederationRecord(Base):
     imported_from_peer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="SET NULL")
     )
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False, default="published")
+    source_record_url: Mapped[str | None] = mapped_column(String(2048))
+    source_event_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    source_event_position: Mapped[int | None] = mapped_column(BigInteger)
+    source_signature_kid: Mapped[str | None] = mapped_column(String(128))
+    source_signed_payload_digest_sha256: Mapped[str | None] = mapped_column(String(128))
+    verification_status: Mapped[str | None] = mapped_column(String(32))
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -179,6 +200,7 @@ class FederationPeerCursor(Base):
         UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     cursor: Mapped[str | None] = mapped_column(String(512))
+    last_remote_position: Mapped[int | None] = mapped_column(BigInteger)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -193,6 +215,11 @@ class FederationSyncAttempt(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
+    pages_processed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    events_processed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cursor_before: Mapped[str | None] = mapped_column(String(1024))
+    cursor_after: Mapped[str | None] = mapped_column(String(1024))
     error_code: Mapped[str | None] = mapped_column(String(128))
     error_detail: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -218,10 +245,96 @@ class FederationConflictRecord(Base):
     __table_args__ = (Index("ix_federation_conflicts_record_key", "record_key"),)
 
 
+class FederationPeerSigningKey(Base):
+    __tablename__ = "federation_peer_signing_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    peer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="CASCADE"), nullable=False
+    )
+    kid: Mapped[str] = mapped_column(String(128), nullable=False)
+    alg: Mapped[str] = mapped_column(String(32), nullable=False)
+    kty: Mapped[str] = mapped_column(String(16), nullable=False)
+    crv: Mapped[str] = mapped_column(String(32), nullable=False)
+    x: Mapped[str] = mapped_column(String(1024), nullable=False)
+    key_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    key_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[str | None] = mapped_column(String(128))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("peer_id", "kid", name="uq_federation_peer_signing_keys_peer_kid"),
+        CheckConstraint("alg = 'EdDSA'", name="ck_federation_peer_signing_keys_alg"),
+        CheckConstraint("kty = 'OKP'", name="ck_federation_peer_signing_keys_kty"),
+        CheckConstraint("crv = 'Ed25519'", name="ck_federation_peer_signing_keys_crv"),
+        CheckConstraint("key_status IN ('active','retired','revoked')", name="ck_federation_peer_signing_keys_status"),
+    )
+
+
+class FederationInboundEvent(Base):
+    __tablename__ = "federation_inbound_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_peer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="CASCADE"), nullable=False
+    )
+    authority_node_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    remote_event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    remote_event_position: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    remote_operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    signed_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    signed_payload_digest_sha256: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature_kid: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature_alg: Mapped[str] = mapped_column(String(32), nullable=False)
+    signature_base64url: Mapped[str] = mapped_column(String(512), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    processing_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    record_canonical_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    record_payload_digest_sha256: Mapped[str] = mapped_column(String(128), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(128))
+    error_detail: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint("authority_node_id", "remote_event_id", name="uq_federation_inbound_events_authority_event_id"),
+        UniqueConstraint(
+            "authority_node_id",
+            "remote_event_position",
+            name="uq_federation_inbound_events_authority_event_position",
+        ),
+        UniqueConstraint(
+            "source_peer_id",
+            "signed_payload_digest_sha256",
+            name="uq_federation_inbound_events_peer_digest",
+        ),
+    )
+
+
+class FederationPeerAuditLog(Base):
+    __tablename__ = "federation_peer_audit_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    peer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="CASCADE"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor: Mapped[str] = mapped_column(String(128), nullable=False)
+    details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 Index("ix_federation_records_authority", FederationRecord.authority_node_id)
 Index("ix_federation_records_canonical_id", FederationRecord.canonical_id)
+Index("ix_federation_records_imported_peer", FederationRecord.imported_from_peer_id)
 Index("ix_federation_record_aliases_record_id", FederationRecordAlias.record_id)
 Index("ix_federation_representations_record_id", FederationRecordRepresentation.record_id)
 Index("ix_federation_provenance_record_id", FederationRecordProvenance.record_id)
 Index("ix_federation_change_events_occurred_at", FederationChangeEvent.occurred_at)
 Index("ix_federation_sync_attempts_peer_started", FederationSyncAttempt.peer_id, FederationSyncAttempt.started_at)
+Index("ix_federation_inbound_events_peer_position", FederationInboundEvent.source_peer_id, FederationInboundEvent.remote_event_position)

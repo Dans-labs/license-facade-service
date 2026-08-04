@@ -1,5 +1,6 @@
 services:
   fuseki:
+    profiles: ["app"]
     image: secoresearch/fuseki:4.10.0
     container_name: lfs-fuseki
     environment:
@@ -18,6 +19,7 @@ services:
       - lfs-internal
 
   license-facade-service:
+    profiles: ["app"]
     container_name: lfs
 #    image: ekoindarto/lfs:0.1.0-amd64
     build:
@@ -59,10 +61,181 @@ services:
     networks:
       - lfs-internal
 
+  node-a-db:
+    image: postgres:16-alpine
+    profiles: ["federation-demo"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: lfs_a
+    volumes:
+      - federation-demo-node-a-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lfs_a"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - federation-demo
+
+  node-b-db:
+    image: postgres:16-alpine
+    profiles: ["federation-demo"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: lfs_b
+    volumes:
+      - federation-demo-node-b-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lfs_b"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - federation-demo
+
+  node-a:
+    container_name: lfs-node-a
+    profiles: ["federation-demo"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "ALEMBIC_DATABASE_URL=$$FEDERATION_DATABASE_URL uv run alembic -c alembic.ini upgrade head && python -m src.license_facade_service.main"]
+    environment:
+      APP_NAME: License Facade Service Node A
+      EXPOSE_PORT: 12104
+      BASE_DIR: /home/akmi/lfs
+      URL_BASE: http://node-a:12104/api/v1/licenses
+      FUSEKI_ENABLE: "false"
+      CORS_ORIGINS: ""
+      CORS_ALLOW_CREDENTIALS: "false"
+      RELOAD_ENABLE: "false"
+      LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN}
+      FEDERATION_ENABLED: "true"
+      FEDERATION_INBOUND_ENABLED: "false"
+      FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-a-db:5432/lfs_a
+      FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_A_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}
+      FEDERATION_PUBLIC_BASE_URL: http://node-a:12104
+      FEDERATION_NODE_NAME: Demo Node A
+      FEDERATION_OPERATOR: Demo Operator A
+      FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_A_KID:-node-a-k1}
+      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-a-signing-key.pem
+      FEDERATION_JWKS_ENABLED: "true"
+      FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
+      FEDERATION_SYNC_ALLOWED_PORTS: "12104,443"
+    volumes:
+      - ./resources:/home/akmi/lfs/resources
+      - ${FEDERATION_DEMO_NODE_A_KEY_FILE:-/tmp/lfs-node-a-key.pem}:/run/secrets/node-a-signing-key.pem:ro
+    depends_on:
+      node-a-db:
+        condition: service_healthy
+    ports:
+      - "12114:12104"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:12104/api/v1/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - federation-demo
+
+  node-b:
+    container_name: lfs-node-b
+    profiles: ["federation-demo"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "ALEMBIC_DATABASE_URL=$$FEDERATION_DATABASE_URL uv run alembic -c alembic.ini upgrade head && python -m src.license_facade_service.main"]
+    environment:
+      APP_NAME: License Facade Service Node B
+      EXPOSE_PORT: 12104
+      BASE_DIR: /home/akmi/lfs
+      URL_BASE: http://node-b:12104/api/v1/licenses
+      FUSEKI_ENABLE: "false"
+      CORS_ORIGINS: ""
+      CORS_ALLOW_CREDENTIALS: "false"
+      RELOAD_ENABLE: "false"
+      LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN}
+      FEDERATION_ENABLED: "true"
+      FEDERATION_INBOUND_ENABLED: "true"
+      FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-b-db:5432/lfs_b
+      FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_B_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}
+      FEDERATION_PUBLIC_BASE_URL: http://node-b:12104
+      FEDERATION_NODE_NAME: Demo Node B
+      FEDERATION_OPERATOR: Demo Operator B
+      FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_B_KID:-node-b-k1}
+      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-b-signing-key.pem
+      FEDERATION_JWKS_ENABLED: "true"
+      FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
+      FEDERATION_ALLOW_PRIVATE_NETWORK: "false"
+      FEDERATION_SYNC_ALLOWED_HOSTNAMES: "node-a,node-b"
+      FEDERATION_SYNC_ALLOWED_PORTS: "12104,443"
+      FEDERATION_ADMIN_SYNC_TIMEOUT_SECONDS: "30"
+    volumes:
+      - ./resources:/home/akmi/lfs/resources
+      - ${FEDERATION_DEMO_NODE_B_KEY_FILE:-/tmp/lfs-node-b-key.pem}:/run/secrets/node-b-signing-key.pem:ro
+    depends_on:
+      node-b-db:
+        condition: service_healthy
+      node-a:
+        condition: service_healthy
+    ports:
+      - "12124:12104"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:12104/api/v1/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - federation-demo
+
+  node-b-worker:
+    profiles: ["federation-demo"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.license_facade_service.worker"]
+    environment:
+      APP_NAME: License Facade Service Node B Worker
+      BASE_DIR: /home/akmi/lfs
+      FUSEKI_ENABLE: "false"
+      FEDERATION_ENABLED: "true"
+      FEDERATION_INBOUND_ENABLED: "true"
+      FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-b-db:5432/lfs_b
+      FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_B_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}
+      FEDERATION_PUBLIC_BASE_URL: http://node-b:12104
+      FEDERATION_NODE_NAME: Demo Node B
+      FEDERATION_OPERATOR: Demo Operator B
+      FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_B_KID:-node-b-k1}
+      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-b-signing-key.pem
+      FEDERATION_JWKS_ENABLED: "true"
+      FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
+      FEDERATION_ALLOW_PRIVATE_NETWORK: "false"
+      FEDERATION_SYNC_ALLOWED_HOSTNAMES: "node-a,node-b"
+      FEDERATION_SYNC_ALLOWED_PORTS: "12104,443"
+      FEDERATION_WORKER_INTERVAL_SECONDS: "15"
+      FEDERATION_WORKER_MAX_SYNC_SECONDS: "30"
+    volumes:
+      - ${FEDERATION_DEMO_NODE_B_KEY_FILE:-/tmp/lfs-node-b-key.pem}:/run/secrets/node-b-signing-key.pem:ro
+    depends_on:
+      node-b-db:
+        condition: service_healthy
+      node-b:
+        condition: service_healthy
+    networks:
+      - federation-demo
+
 volumes:
   fuseki-data:
+    driver: local
+  federation-demo-node-a-db:
+    driver: local
+  federation-demo-node-b-db:
     driver: local
 
 networks:
   lfs-internal:
+    driver: bridge
+  federation-demo:
     driver: bridge

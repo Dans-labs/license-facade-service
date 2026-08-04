@@ -117,3 +117,31 @@ Key rules:
 - cursor tokens are opaque, versioned, Ed25519-signed claims;
 - catalog pagination uses keyset ordering plus a stable event-sequence watermark;
 - event and record payload digests/signatures use RFC 8785/JCS canonical JSON (UTF-8) + SHA-256 + Ed25519.
+
+## Federation Phase 3 (trusted peers + inbound synchronization)
+
+Implemented:
+
+- admin-only peer APIs:
+  - `GET/POST /api/v1/admin/federation/peers`
+  - `GET/PATCH/DELETE /api/v1/admin/federation/peers/{peer-id}`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/sync`
+  - `GET /api/v1/admin/federation/peers/{peer-id}/imports`
+  - `GET /api/v1/admin/federation/status`
+- explicit trusted-peer enrollment with pinned expected node ID + key fingerprint/kid;
+- separate inbound event store (`federation_inbound_events`), separate from outbound authoritative feed;
+- per-page transactional import with persisted `resumeCursor` and idempotent replay handling;
+- worker entrypoint: `python -m src.license_facade_service.worker`;
+- imported records are persisted as `is_authoritative=false` and are not re-exported via outbound authoritative catalog/changes.
+
+Security behavior:
+
+- no automatic peer enrollment;
+- no blind TOFU in production (`FEDERATION_DEMO_TOFU_UNSAFE` is explicit and disabled by default);
+- unknown/revoked peer keys are rejected;
+- duplicate JSON keys are rejected before Pydantic validation;
+- outbound sync HTTP enforces bounded timeouts, size limits, strict content types, and DNS/IP policy checks.
+
+DNS rebinding note:
+
+- requests re-resolve and validate addresses before each call, but the default HTTP client may still perform its own DNS lookup at connect time; production deployment must additionally enforce egress network policy to trusted destinations.
