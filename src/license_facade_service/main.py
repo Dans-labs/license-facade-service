@@ -7,6 +7,7 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from src.license_facade_service.api.federation import admin as federation_admin
 from src.license_facade_service.api.federation import jwks as federation_jwks
 from src.license_facade_service.api.federation import outbound as federation_outbound
 from src.license_facade_service.api.v1 import licenses, metrics
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(licenses.router, tags=["Licenses"], prefix="/api/v1")
     app.include_router(federation_outbound.router, tags=["Federation"])
     app.include_router(federation_jwks.router, tags=["Federation"])
+    app.include_router(federation_admin.router, tags=["Federation Admin"])
     return app
 
 

@@ -38,6 +38,8 @@ COPY conf ./conf
 COPY pyproject.toml .
 COPY README.md .
 COPY uv.lock .
+COPY alembic ./alembic
+COPY alembic.ini .
 
 
 # Install dependencies

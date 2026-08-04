@@ -17,3 +17,6 @@
 13. Federation GET endpoints are read-only and do not create change events.
 14. Change events are append-only and sequence-ordered by a database-generated monotonic position.
 15. Cursor pagination is opaque, versioned, signature-verified, and watermark-bounded for deterministic traversal.
+16. Phase 3 adds admin-only trusted-peer enrollment and inbound synchronization; imported records remain non-authoritative and are not re-exported in local authoritative feeds.
+17. Inbound synchronization uses per-page transactional processing and persists peer-issued `resumeCursor` only after successful page commit.
+18. Phase 3 stores inbound accepted events in dedicated tables (`federation_inbound_events`, `federation_peer_signing_keys`) separate from local outbound change events.

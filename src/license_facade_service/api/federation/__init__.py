@@ -1,3 +1,3 @@
-from src.license_facade_service.api.federation import jwks, outbound
+from src.license_facade_service.api.federation import admin, jwks, outbound
 
-__all__ = ["jwks", "outbound"]
+__all__ = ["admin", "jwks", "outbound"]

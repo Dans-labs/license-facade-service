@@ -151,3 +151,23 @@ Signed change-event payload fields:
 - Backfill is explicit and separate from GET/startup.
 - Command path: `src/license_facade_service/federation/backfill.py`
 - Defaults to dry-run; write mode requires explicit confirmation; idempotent.
+
+## Federation Phase 3 inbound synchronization
+
+Implemented Phase 3 boundaries:
+
+- trusted peers are explicitly admin-enrolled; automatic enrollment is not implemented;
+- peer trust material is pinned (node ID + verification key `kid` + fingerprint);
+- inbound synchronization uses `/changes` paging with `nextCursor` traversal and persisted `resumeCursor`;
+- per-page transactional import: if one page fails, that page and cursor update roll back, prior committed pages remain;
+- remote event positions are required to be strictly increasing for newly accepted events, but sequence gaps are allowed;
+- duplicate JSON keys are rejected before schema validation;
+- imported records are stored with `is_authoritative=false`, provenance metadata, and verification status;
+- imported events are stored in dedicated inbound tables and are never inserted into outbound `federation_change_events`.
+
+Security notes:
+
+- unknown/revoked peer keys are rejected;
+- HTTPS-only by default (demo profile may allow HTTP with explicit config);
+- SSRF protections validate resolved addresses and reject loopback/private/link-local/metadata ranges by default;
+- DNS is revalidated per request; deployment should still enforce outbound network policy to close resolver-to-connect rebinding gaps.
