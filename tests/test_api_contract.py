@@ -49,6 +49,8 @@ def test_static_routes_take_precedence(app_client):
     openapi = client.get("/openapi.json").json()
     assert "/api/v1/licences/taxonomy" not in openapi["paths"]
     assert "/api/v1/licenses/taxonomy" in openapi["paths"]
+    assert "/api/v1/licenses/resolution" in openapi["paths"]
+    assert "/api/v1/licenses/provenance" in openapi["paths"]
     assert "/api/v1/licenses/{id}" in openapi["paths"]
     assert list(openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["200"]["content"].keys()) == [
         "application/json",

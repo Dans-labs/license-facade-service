@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Query, Request
 
+from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.api.v1.licenses import get_auth_service
 from src.license_facade_service.federation.inbound import FederationInboundSyncService, FederationPeerService
 from src.license_facade_service.federation.inbound_models import (
@@ -16,24 +17,35 @@ from src.license_facade_service.federation.inbound_models import (
     PeerResponse,
     SyncResultResponse,
 )
+from src.license_facade_service.federation.resolution import FederationResolutionService, ResolutionError
+from src.license_facade_service.federation.resolution_models import ConflictDecisionRequest, ConflictDecisionResponse, ConflictResponse
 from src.license_facade_service.federation.outbound import FederationError, FederationPublicationService
 from src.license_facade_service.federation.runtime import FederationRuntime
-from src.license_facade_service.services.auth import AuthService, AuthenticationError, AuthorizationError
+from src.license_facade_service.services.auth import AuthService, AuthenticationError, AuthorizationError, Principal
 from src.license_facade_service.services.problem import ProblemDetails, problem_response
 
 router = APIRouter()
 
 
-def _admin_guard(request: Request) -> None:
+def _guard(request: Request, allowed_roles: set[str]) -> Principal:
     auth = get_auth_service()
     try:
         principal = auth.authenticate(request)
     except AuthenticationError as exc:
         raise FederationError("unauthorized", "Missing or invalid bearer token.") from exc
     try:
-        auth.authorize(principal, {"admin"})
+        auth.authorize(principal, allowed_roles)
     except AuthorizationError as exc:
         raise FederationError("forbidden", "Administrator role is required.") from exc
+    return principal
+
+
+def _admin_guard(request: Request) -> Principal:
+    return _guard(request, {"admin"})
+
+
+def _curator_guard(request: Request) -> Principal:
+    return _guard(request, {"admin", "curator"})
 
 
 def _services(request: Request) -> tuple[FederationPeerService, FederationInboundSyncService, FederationPublicationService]:
@@ -48,6 +60,18 @@ def _services(request: Request) -> tuple[FederationPeerService, FederationInboun
         FederationInboundSyncService(runtime.db, runtime.settings),
         FederationPublicationService(runtime.db, runtime.settings),
     )
+
+
+def _resolution_service(request: Request) -> FederationResolutionService:
+    runtime: FederationRuntime | None = getattr(request.app.state, "federation_runtime", None)
+    state = getattr(request.app.state, "federation_state", None)
+    if runtime is None or state is None or not state.enabled:
+        from src.license_facade_service.api.v1.licenses import get_license_service
+
+        return FederationResolutionService(None, FederationSettings.from_env(), license_service=get_license_service())
+    from src.license_facade_service.api.v1.licenses import get_license_service
+
+    return FederationResolutionService(runtime.db, runtime.settings, license_service=get_license_service())
 
 
 def _problem_from_error(request: Request, error: FederationError):
@@ -85,6 +109,30 @@ def _problem_from_error(request: Request, error: FederationError):
         detail=error.detail,
         type_uri=f"https://eosc-eden.eu/problems/{error.code}",
         instance=str(request.url),
+    )
+
+
+def _resolution_problem(request: Request, error: ResolutionError):
+    mapping = {
+        "invalid-identifier": (400, "Invalid Identifier"),
+        "resolution-not-found": (404, "Resolution Not Found"),
+        "resolution-ambiguous": (409, "Ambiguous Resolution"),
+        "resolution-conflicted": (409, "Conflicted Resolution"),
+        "resolution-tombstoned": (410, "Tombstoned Resolution"),
+        "resolution-unavailable": (503, "Resolution Unavailable"),
+        "conflict-not-found": (404, "Conflict Not Found"),
+        "conflict-stale": (409, "Conflict Version Changed"),
+        "conflict-not-allowed": (409, "Conflict Decision Not Allowed"),
+        "conflict-data-collision": (409, "Conflict Data Collision"),
+    }
+    status, title = mapping.get(error.code, (400, "Resolution Error"))
+    return problem_response(
+        status=status,
+        title=title,
+        detail=error.detail,
+        type_uri=f"https://eosc-eden.eu/problems/{error.code}",
+        instance=str(request.url),
+        extra={"resolutionContext": getattr(error, "context", {})},
     )
 
 
@@ -244,3 +292,70 @@ async def publish_record(request: Request, payload: AdminPublishRequest):
         return {"canonicalId": canonical_id, "recordId": str(record_uuid)}
     except FederationError as error:
         return _problem_from_error(request, error)
+
+
+@router.get(
+    "/api/v1/admin/federation/conflicts",
+    response_model=list[ConflictResponse],
+    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}},
+)
+async def list_conflicts(request: Request, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0)):
+    try:
+        _curator_guard(request)
+        service = _resolution_service(request)
+        return service.list_conflicts(limit=limit, offset=offset)
+    except ResolutionError as error:
+        return _resolution_problem(request, error)
+
+
+@router.get(
+    "/api/v1/admin/federation/conflicts/{conflict_id}",
+    response_model=ConflictResponse,
+    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+)
+async def get_conflict(request: Request, conflict_id: uuid.UUID):
+    try:
+        _curator_guard(request)
+        service = _resolution_service(request)
+        return service.get_conflict(conflict_id)
+    except ResolutionError as error:
+        return _resolution_problem(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/conflicts/{conflict_id}/decisions",
+    response_model=ConflictDecisionResponse,
+    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}},
+)
+async def decide_conflict(request: Request, conflict_id: uuid.UUID, payload: ConflictDecisionRequest):
+    try:
+        principal = _curator_guard(request)
+        service = _resolution_service(request)
+        return service.decide_conflict(
+            conflict_id=conflict_id,
+            payload=payload,
+            actor_role=principal.role,
+            actor_identifier=principal.role,
+        )
+    except ResolutionError as error:
+        return _resolution_problem(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/conflicts/{conflict_id}/reversals",
+    response_model=ConflictDecisionResponse,
+    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}},
+)
+async def reverse_conflict(request: Request, conflict_id: uuid.UUID, payload: ConflictDecisionRequest):
+    try:
+        principal = _curator_guard(request)
+        service = _resolution_service(request)
+        reversed_payload = payload.model_copy(update={"decisionType": "reverse"})
+        return service.decide_conflict(
+            conflict_id=conflict_id,
+            payload=reversed_payload,
+            actor_role=principal.role,
+            actor_identifier=principal.role,
+        )
+    except ResolutionError as error:
+        return _resolution_problem(request, error)

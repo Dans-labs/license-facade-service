@@ -164,6 +164,72 @@ class FusekiClient:
             logging.error(f"Error uploading RDF data: {e}")
             return False
 
+    async def replace_graph(
+        self,
+        graph_uri: str,
+        rdf_data: str,
+        content_type: str = "text/turtle",
+    ) -> bool:
+        if not await self.delete_graph(graph_uri):
+            return False
+        return await self.upload_rdf(rdf_data, content_type, graph_uri)
+
+    async def delete_graph(self, graph_uri: str) -> bool:
+        try:
+            sparql_update = f"CLEAR GRAPH <{graph_uri}>"
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    self.update_endpoint,
+                    data=sparql_update,
+                    headers={"Content-Type": "application/sparql-update"},
+                    auth=self.auth,
+                )
+                if response.status_code in (200, 204):
+                    return True
+                if response.status_code == 500 and "No such graph" in response.text:
+                    return True
+                logging.error(f"Failed to clear graph {graph_uri}: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            logging.error(f"Error clearing graph {graph_uri}: {e}")
+            return False
+
+    async def construct_graph(self, graph_uri: str) -> str | None:
+        query = f"CONSTRUCT {{ ?s ?p ?o }} WHERE {{ GRAPH <{graph_uri}> {{ ?s ?p ?o }} }}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    self.query_endpoint,
+                    params={"query": query},
+                    headers={"Accept": "text/turtle"},
+                    auth=self.auth,
+                )
+                if response.status_code != 200:
+                    logging.error(f"Failed to construct graph {graph_uri}: {response.status_code} - {response.text}")
+                    return None
+                return response.text
+        except Exception as e:
+            logging.error(f"Error constructing graph {graph_uri}: {e}")
+            return None
+
+    async def graph_ask(self, graph_uri: str, triple_pattern: str = "?s ?p ?o") -> bool:
+        query = f"ASK {{ GRAPH <{graph_uri}> {{ {triple_pattern} }} }}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    self.query_endpoint,
+                    params={"query": query},
+                    headers={"Accept": "application/sparql-results+json"},
+                    auth=self.auth,
+                )
+                if response.status_code != 200:
+                    return False
+                data = response.json()
+                return bool(data.get("boolean"))
+        except Exception as e:
+            logging.error(f"Error asking graph {graph_uri}: {e}")
+            return False
+
     async def upload_graph(
         self,
         graph: Graph,

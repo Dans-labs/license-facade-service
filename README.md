@@ -14,7 +14,8 @@ uv run python -m src.license_facade_service.main
 - Canonical lookup: `GET /api/v1/licenses/{id}`
 - Specification alias: `GET /api/v1/licences/{id}`
 - Default response: `application/json`
-- Explicit HTML: `Accept: text/html` or `/html`
+- JSON/LD/RDF: `application/json`, `application/ld+json`, `text/turtle`, `application/rdf+xml`
+- Arbitrary identifiers: `GET /api/v1/licenses/resolution?identifier=...`
 
 Supported negotiated media types:
 
@@ -35,6 +36,7 @@ Convenience routes:
 - `/api/v1/licenses/{id}/legal`
 - `/api/v1/licenses/{id}/machine`
 - `/api/v1/licenses/{id}/encoding`
+- `/api/v1/licenses/provenance?identifier=...`
 
 ## Representation rules
 
@@ -145,3 +147,22 @@ Security behavior:
 DNS rebinding note:
 
 - requests re-resolve and validate addresses before each call, but the default HTTP client may still perform its own DNS lookup at connect time; production deployment must additionally enforce egress network policy to trusted destinations.
+
+## Federation Phase 4 (local resolution + RDF outbox)
+
+Implemented:
+
+- `GET /api/v1/licenses/resolution`
+- `GET /api/v1/licenses/provenance`
+- canonical content negotiation for HTML, SPDX JSON, JSON-LD, Turtle, and RDF/XML;
+- local authoritative records always win over imported candidates;
+- imported snapshots are immutable and resolved through separate provenance/history state;
+- RDF graph URIs are deterministic per record/decision:
+  - `urn:lfs:graph:record:{recordId}`
+  - `urn:lfs:graph:provenance:{recordId}`
+  - `urn:lfs:graph:decision:{conflictId}`
+- outbox statuses: `pending`, `running`, `succeeded`, `retryable_failed`, `dead_lettered`, `superseded`;
+- worker mode: `python -m src.license_facade_service.rdf_worker` for continuous or one-shot processing;
+- maintenance commands: `process`, `retry`, `requeue`, `rebuild`, `reconcile`;
+- Fuseki outages do not block PostgreSQL resolution; failed RDF jobs retry with leases/backoff and can be dead-lettered;
+- rebuild/reconcile operate only on graphs owned by this service.

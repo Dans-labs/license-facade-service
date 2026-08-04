@@ -26,6 +26,7 @@ from src.license_facade_service.db.models.federation import (
     FederationPeerSigningKey,
     FederationRecord,
     FederationRecordProvenance,
+    FederationResolutionAlias,
     FederationSyncAttempt,
     FederationTrustedPeer,
 )
@@ -48,6 +49,7 @@ from src.license_facade_service.federation.inbound_models import (
 from src.license_facade_service.federation.json_strict import DuplicateJsonKeyError, loads_json_no_duplicates
 from src.license_facade_service.federation.license_identity import build_canonical_license_identity
 from src.license_facade_service.federation.outbound import FederationError, encode_canonical_id
+from src.license_facade_service.federation.rdf_outbox import RdfOutboxService
 from src.license_facade_service.federation.security import FederationUrlPolicy, UrlSecurityError
 
 logger = logging.getLogger(__name__)
@@ -727,6 +729,7 @@ class FederationInboundSyncService:
         self.settings = settings
         self.remote_client = remote_client or FederationRemoteClient(settings)
         self.peer_service = FederationPeerService(db, settings, remote_client=self.remote_client)
+        self.rdf_outbox = RdfOutboxService(db, settings)
 
     def _refresh_peer_verification_state(
         self,
@@ -1337,6 +1340,8 @@ class FederationInboundSyncService:
                 record.verification_status = "verified"
                 record.last_verified_at = now
                 record.updated_at = now
+            record.materialized_generation = payload.eventPosition
+            self._sync_resolution_aliases(session=session, record=record, peer=peer, payload=payload)
             session.add(
                 FederationRecordProvenance(
                     id=uuid.uuid4(),
@@ -1363,12 +1368,14 @@ class FederationInboundSyncService:
             record.lifecycle_state = "deprecated"
             record.last_verified_at = now
             record.updated_at = now
+            record.materialized_generation = payload.eventPosition
         elif payload.operation == "tombstone":
             if record is None:
                 raise FederationError("missing-record", "Tombstone event received before imported upsert record.")
             record.lifecycle_state = "tombstoned"
             record.last_verified_at = now
             record.updated_at = now
+            record.materialized_generation = payload.eventPosition
         else:
             raise FederationError("invalid-operation", "Unsupported remote operation.")
 
@@ -1392,6 +1399,7 @@ class FederationInboundSyncService:
                 record_payload_digest_sha256=payload.record.payloadDigestSha256,
             )
         )
+        self.rdf_outbox.enqueue_record_jobs(session, record, operation=payload.operation)
 
     def _persist_rejection(self, *, peer_id: uuid.UUID, item: Any, error: FederationError) -> None:
         now = datetime.now(timezone.utc)
@@ -1497,6 +1505,98 @@ class FederationInboundSyncService:
                 created_at=datetime.now(timezone.utc),
             )
         )
+
+    @staticmethod
+    def _normalize_identifier(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    def _upsert_resolution_alias(
+        self,
+        *,
+        session: Session,
+        record: FederationRecord,
+        alias_value: str,
+        alias_kind: str,
+        authority_node_id: str | None,
+        source_peer: FederationTrustedPeer | None,
+        is_authoritative: bool,
+    ) -> None:
+        normalized = self._normalize_identifier(alias_value)
+        if not normalized:
+            return
+        now = datetime.now(timezone.utc)
+        existing = session.execute(
+            select(FederationResolutionAlias).where(
+                FederationResolutionAlias.normalized_identifier == normalized,
+                FederationResolutionAlias.record_id == record.id,
+                FederationResolutionAlias.alias_kind == alias_kind,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            session.add(
+                FederationResolutionAlias(
+                    id=uuid.uuid4(),
+                    normalized_identifier=normalized,
+                    alias_value=alias_value,
+                    alias_kind=alias_kind,
+                    record_id=record.id,
+                    authority_node_id=authority_node_id,
+                    source_peer_id=source_peer.id if source_peer else None,
+                    is_authoritative=is_authoritative,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            return
+        existing.alias_value = alias_value
+        existing.authority_node_id = authority_node_id
+        existing.source_peer_id = source_peer.id if source_peer else None
+        existing.is_authoritative = is_authoritative
+        existing.updated_at = now
+
+    def _sync_resolution_aliases(
+        self,
+        *,
+        session: Session,
+        record: FederationRecord,
+        peer: FederationTrustedPeer | None,
+        payload: Any,
+    ) -> None:
+        self._upsert_resolution_alias(
+            session=session,
+            record=record,
+            alias_value=record.canonical_id,
+            alias_kind="canonical",
+            authority_node_id=record.authority_node_id,
+            source_peer=peer,
+            is_authoritative=record.is_authoritative and record.imported_from_peer_id is None,
+        )
+        if record.source_record_url:
+            self._upsert_resolution_alias(
+                session=session,
+                record=record,
+                alias_value=record.source_record_url,
+                alias_kind="authority-uri",
+                authority_node_id=record.authority_node_id,
+                source_peer=peer,
+                is_authoritative=False,
+            )
+        explicit_aliases = payload.record.payload.get("aliases") if hasattr(payload.record, "payload") else None
+        if isinstance(explicit_aliases, list):
+            for alias in explicit_aliases:
+                if isinstance(alias, str) and alias.strip():
+                    self._upsert_resolution_alias(
+                        session=session,
+                        record=record,
+                        alias_value=alias,
+                        alias_kind="approved-alias",
+                        authority_node_id=record.authority_node_id,
+                        source_peer=peer,
+                        is_authoritative=record.is_authoritative and record.imported_from_peer_id is None,
+                    )
 
     @staticmethod
     def _retry_sleep_seconds(attempt_count: int) -> float:

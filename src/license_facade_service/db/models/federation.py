@@ -88,6 +88,7 @@ class FederationRecord(Base):
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     payload_digest_sha256: Mapped[str] = mapped_column(String(128), nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    materialized_generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     imported_from_peer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="SET NULL")
     )
@@ -327,6 +328,155 @@ class FederationPeerAuditLog(Base):
     actor: Mapped[str] = mapped_column(String(128), nullable=False)
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FederationResolutionAlias(Base):
+    __tablename__ = "federation_resolution_aliases"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    normalized_identifier: Mapped[str] = mapped_column(String(1024), nullable=False)
+    alias_value: Mapped[str] = mapped_column(String(2048), nullable=False)
+    alias_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="CASCADE"), nullable=False
+    )
+    authority_node_id: Mapped[str | None] = mapped_column(String(128))
+    source_peer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="SET NULL")
+    )
+    is_authoritative: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("normalized_identifier", "record_id", "alias_kind", name="uq_federation_resolution_alias"),
+        Index("ix_federation_resolution_aliases_normalized_identifier", "normalized_identifier"),
+    )
+
+
+class FederationResolutionConflict(Base):
+    __tablename__ = "federation_resolution_conflicts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    normalized_identifier: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    conflict_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    decision_effectiveness: Mapped[str | None] = mapped_column(String(32))
+    candidate_summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    resolved_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_federation_resolution_conflicts_normalized_identifier", "normalized_identifier"),)
+
+
+class FederationConflictDecisionEvent(Base):
+    __tablename__ = "federation_conflict_decision_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conflict_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_resolution_conflicts.id", ondelete="CASCADE"), nullable=False
+    )
+    expected_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    decision_effectiveness: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_identifier: Mapped[str | None] = mapped_column(String(256))
+    rationale: Mapped[str | None] = mapped_column(Text)
+    before_state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    after_state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("ix_federation_conflict_decisions_conflict_version", "conflict_id", "version"),
+        UniqueConstraint("conflict_id", "version", name="uq_federation_conflict_decisions_conflict_version"),
+    )
+
+
+class FederationResolutionAuditLog(Base):
+    __tablename__ = "federation_resolution_audit_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    subject_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_identifier: Mapped[str | None] = mapped_column(String(256))
+    rationale: Mapped[str | None] = mapped_column(Text)
+    before_state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    after_state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FederationRdfOutboxJob(Base):
+    __tablename__ = "federation_rdf_outbox_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dedupe_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="CASCADE")
+    )
+    authority_node_id: Mapped[str | None] = mapped_column(String(128))
+    source_peer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="SET NULL")
+    )
+    graph_uri: Mapped[str] = mapped_column(String(2048), nullable=False)
+    expected_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    expected_digest_sha256: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    leased_by: Mapped[str | None] = mapped_column(String(128))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(128))
+    last_error_detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_federation_rdf_outbox_status_next_attempt", "status", "next_attempt_at"),
+        Index("ix_federation_rdf_outbox_record_generation", "record_id", "expected_generation"),
+        Index("ix_federation_rdf_outbox_graph_uri", "graph_uri"),
+        CheckConstraint("status IN ('pending','running','succeeded','retryable_failed','dead_lettered','superseded')", name="ck_federation_rdf_outbox_status"),
+    )
+
+
+class FederationRdfGraphState(Base):
+    __tablename__ = "federation_rdf_graph_state"
+
+    graph_uri: Mapped[str] = mapped_column(String(2048), primary_key=True)
+    graph_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="CASCADE")
+    )
+    authority_node_id: Mapped[str | None] = mapped_column(String(128))
+    source_peer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_trusted_peers.id", ondelete="SET NULL")
+    )
+    expected_generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    expected_digest_sha256: Mapped[str | None] = mapped_column(String(128))
+    current_generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    current_digest_sha256: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    active_lease_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    active_lease_by: Mapped[str | None] = mapped_column(String(128))
+    active_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(128))
+    last_error_detail: Mapped[str | None] = mapped_column(Text)
+    owned_by_service: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 Index("ix_federation_records_authority", FederationRecord.authority_node_id)

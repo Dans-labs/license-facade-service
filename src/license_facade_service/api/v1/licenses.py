@@ -33,6 +33,8 @@ from src.license_facade_service.services.contract import LicenseDetail, LicenseI
 from src.license_facade_service.services.contract import LicenseInventoryResponse
 from src.license_facade_service.services.problem import ProblemDetails
 from src.license_facade_service.services.problem import problem_response
+from src.license_facade_service.federation.resolution import FederationResolutionService, ResolutionError
+from src.license_facade_service.federation.resolution_models import LicenseProvenanceResponse, LicenseResolutionResponse
 
 router = APIRouter()
 
@@ -100,6 +102,42 @@ def _build_optional_representation_unavailable(
         status=404,
         title="Representation Not Available",
         detail=f"Representation '{representation}' is unavailable for this license.",
+        instance=str(request.url),
+        extra=extra,
+    )
+
+
+def _resolution_service(request: Request) -> FederationResolutionService:
+    runtime = getattr(request.app.state, "federation_runtime", None)
+    settings = getattr(runtime, "settings", None)
+    db = getattr(runtime, "db", None) if runtime is not None else None
+    if settings is None:
+        from src.license_facade_service.config.federation import FederationSettings
+
+        settings = FederationSettings.from_env()
+    return FederationResolutionService(db, settings, license_service=get_license_service())
+
+
+def _resolution_problem(request: Request, error: ResolutionError):
+    mapping = {
+        "invalid-identifier": (400, "Invalid Identifier"),
+        "resolution-not-found": (404, "Resolution Not Found"),
+        "resolution-ambiguous": (409, "Ambiguous Resolution"),
+        "resolution-conflicted": (409, "Conflicted Resolution"),
+        "resolution-tombstoned": (410, "Tombstoned Resolution"),
+        "resolution-unavailable": (503, "Resolution Unavailable"),
+        "conflict-not-found": (404, "Conflict Not Found"),
+        "conflict-stale": (409, "Conflict Version Changed"),
+        "conflict-not-allowed": (409, "Conflict Decision Not Allowed"),
+        "conflict-data-collision": (409, "Conflict Data Collision"),
+    }
+    status, title = mapping.get(error.code, (400, "Resolution Error"))
+    extra = {"resolutionContext": getattr(error, "context", {})}
+    return problem_response(
+        status=status,
+        title=title,
+        detail=error.detail,
+        type_uri=f"https://eosc-eden.eu/problems/{error.code}",
         instance=str(request.url),
         extra=extra,
     )
@@ -521,6 +559,38 @@ async def get_license_encoding(
             metadata=service.build_metadata(resolved),
         )
     return RedirectResponse(url=encoding["href"], status_code=307)
+
+
+@router.get(
+    "/licenses/resolution",
+    response_model=LicenseResolutionResponse,
+    responses={400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}, 410: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+)
+@router.get("/licences/resolution", include_in_schema=False)
+async def resolve_license(
+    request: Request,
+    identifier: str,
+):
+    try:
+        return _resolution_service(request).resolve(identifier)
+    except ResolutionError as error:
+        return _resolution_problem(request, error)
+
+
+@router.get(
+    "/licenses/provenance",
+    response_model=LicenseProvenanceResponse,
+    responses={400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}, 410: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+)
+@router.get("/licences/provenance", include_in_schema=False)
+async def get_license_provenance(
+    request: Request,
+    identifier: str,
+):
+    try:
+        return _resolution_service(request).provenance(identifier)
+    except ResolutionError as error:
+        return _resolution_problem(request, error)
 
 
 @router.get(
