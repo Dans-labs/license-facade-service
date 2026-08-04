@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from src.license_facade_service.infra.fuseki_client import FusekiClient
 from src.license_facade_service.services.licenses import LicenseService
@@ -22,7 +22,7 @@ async def ping():
 
 
 @router.get("/ready")
-async def readiness(service: LicenseService = Depends(get_license_service)):
+async def readiness(request: Request, service: LicenseService = Depends(get_license_service)):
     licenses_ready = service.health_can_resolve()
     fuseki_enabled = os.getenv("FUSEKI_ENABLE", "true").lower() == "true"
     fuseki_ready = None
@@ -36,10 +36,22 @@ async def readiness(service: LicenseService = Depends(get_license_service)):
         )
         fuseki_ready = await client.check_connection()
 
-    ready = licenses_ready and (fuseki_ready is True or fuseki_ready is None)
+    federation_state = getattr(request.app.state, "federation_state", None)
+    federation_ready = True
+    federation_payload = {"enabled": False, "ready": None, "errors": []}
+    if federation_state is not None:
+        federation_payload = {
+            "enabled": federation_state.enabled,
+            "ready": federation_state.ready if federation_state.enabled else None,
+            "errors": federation_state.errors,
+            "nodeId": federation_state.node_id,
+        }
+        federation_ready = federation_state.ready or not federation_state.enabled
+
+    ready = licenses_ready and (fuseki_ready is True or fuseki_ready is None) and federation_ready
     return {
         "status": "ready" if ready else "not_ready",
         "licenses": {"ready": licenses_ready},
         "fuseki": {"enabled": fuseki_enabled, "ready": fuseki_ready},
+        "federation": federation_payload,
     }
-

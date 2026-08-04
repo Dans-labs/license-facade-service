@@ -73,3 +73,21 @@ The implementation validates RELs syntactically and by registered vocabulary/pro
 
 This is **syntax/vocabulary validation only**, not legal or semantic validation.
 
+## Federation Phase 1 foundation
+
+Implemented in this phase:
+
+- PostgreSQL schema + Alembic migrations for federation state tables.
+- Feature flag: `FEDERATION_ENABLED`.
+- Validated node identity from configuration (no request-header derivation).
+- Persisted node identity fingerprint/state for configuration drift detection.
+- Ed25519 signing-key loading from configured file/secret path.
+- Public-key metadata persistence (`kid`, `alg`, status, validity).
+- Typed JWKS service and optional `/.well-known/jwks.json` endpoint.
+- Canonical licence identity utility using UUIDv5 with fixed namespace.
+- Canonical JSON (RFC 8785/JCS) + SHA-256 digest helpers.
+- Typed federation peer/provenance/record/change-event models.
+
+Compatibility decision:
+
+- With `FEDERATION_ENABLED=false`, the current public licence API remains operational without federation configuration, PostgreSQL, or signing keys.

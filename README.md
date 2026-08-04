@@ -71,3 +71,30 @@ Mutation endpoints require bearer auth via env/secret file:
 
 See `docs/specification.md` and `docs/migration-note.md` for details.
 
+## Federation Phase 1 (foundation only)
+
+Federation is **feature-gated** and disabled by default.
+
+- `FEDERATION_ENABLED=false` keeps current licence API behaviour and does not require PostgreSQL or signing keys.
+- `FEDERATION_ENABLED=true` requires validated node identity, PostgreSQL DSN, and signing-key configuration.
+
+Required federation settings when enabled:
+
+- `FEDERATION_NODE_ID` (UUID)
+- `FEDERATION_PUBLIC_BASE_URL` (absolute `https://...`)
+- `FEDERATION_NODE_NAME`
+- `FEDERATION_OPERATOR`
+- `FEDERATION_DATABASE_URL` (PostgreSQL)
+- `FEDERATION_ACTIVE_KID`
+- `FEDERATION_SIGNING_KEY_PATH` or `FEDERATION_SIGNING_KEY_SECRET_PATH`
+
+Signing-key policy:
+
+- Ed25519/EdDSA key loaded from configured file/secret path.
+- Private keys are never stored in PostgreSQL or API responses.
+- Database stores only public key metadata and supports multiple keys with one active key.
+
+Optional JWKS endpoint (feature-gated):
+
+- `GET /.well-known/jwks.json`
+- enable with `FEDERATION_ENABLED=true` and `FEDERATION_JWKS_ENABLED=true`.
