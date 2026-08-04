@@ -98,3 +98,22 @@ Optional JWKS endpoint (feature-gated):
 
 - `GET /.well-known/jwks.json`
 - enable with `FEDERATION_ENABLED=true` and `FEDERATION_JWKS_ENABLED=true`.
+
+## Federation Phase 2 (authoritative outbound only)
+
+Implemented outbound endpoints (all read-only):
+
+- `GET /.well-known/lfs`
+- `GET /.well-known/jwks.json`
+- `GET /api/v1/federation/catalog`
+- `GET /api/v1/federation/changes`
+- `GET /api/v1/federation/records/{encoded_id}`
+
+Key rules:
+
+- only authoritative local records are exposed (`is_authoritative=true`, local authority node, published, non-imported);
+- federation endpoints return `404` when `FEDERATION_ENABLED=false`;
+- change events are append-only and inserted transactionally at publication/deprecate/tombstone operations (not by GET);
+- cursor tokens are opaque, versioned, Ed25519-signed claims;
+- catalog pagination uses keyset ordering plus a stable event-sequence watermark;
+- event and record payload digests/signatures use RFC 8785/JCS canonical JSON (UTF-8) + SHA-256 + Ed25519.

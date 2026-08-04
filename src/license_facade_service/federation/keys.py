@@ -12,11 +12,16 @@ from sqlalchemy import select, update
 from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.db.models.federation import FederationSigningKey
 from src.license_facade_service.db.session import Database
-from src.license_facade_service.federation.models import JwkKey, JwksResponse
+from src.license_facade_service.federation.models import JwkKey, JwksResponse, SignatureEnvelope
 
 
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
 
 
 def _read_secret_file(path: str) -> str:
@@ -93,9 +98,35 @@ class SigningKeyService:
 
         return ActiveSigningKey(kid=self.settings.active_kid, public_x=x)
 
+    def sign_bytes(self, payload: bytes) -> SignatureEnvelope:
+        private_key = self._load_private_key()
+        if not self.settings.active_kid:
+            raise ValueError("FEDERATION_ACTIVE_KID is required")
+        signature = private_key.sign(payload)
+        return SignatureEnvelope(kid=self.settings.active_kid, value=_b64url(signature))
+
+    def verify_bytes(self, payload: bytes, *, signature_b64url: str, kid: str) -> bool:
+        with self.db.transaction() as session:
+            row = session.execute(select(FederationSigningKey).where(FederationSigningKey.kid == kid)).scalar_one_or_none()
+        if row is None:
+            return False
+        try:
+            public_bytes = _b64url_decode(row.x)
+            key = Ed25519PublicKey.from_public_bytes(public_bytes)
+            key.verify(_b64url_decode(signature_b64url), payload)
+            return True
+        except Exception:
+            return False
+
     def jwks(self) -> JwksResponse:
         with self.db.transaction() as session:
-            rows = session.execute(select(FederationSigningKey).order_by(FederationSigningKey.created_at)).scalars().all()
+            rows = (
+                session.execute(
+                    select(FederationSigningKey).where(FederationSigningKey.status.in_(["active", "retired"])).order_by(FederationSigningKey.created_at)
+                )
+                .scalars()
+                .all()
+            )
             keys = [
                 JwkKey(
                     kid=row.kid,
@@ -103,9 +134,6 @@ class SigningKeyService:
                     kty="OKP",
                     crv="Ed25519",
                     x=row.x,
-                    status=row.status,
-                    validFrom=row.valid_from,
-                    validUntil=row.valid_until,
                 )
                 for row in rows
             ]

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -143,16 +143,32 @@ class FederationChangeEvent(Base):
     __tablename__ = "federation_change_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    event_sequence: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, default="record.changed")
     authority_node_id: Mapped[str] = mapped_column(String(128), nullable=False)
     record_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="SET NULL")
     )
+    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="upsert")
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload_schema_version: Mapped[str] = mapped_column(String(16), nullable=False, default="1")
+    signed_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    signed_payload_digest_sha256: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature_base64url: Mapped[str] = mapped_column(String(512), nullable=False)
+    signature_kid: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature_alg: Mapped[str] = mapped_column(String(32), nullable=False, default="EdDSA")
+    provenance_type: Mapped[str] = mapped_column(String(32), nullable=False, default="publication")
+    backfill_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     event_digest_sha256: Mapped[str] = mapped_column(String(128), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("authority_node_id", "event_sequence", name="uq_federation_change_events_authority_sequence"),
+        CheckConstraint("operation IN ('upsert','deprecate','tombstone')", name="ck_federation_change_events_operation"),
+        CheckConstraint("signature_alg = 'EdDSA'", name="ck_federation_change_events_signature_alg"),
+    )
 
 
 class FederationPeerCursor(Base):

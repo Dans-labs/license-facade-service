@@ -109,7 +109,7 @@ def _run_alembic(database_url: str, *command: str) -> None:
     env = dict(os.environ)
     env["ALEMBIC_DATABASE_URL"] = database_url
     subprocess.run(
-        ["alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
+        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
         check=True,
         cwd=REPO_ROOT,
         env=env,

@@ -13,3 +13,7 @@
 9. Federation identity (`NODE_ID`, public base URL, node name, operator) is configuration-driven and fingerprinted; drift is detected and reported as not ready.
 10. Federation signing keys are loaded from file/secret path (Ed25519) and only public metadata is persisted.
 11. Canonical federation digests now use RFC 8785/JCS canonical JSON before SHA-256.
+12. Federation Phase 2 adds authoritative outbound federation endpoints (`/.well-known/lfs`, `/.well-known/jwks.json`, catalog, changes, record).
+13. Federation GET endpoints are read-only and do not create change events.
+14. Change events are append-only and sequence-ordered by a database-generated monotonic position.
+15. Cursor pagination is opaque, versioned, signature-verified, and watermark-bounded for deterministic traversal.

@@ -91,3 +91,63 @@ Implemented in this phase:
 Compatibility decision:
 
 - With `FEDERATION_ENABLED=false`, the current public licence API remains operational without federation configuration, PostgreSQL, or signing keys.
+
+## Federation Phase 2 outbound protocol
+
+Implemented:
+
+- `GET /.well-known/lfs`
+- `GET /.well-known/jwks.json`
+- `GET /api/v1/federation/catalog`
+- `GET /api/v1/federation/changes`
+- `GET /api/v1/federation/records/{encoded_id}`
+
+### Signed immutable payloads
+
+- Canonicalization: RFC 8785 / JCS
+- Encoding: UTF-8 bytes
+- Digest: SHA-256 hex over canonical bytes
+- Signature: Ed25519 (EdDSA), base64url signature, with `kid` and `alg`
+
+Signed record payload fields:
+
+- `nodeId`
+- `canonicalId`
+- `authorityNodeId`
+- `localId`
+- `version`
+- `publicationState`
+- `publishedAt`
+- `payload`
+- `payloadDigestSha256`
+
+Signed change-event payload fields:
+
+- `nodeId`
+- `eventId`
+- `eventPosition` (database-generated monotonic sequence)
+- `operation` (`upsert|deprecate|tombstone`)
+- `generatedAt`
+- `record` (signed record payload structure)
+- `provenance` (`publication|backfill`)
+- `backfillCreatedAt` (optional)
+
+### Cursor format and watermark
+
+- Opaque cursor token format: `v{n}.{kid}.{payload_b64url}.{sig_b64url}`
+- Cursor payload contains pagination state only (kind, node, watermark, after/last keys).
+- `changes` uses position cursor (`since` means strictly after position).
+- `catalog` uses keyset cursor plus snapshot watermark (max event sequence seen at initial page).
+- Later pages are constrained to the cursor watermark to prevent mid-traversal inserts from causing skips/duplicates.
+
+### ETag and conditional requests
+
+- Strong ETags are derived from deterministic canonical response bytes.
+- `If-None-Match` is supported (lists and `*`).
+- `304` responses are body-empty and include `ETag` and `Cache-Control`.
+
+### Backfill
+
+- Backfill is explicit and separate from GET/startup.
+- Command path: `src/license_facade_service/federation/backfill.py`
+- Defaults to dry-run; write mode requires explicit confirmation; idempotent.
