@@ -16,12 +16,14 @@ from src.license_facade_service.db.models.federation import (
     FederationChangeEvent,
     FederationNodeIdentityState,
     FederationRecord,
+    FederationResolutionAlias,
 )
 from src.license_facade_service.db.session import Database
 from src.license_facade_service.federation.canonical_json import canonicalize_to_bytes
 from src.license_facade_service.federation.digests import canonical_json_sha256_hex, sha256_hex
 from src.license_facade_service.federation.keys import SigningKeyService
 from src.license_facade_service.federation.license_identity import build_canonical_license_identity
+from src.license_facade_service.federation.rdf_outbox import RdfOutboxService
 from src.license_facade_service.federation.models import (
     FederationCatalogItem,
     FederationCatalogResponse,
@@ -181,6 +183,7 @@ class FederationPublicationService:
         self.db = db
         self.settings = settings
         self.signing = SigningKeyService(db, settings)
+        self.rdf_outbox = RdfOutboxService(db, settings)
 
     def publish_new_version(
         self,
@@ -231,6 +234,7 @@ class FederationPublicationService:
             )
             session.add(record)
             session.flush()
+            self._sync_resolution_aliases(session=session, record=record)
             self._insert_event(
                 session=session,
                 record=record,
@@ -280,6 +284,7 @@ class FederationPublicationService:
                 raise FederationError("invalid-state-transition", "Tombstoned records cannot transition.")
             if current_state == "deprecated" and operation == "deprecate":
                 raise FederationError("invalid-state-transition", "Record is already deprecated.")
+            self._sync_resolution_aliases(session=session, record=record)
             self._insert_event(
                 session=session,
                 record=record,
@@ -298,7 +303,7 @@ class FederationPublicationService:
         generated_at: datetime,
         provenance_type: str,
         backfill_created_at: datetime | None,
-    ) -> None:
+    ) -> int:
         self._validate_record_identity(record)
         state = _state_from_operation(operation)
         signed_record_payload = SignedFederationRecordPayload(
@@ -349,6 +354,9 @@ class FederationPublicationService:
                 created_at=datetime.now(timezone.utc),
             )
         )
+        record.materialized_generation = int(next_sequence)
+        self.rdf_outbox.enqueue_record_jobs(session, record, operation=operation)
+        return int(next_sequence)
 
     def _validate_publication_input(self, *, canonical_id: str, authority_node_id: str, local_id: str, version: str) -> None:
         if not CANONICAL_ID_PATTERN.match(canonical_id):
@@ -372,6 +380,56 @@ class FederationPublicationService:
         )
         if expected.canonicalId != record.canonical_id or expected.resolvingUuid != str(record.resolving_uuid):
             raise FederationError("invalid-canonical-id", "Record identity fields are inconsistent.")
+
+    @staticmethod
+    def _normalize_alias(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    def _sync_resolution_aliases(self, *, session: Session, record: FederationRecord) -> None:
+        aliases = [("canonical", record.canonical_id)]
+        if isinstance(record.payload, dict):
+            uri = record.payload.get("uri")
+            if isinstance(uri, str):
+                aliases.append(("authority-uri", uri))
+            payload_aliases = record.payload.get("aliases", [])
+            if isinstance(payload_aliases, list):
+                aliases.extend(("approved-alias", alias) for alias in payload_aliases if isinstance(alias, str))
+        now = datetime.now(timezone.utc)
+        for alias_kind, alias_value in aliases:
+            normalized = self._normalize_alias(alias_value)
+            if not normalized:
+                continue
+            existing = session.execute(
+                select(FederationResolutionAlias).where(
+                    FederationResolutionAlias.normalized_identifier == normalized,
+                    FederationResolutionAlias.record_id == record.id,
+                    FederationResolutionAlias.alias_kind == alias_kind,
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                session.add(
+                    FederationResolutionAlias(
+                        id=uuid.uuid4(),
+                        normalized_identifier=normalized,
+                        alias_value=alias_value,
+                        alias_kind=alias_kind,
+                        record_id=record.id,
+                        authority_node_id=record.authority_node_id,
+                        source_peer_id=record.imported_from_peer_id,
+                        is_authoritative=record.is_authoritative and record.imported_from_peer_id is None,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            else:
+                existing.alias_value = alias_value
+                existing.authority_node_id = record.authority_node_id
+                existing.source_peer_id = record.imported_from_peer_id
+                existing.is_authoritative = record.is_authoritative and record.imported_from_peer_id is None
+                existing.updated_at = now
 
 
 class FederationBackfillService:
@@ -451,6 +509,7 @@ class FederationOutboundService:
         self.settings = settings
         self.signing = SigningKeyService(db, settings)
         self.cursor_codec = CursorCodec(self.signing, settings)
+        self.rdf_outbox = RdfOutboxService(db, settings)
 
     def discovery(self) -> FederationDiscoveryResponse:
         base = (self.settings.public_base_url or "").rstrip("/")

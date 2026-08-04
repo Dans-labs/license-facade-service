@@ -64,6 +64,12 @@ class FederationSettings:
     allow_private_network: bool
     allow_http_for_demo: bool
     demo_tofu_unsafe_enabled: bool
+    rdf_fuseki_timeout_seconds: float
+    rdf_outbox_lease_seconds: int
+    rdf_outbox_retry_attempts: int
+    rdf_outbox_retry_base_seconds: float
+    rdf_outbox_retry_max_seconds: float
+    rdf_outbox_batch_size: int
     validation_errors: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -169,5 +175,11 @@ class FederationSettings:
             allow_private_network=allow_private_network,
             allow_http_for_demo=allow_http_for_demo,
             demo_tofu_unsafe_enabled=demo_tofu_unsafe_enabled,
+            rdf_fuseki_timeout_seconds=float(os.getenv("FEDERATION_RDF_FUSEKI_TIMEOUT_SECONDS", "10")),
+            rdf_outbox_lease_seconds=_as_int("FEDERATION_RDF_OUTBOX_LEASE_SECONDS", 300),
+            rdf_outbox_retry_attempts=_as_int("FEDERATION_RDF_OUTBOX_RETRY_ATTEMPTS", 5),
+            rdf_outbox_retry_base_seconds=float(os.getenv("FEDERATION_RDF_OUTBOX_RETRY_BASE_SECONDS", "2")),
+            rdf_outbox_retry_max_seconds=float(os.getenv("FEDERATION_RDF_OUTBOX_RETRY_MAX_SECONDS", "30")),
+            rdf_outbox_batch_size=_as_int("FEDERATION_RDF_OUTBOX_BATCH_SIZE", 25),
             validation_errors=tuple(errors),
         )

@@ -8,6 +8,7 @@ The introductory prose suggests HTML as the default landing page, but **normativ
 This implementation follows the normative table:
 
 - no `Accept` header → `application/json`
+- no `Accept` header → `application/json`
 - `Accept: */*` → `application/json`
 - `Accept: text/html` → HTML
 - unsupported media types → `406 application/problem+json`
@@ -171,3 +172,27 @@ Security notes:
 - HTTPS-only by default (demo profile may allow HTTP with explicit config);
 - SSRF protections validate resolved addresses and reject loopback/private/link-local/metadata ranges by default;
 - DNS is revalidated per request; deployment should still enforce outbound network policy to close resolver-to-connect rebinding gaps.
+
+## Federation Phase 4 resolution and RDF outbox
+
+Implemented Phase 4 boundaries:
+
+- `GET /api/v1/licenses/resolution?identifier=...` and `GET /api/v1/licenses/provenance?identifier=...` are the canonical arbitrary-identifier lookups.
+- Path lookup remains available for simple IDs, but query lookup is preferred for identifiers containing `/`, `:`, `#`, `?`, or encoded characters.
+- Local authoritative records always win; imported candidates are resolvable only when no local authoritative record is selected.
+- Imported records are immutable snapshots; signed inbound source/event history is preserved separately from current resolution state.
+- Canonical success outcomes are `200`, `404`, `409`, `410`, and `503` with RFC 9457 problem details for errors.
+- RDF graph ownership is per-record and per-conflict:
+  - `urn:lfs:graph:record:{recordId}`
+  - `urn:lfs:graph:provenance:{recordId}`
+  - `urn:lfs:graph:decision:{conflictId}`
+- Outbox statuses are `pending`, `running`, `succeeded`, `retryable_failed`, `dead_lettered`, and `superseded`.
+- Lease ownership is tracked in PostgreSQL and skipped by competing claimers; a stale or superseded job never overwrites newer graph state.
+- PostgreSQL remains the source of truth; Fuseki outages do not block resolution, publication, or imported-history lookup.
+- Worker/maintenance operations are bounded and explicit:
+  - `python -m src.license_facade_service.rdf_worker`
+  - `python -m src.license_facade_service.federation.maintenance process`
+  - `retry`
+  - `requeue`
+  - `rebuild`
+  - `reconcile`

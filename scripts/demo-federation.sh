@@ -54,6 +54,14 @@ print(cur if not isinstance(cur, (dict, list)) else json.dumps(cur))
 PY
 }
 
+url_encode() {
+  uv run python - <<'PY' "$1"
+from urllib.parse import quote
+import sys
+print(quote(sys.argv[1], safe=""))
+PY
+}
+
 sync_request() {
   local peer_id="$1"
   local response
@@ -180,6 +188,28 @@ SYNC1="$(sync_request "${PEER_ID}")"
 echo "B signature verification: passed"
 echo "B record digest verification: passed"
 
+ENC_CANONICAL_ID="$(url_encode "${CANONICAL_ID}")"
+RESOLUTION_B="$(curl -fsS "http://localhost:12124/api/v1/licenses/resolution?identifier=${ENC_CANONICAL_ID}")"
+[[ "$(json_get "${RESOLUTION_B}" "resolutionOutcome")" == "imported" ]]
+[[ "$(json_get "${RESOLUTION_B}" "authorityNodeId")" == "${NODE_A_ID}" ]]
+[[ "$(json_get "${RESOLUTION_B}" "sourcePeerId")" == "${PEER_ID}" ]]
+[[ "$(json_get "${RESOLUTION_B}" "canonicalId")" == "${CANONICAL_ID}" ]]
+echo "B resolution outcome: imported"
+echo "B resolution authority: ${NODE_A_ID}"
+echo "B source peer: ${PEER_ID}"
+
+PROVENANCE_B="$(curl -fsS "http://localhost:12124/api/v1/licenses/provenance?identifier=${ENC_CANONICAL_ID}")"
+[[ "$(json_get "${PROVENANCE_B}" "events.0.sourcePeerId")" == "${PEER_ID}" ]]
+[[ "$(json_get "${PROVENANCE_B}" "events.0.sourcePeerNodeId")" == "${NODE_A_ID}" ]]
+[[ "$(json_get "${PROVENANCE_B}" "events.0.eventPosition")" == "${POSITION_A}" ]]
+echo "B provenance history: signed inbound event recorded"
+
+CATALOG_B="$(curl -fsS http://localhost:12124/api/v1/federation/catalog)"
+CHANGES_B="$(curl -fsS http://localhost:12124/api/v1/federation/changes?limit=10)"
+[[ "${CATALOG_B}" != *"${CANONICAL_ID}"* ]]
+[[ "${CHANGES_B}" != *"${CANONICAL_ID}"* ]]
+echo "B outbound catalog/changes exclude imported record: yes"
+
 IMPORTS="$(curl -fsS "http://localhost:12124/api/v1/admin/federation/peers/${PEER_ID}/imports" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}")"
 COUNT_IMPORTS="$(json_get "${IMPORTS}" "total")"
@@ -193,41 +223,36 @@ echo "B authority: ${AUTHORITY}"
 echo "B is authoritative: false"
 echo "B provenance source: ${AUTHORITY}"
 
-CURSOR_VALUE="$(uv run python - <<'PY'
-import json, psycopg
-dsn = "postgresql://postgres:postgres@localhost:5432/lfs_b"
-try:
-    with psycopg.connect(dsn) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT cursor FROM federation_peer_cursors LIMIT 1")
-            row = cur.fetchone()
-            print("" if row is None or row[0] is None else row[0])
-except Exception:
-    print("")
-PY
-)"
-# Fallback through API status when host postgres is not exposed.
-if [[ -z "${CURSOR_VALUE}" ]]; then
-  CURSOR_VALUE="$(json_get "${SYNC1}" "cursorAfter")"
-fi
-[[ -n "${CURSOR_VALUE}" ]]
-echo "B resume cursor persisted: yes"
-
 SYNC2="$(sync_request "${PEER_ID}")"
 IMPORTED2="$(json_get "${SYNC2}" "importedRecords")"
 [[ "${IMPORTED2}" == "0" ]]
 echo "Second synchronization imported: 0"
 
+CURSOR_BEFORE="$(docker compose exec -T node-b-db psql -U postgres -d lfs_b -tAc "SELECT COALESCE((SELECT cursor FROM federation_peer_cursors ORDER BY updated_at DESC LIMIT 1), '')" | tr -d '[:space:]')"
+[[ -n "${CURSOR_BEFORE}" ]]
+echo "B resume cursor persisted: yes"
+TAMPER_EVENT_ID="$(uuidgen)"
+TAMPER_RECORD_ID="$(docker compose exec -T node-a-db psql -U postgres -d lfs_a -tAc "SELECT id FROM federation_records ORDER BY created_at DESC LIMIT 1" | tr -d '[:space:]')"
+docker compose exec -T node-a-db psql -U postgres -d lfs_a -c "INSERT INTO federation_change_events (id, event_sequence, event_type, authority_node_id, record_id, operation, generated_at, payload_schema_version, signed_payload, signed_payload_digest_sha256, signature_base64url, signature_kid, signature_alg, provenance_type, event_payload, event_digest_sha256, occurred_at, created_at) VALUES ('${TAMPER_EVENT_ID}', ${POSITION_A} + 1, 'record.changed', '${NODE_A_ID}', '${TAMPER_RECORD_ID}', 'upsert', NOW(), '1', '{\"tampered\":true}'::jsonb, 'bad', 'tampered', 'node-a-k1', 'EdDSA', 'publication', '{}'::jsonb, 'bad', NOW(), NOW());" >/dev/null
+TAMPER_SYNC="$(sync_request "${PEER_ID}")"
+TAMPER_STATUS="$(json_get "${TAMPER_SYNC}" "status")"
+TAMPER_IMPORTED="$(json_get "${TAMPER_SYNC}" "importedRecords")"
+[[ "${TAMPER_STATUS}" != "complete" ]]
+[[ "${TAMPER_IMPORTED}" == "0" ]]
+CURSOR_AFTER="$(docker compose exec -T node-b-db psql -U postgres -d lfs_b -tAc "SELECT COALESCE((SELECT cursor FROM federation_peer_cursors ORDER BY updated_at DESC LIMIT 1), '')" | tr -d '[:space:]')"
+[[ "${CURSOR_AFTER}" == "${CURSOR_BEFORE}" ]]
+echo "Tampered event rejected: yes"
+echo "Cursor unchanged after tampering: yes"
+
 docker compose stop node-a >/dev/null
 SYNC_OFFLINE="$(sync_request "${PEER_ID}")"
 OFFLINE_STATUS="$(json_get "${SYNC_OFFLINE}" "status")"
 [[ "${OFFLINE_STATUS}" == "partial" || "${OFFLINE_STATUS}" == "failed" ]]
-IMPORTS_OFFLINE="$(curl -fsS "http://localhost:12124/api/v1/admin/federation/peers/${PEER_ID}/imports" \
-  -H "Authorization: Bearer ${ADMIN_TOKEN}")"
-[[ "$(json_get "${IMPORTS_OFFLINE}" "total")" -ge 1 ]]
+RESOLUTION_OFFLINE="$(curl -fsS "http://localhost:12124/api/v1/licenses/resolution?identifier=${ENC_CANONICAL_ID}")"
+[[ "$(json_get "${RESOLUTION_OFFLINE}" "resolutionOutcome")" == "imported" ]]
+[[ "$(json_get "${RESOLUTION_OFFLINE}" "freshnessState")" == "stale" ]]
+[[ "$(json_get "${RESOLUTION_OFFLINE}" "sourceAvailability")" == "offline" ]]
 echo "Offline record retained: yes"
+echo "Offline freshness state: stale"
 
-uv run pytest -q tests/federation/test_inbound_phase3.py::test_tampered_event_rejected_cursor_unchanged >/dev/null
-echo "Tampered event rejected: yes"
-echo "Cursor unchanged after tampering: yes"
 echo "Federation demo: PASSED"
