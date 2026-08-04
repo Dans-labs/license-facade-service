@@ -9,7 +9,7 @@ import pytest
 from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService, Principal
-from src.license_facade_service.services.licenses import LicenseService, SPDXClient
+from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense
 
 
 def test_openapi_has_no_duplicate_operations(app_client):
@@ -49,6 +49,48 @@ def test_static_routes_take_precedence(app_client):
     openapi = client.get("/openapi.json").json()
     assert "/api/v1/licences/taxonomy" not in openapi["paths"]
     assert "/api/v1/licenses/taxonomy" in openapi["paths"]
+    assert "/api/v1/licenses/{id}" in openapi["paths"]
+    assert list(openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["200"]["content"].keys()) == [
+        "application/json",
+        "text/html",
+        "application/ld+json",
+        "text/turtle",
+        "application/rdf+xml",
+    ]
+    assert list(openapi["paths"]["/api/v1/licenses/{id}/html"]["get"]["responses"]["200"]["content"].keys()) == ["text/html"]
+    assert list(openapi["paths"]["/api/v1/licenses/{id}/json-ld"]["get"]["responses"]["200"]["content"].keys()) == ["application/ld+json"]
+    assert list(openapi["paths"]["/api/v1/licenses/{id}/turtle"]["get"]["responses"]["200"]["content"].keys()) == ["text/turtle"]
+    assert list(openapi["paths"]["/api/v1/licenses/{id}/rdfxml"]["get"]["responses"]["200"]["content"].keys()) == ["application/rdf+xml"]
+
+
+def test_default_json_and_aliases(app_client):
+    client, _, _, _, _ = app_client
+    default = client.get("/api/v1/licenses/MIT")
+    assert default.status_code == 200
+    assert default.headers["content-type"].startswith("application/json")
+    payload = default.json()
+    assert payload["licenseId"] == "MIT"
+    assert payload["licenseID"] == "MIT"
+    assert payload["detailsURL"] == "/api/v1/licenses/MIT/json"
+    assert payload["spdxDetailsURL"] == "https://spdx.org/licenses/MIT.json"
+    assert payload["conformance"]["conformant"] is False
+    assert payload["conformance"]["requirements"]["LFS-REQ-2-04"]["missing"] == ["machine"]
+
+    wildcard = client.get("/api/v1/licenses/MIT", headers={"Accept": "*/*"})
+    assert wildcard.status_code == 200
+    assert wildcard.headers["content-type"].startswith("application/json")
+
+    alias = client.get("/api/v1/licences/MIT")
+    assert alias.status_code == 200
+    assert alias.json()["licenseId"] == "MIT"
+
+    alias_json = client.get("/api/v1/licences/MIT/json")
+    assert alias_json.status_code == 200
+    assert alias_json.json()["licenseId"] == "MIT"
+
+    explicit_html = client.get("/api/v1/licenses/MIT", headers={"Accept": "text/html"})
+    assert explicit_html.status_code == 200
+    assert explicit_html.headers["content-type"].startswith("text/html")
 
 
 def test_lookup_by_spdx_id_uuid_and_uri(app_client):
@@ -64,7 +106,7 @@ def test_lookup_by_spdx_id_uuid_and_uri(app_client):
     assert "isDeprecatedLicenseID" in payload
     assert payload["uri"].startswith("https://example.test/api/v1/licenses/")
     assert "representations" in payload
-    assert "html" in payload["representations"]
+    assert "original" in payload["representations"]
 
     by_uuid = client.get(f"/api/v1/licenses/{mit_uuid}/json")
     assert by_uuid.status_code == 200
@@ -103,13 +145,6 @@ def test_content_negotiation_supported_types(app_client, accept, expected_conten
     assert response.headers["vary"] == "Accept"
 
 
-def test_default_accept_is_html(app_client):
-    client, *_ = app_client
-    response = client.get("/api/v1/licenses/MIT")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
-
-
 def test_unsupported_accept_returns_406_problem_details(app_client):
     client, *_ = app_client
     response = client.get("/api/v1/licenses/MIT", headers={"Accept": "application/pdf"})
@@ -123,20 +158,22 @@ def test_convenience_route_equivalent_to_negotiation_json(app_client):
     direct = client.get("/api/v1/licenses/MIT/json").json()
     negotiated = client.get("/api/v1/licenses/MIT", headers={"Accept": "application/json"}).json()
     assert direct == negotiated
+    assert client.get("/api/v1/licenses/MIT").json() == negotiated
 
 
 def test_optional_original_legal_machine_representations(app_client):
     client, *_ = app_client
-    original = client.get("/api/v1/licenses/MIT/original", follow_redirects=False)
+    original = client.get("/api/v1/licenses/Apache-2.0/original", follow_redirects=False)
     assert original.status_code == 307
-    assert original.headers["location"].startswith("https://opensource.org/licenses/MIT") or original.headers["location"].startswith("https://spdx.org/licenses/MIT")
+    assert original.headers["location"].startswith("https://www.apache.org/licenses/LICENSE-2.0")
 
-    legal = client.get("/api/v1/licenses/MIT/legal")
+    legal = client.get("/api/v1/licenses/Apache-2.0/legal")
     assert legal.status_code == 404
     assert "availableRepresentations" in legal.json()
 
     machine_missing = client.get("/api/v1/licenses/MIT/machine")
     assert machine_missing.status_code == 404
+    assert machine_missing.json()["licenseMetadata"]["conformance"]["requirements"]["LFS-REQ-2-04"]["missing"] == ["machine"]
 
     encoding_missing = client.get("/api/v1/licenses/MIT/encoding")
     assert encoding_missing.status_code == 404
@@ -144,6 +181,18 @@ def test_optional_original_legal_machine_representations(app_client):
     machine_available = client.get("/api/v1/licenses/Apache-2.0/machine")
     assert machine_available.status_code == 200
     assert machine_available.headers["content-type"].startswith("application/ld+json")
+    assert "profile" in machine_available.headers.get("link", "")
+
+    cc_machine = client.get("/api/v1/licenses/CC-BY-4.0/machine")
+    assert cc_machine.status_code == 200
+    assert cc_machine.headers["content-type"].startswith("application/ld+json")
+
+    missing_original = client.get("/api/v1/licenses/Legacy-No-Original/original")
+    assert missing_original.status_code == 404
+    assert missing_original.json()["licenseMetadata"]["conformance"]["requirements"]["LFS-REQ-2-04"]["missing"] == ["original"]
+
+    bad_rel = client.get("/api/v1/licenses/Bad-REL/machine")
+    assert bad_rel.status_code == 404
 
 
 def test_authentication_and_authorization_for_mutations(app_client, monkeypatch):
@@ -253,3 +302,226 @@ def test_application_import_and_compose_configuration():
     compose_text = Path("docker-compose.yaml").read_text(encoding="utf-8")
     assert "secoresearch/fuseki:4.10.0" in compose_text
     assert '  ports:\n      - "3030:3030"' not in compose_text
+
+
+def test_table6_mappings_and_response_schema(app_client):
+    client, *_ = app_client
+    apache = client.get("/api/v1/licenses/Apache-2.0/json").json()
+    assert apache["detailsURL"] == "/api/v1/licenses/Apache-2.0/json"
+    assert apache["spdxDetailsURL"] == "https://spdx.org/licenses/Apache-2.0.json"
+    assert any(ref["type"] == "original" for ref in apache["crossRef"])
+    assert any(ref["type"] == "machine" for ref in apache["crossRef"])
+    assert "legal" not in apache["representations"]
+    assert apache["conformance"]["conformant"] is True
+    assert apache["representationStatus"]["original"]["available"] is True
+    assert apache["representationStatus"]["machine"]["available"] is True
+
+    legacy = client.get("/api/v1/licenses/Legacy-No-Original/json").json()
+    assert legacy["conformance"]["conformant"] is False
+    assert legacy["conformance"]["requirements"]["LFS-REQ-2-04"]["missing"] == ["original"]
+
+
+def test_html_escaping_and_safe_redirects(tmp_path: Path):
+    from src.license_facade_service.services.licenses import LicenseService
+
+    base = tmp_path
+    licenses_root = base / "resources" / "data" / "licenses"
+    licenses_root.mkdir(parents=True, exist_ok=True)
+    (licenses_root / "current_snapshot.json").write_text(json.dumps({"snapshot": "seed"}), encoding="utf-8")
+    seed = licenses_root / "snapshots" / "seed"
+    seed.mkdir(parents=True, exist_ok=True)
+    (seed / "licenses_list.json").write_text(
+        json.dumps(
+            {
+                "licenseListVersion": "1",
+                "licenses": [
+                    {
+                        "licenseId": "XSS",
+                        "name": "<script>alert(1)</script>",
+                        "isDeprecatedLicenseId": False,
+                        "isOsiApproved": False,
+                        "uri": "https://example.test/api/v1/licenses/xss",
+                        "detailsUrl": "https://spdx.org/licenses/XSS.json",
+                        "reference": "https://spdx.org/licenses/XSS.html",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (seed / "XSS.json").write_text(
+        json.dumps(
+            {
+                "licenseId": "XSS",
+                "name": "<script>alert(1)</script>",
+                "licenseText": "x",
+                "licenseTextHtml": "<img src=x onerror=alert(1)>",
+                "standardLicenseTemplate": "x",
+                "crossRef": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (licenses_root / "curated_representations.json").write_text(json.dumps({"XSS": {"original": {"href": "javascript:alert(1)", "relation": "original", "type": "original", "mediaType": "text/html"}}}), encoding="utf-8")
+    service = LicenseService(base_dir=base)
+    resolved = ResolvedLicense(
+        license_id="XSS",
+        identifier="XSS",
+        record={
+            "licenseId": "XSS",
+            "name": "<script>alert(1)</script>",
+            "isDeprecatedLicenseId": False,
+            "isOsiApproved": False,
+            "uri": "https://example.test/api/v1/licenses/xss",
+            "detailsUrl": "https://spdx.org/licenses/XSS.json",
+            "reference": "https://spdx.org/licenses/XSS.html",
+        },
+        details={
+            "licenseId": "XSS",
+            "name": "<script>alert(1)</script>",
+            "licenseText": "x",
+            "licenseTextHtml": "<img src=x onerror=alert(1)>",
+            "standardLicenseTemplate": "x",
+            "crossRef": [],
+        },
+        uri="https://example.test/api/v1/licenses/xss",
+    )
+    html = service._render_html(service.build_metadata(resolved))
+    assert "<script>" not in html
+    assert "javascript:" not in html
+
+
+def test_invalid_jsonld_and_rdf_representations_are_rejected(tmp_path: Path):
+    from src.license_facade_service.services.licenses import LicenseService
+
+    base = tmp_path
+    licenses_root = base / "resources" / "data" / "licenses"
+    licenses_root.mkdir(parents=True, exist_ok=True)
+    (licenses_root / "current_snapshot.json").write_text(json.dumps({"snapshot": "seed"}), encoding="utf-8")
+    seed = licenses_root / "snapshots" / "seed"
+    seed.mkdir(parents=True, exist_ok=True)
+    (seed / "licenses_list.json").write_text(
+        json.dumps(
+            {
+                "licenseListVersion": "1",
+                "licenses": [
+                    {
+                        "licenseId": "RDF-BAD",
+                        "name": "Bad RDF License",
+                        "isDeprecatedLicenseId": False,
+                        "isOsiApproved": False,
+                        "uri": "https://example.test/api/v1/licenses/rdf-bad",
+                        "detailsUrl": "https://spdx.org/licenses/RDF-BAD.json",
+                        "reference": "https://spdx.org/licenses/RDF-BAD.html",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (seed / "RDF-BAD.json").write_text(
+        json.dumps(
+            {
+                "licenseId": "RDF-BAD",
+                "name": "Bad RDF License",
+                "licenseText": "x",
+                "licenseTextHtml": "<p>x</p>",
+                "standardLicenseTemplate": "x",
+                "crossRef": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (licenses_root / "curated_representations.json").write_text(
+        json.dumps(
+            {
+                "RDF-BAD": {
+                    "machine": {
+                        "content": "@prefix odrl: <https://www.w3.org/ns/odrl/2/> . this is not turtle",
+                        "mediaType": "text/turtle",
+                        "profile": "https://www.w3.org/ns/odrl/2/",
+                        "vocabulary": "https://www.w3.org/ns/odrl/2/",
+                        "version": "1.0",
+                        "digest": "sha256:bad-rdf",
+                        "provenance": "curated",
+                        "source": "https://example.org/curated/rdf-bad",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = LicenseService(base_dir=base)
+    import asyncio
+
+    resolved = asyncio.run(service.resolve("RDF-BAD"))
+    assert service.get_machine_representation(resolved) is None
+
+
+def test_string_crossref_booleans_do_not_crash(tmp_path: Path):
+    from src.license_facade_service.services.licenses import LicenseService, ResolvedLicense
+
+    base = tmp_path
+    licenses_root = base / "resources" / "data" / "licenses"
+    licenses_root.mkdir(parents=True, exist_ok=True)
+    (licenses_root / "current_snapshot.json").write_text(json.dumps({"snapshot": "seed"}), encoding="utf-8")
+    seed = licenses_root / "snapshots" / "seed"
+    seed.mkdir(parents=True, exist_ok=True)
+    (seed / "licenses_list.json").write_text(
+        json.dumps(
+            {
+                "licenseListVersion": "1",
+                "licenses": [
+                    {
+                        "licenseId": "X",
+                        "name": "X",
+                        "isDeprecatedLicenseId": False,
+                        "isOsiApproved": False,
+                        "uri": "https://example.test/api/v1/licenses/x",
+                        "detailsUrl": "https://spdx.org/licenses/X.json",
+                        "reference": "https://spdx.org/licenses/X.html",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (seed / "X.json").write_text(
+        json.dumps(
+            {
+                "licenseId": "X",
+                "name": "X",
+                "licenseText": "x",
+                "licenseTextHtml": "<p>x</p>",
+                "standardLicenseTemplate": "x",
+                "crossRef": [{"url": "https://example.org/x", "match": "N/A", "isValid": "maybe"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = LicenseService(base_dir=base)
+    resolved = ResolvedLicense(
+        license_id="X",
+        identifier="X",
+        record={
+            "licenseId": "X",
+            "name": "X",
+            "isDeprecatedLicenseId": False,
+            "isOsiApproved": False,
+            "uri": "https://example.test/api/v1/licenses/x",
+            "detailsUrl": "https://spdx.org/licenses/X.json",
+            "reference": "https://spdx.org/licenses/X.html",
+        },
+        details={
+            "licenseId": "X",
+            "name": "X",
+            "licenseText": "x",
+            "licenseTextHtml": "<p>x</p>",
+            "standardLicenseTemplate": "x",
+            "crossRef": [{"url": "https://example.org/x", "match": "N/A", "isValid": "maybe"}],
+        },
+        uri="https://example.test/api/v1/licenses/x",
+    )
+    metadata = service.build_metadata(resolved)
+    assert "match" not in metadata["crossRef"][0]
+    assert "isValid" not in metadata["crossRef"][0]

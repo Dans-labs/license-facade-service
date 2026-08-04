@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from src.license_facade_service.services.auth import (
@@ -29,6 +29,9 @@ from src.license_facade_service.services.licenses import (
     REPRESENTATION_TURTLE,
     negotiate_representation,
 )
+from src.license_facade_service.services.contract import LicenseDetail, LicenseInventoryItem
+from src.license_facade_service.services.contract import LicenseInventoryResponse
+from src.license_facade_service.services.problem import ProblemDetails
 from src.license_facade_service.services.problem import problem_response
 
 router = APIRouter()
@@ -65,6 +68,7 @@ def _response_headers(content_location: str, include_vary: bool = True) -> dict[
     headers = {
         "Cache-Control": "public, max-age=3600",
         "Content-Location": content_location,
+        "Link": f'<{content_location}>; rel="canonical"',
     }
     if include_vary:
         headers["Vary"] = "Accept"
@@ -87,18 +91,24 @@ def _build_optional_representation_unavailable(
     request: Request,
     representation: str,
     links: dict[str, str],
+    metadata: dict[str, object] | None = None,
 ) -> JSONResponse:
+    extra = {"availableRepresentations": links}
+    if metadata:
+        extra["licenseMetadata"] = metadata
     return problem_response(
         status=404,
         title="Representation Not Available",
         detail=f"Representation '{representation}' is unavailable for this license.",
         instance=str(request.url),
-        extra={"availableRepresentations": links},
+        extra=extra,
     )
 
 
-@router.get("/licenses")
+@router.get("/licenses", response_model=LicenseInventoryResponse)
 @router.get("/licences", include_in_schema=False)
+@router.get("/licenses/", include_in_schema=False)
+@router.get("/licences/", include_in_schema=False)
 async def list_licenses(service: LicenseService = Depends(get_license_service)):
     """Return the cached SPDX license inventory with LFS URI enrichment."""
     return await service.get_all_licenses()
@@ -283,7 +293,11 @@ async def create_complete_spdx3(
     }
 
 
-@router.get("/licenses/{id:path}/html")
+@router.get(
+    "/licenses/{id:path}/html",
+    response_class=HTMLResponse,
+    responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
+)
 @router.get("/licences/{id:path}/html", include_in_schema=False)
 async def get_license_html(
     id: str,
@@ -294,7 +308,7 @@ async def get_license_html(
     return await _render_license_response(service, id, REPRESENTATION_HTML, request, negotiated=False)
 
 
-@router.get("/licenses/{id:path}/json")
+@router.get("/licenses/{id:path}/json", response_model=LicenseDetail)
 @router.get("/licences/{id:path}/json", include_in_schema=False)
 async def get_license_json(
     id: str,
@@ -305,7 +319,11 @@ async def get_license_json(
     return await _render_license_response(service, id, REPRESENTATION_JSON, request, negotiated=False)
 
 
-@router.get("/licenses/{id:path}/json-ld")
+@router.get(
+    "/licenses/{id:path}/json-ld",
+    response_class=Response,
+    responses={200: {"content": {"application/ld+json": {"schema": {"type": "string"}}}}},
+)
 @router.get("/licences/{id:path}/json-ld", include_in_schema=False)
 async def get_license_jsonld(
     id: str,
@@ -316,7 +334,11 @@ async def get_license_jsonld(
     return await _render_license_response(service, id, REPRESENTATION_JSON_LD, request, negotiated=False)
 
 
-@router.get("/licenses/{id:path}/turtle")
+@router.get(
+    "/licenses/{id:path}/turtle",
+    response_class=Response,
+    responses={200: {"content": {"text/turtle": {"schema": {"type": "string"}}}}},
+)
 @router.get("/licences/{id:path}/turtle", include_in_schema=False)
 async def get_license_turtle(
     id: str,
@@ -327,7 +349,11 @@ async def get_license_turtle(
     return await _render_license_response(service, id, REPRESENTATION_TURTLE, request, negotiated=False)
 
 
-@router.get("/licenses/{id:path}/rdfxml")
+@router.get(
+    "/licenses/{id:path}/rdfxml",
+    response_class=Response,
+    responses={200: {"content": {"application/rdf+xml": {"schema": {"type": "string"}}}}},
+)
 @router.get("/licences/{id:path}/rdfxml", include_in_schema=False)
 async def get_license_rdfxml(
     id: str,
@@ -338,7 +364,15 @@ async def get_license_rdfxml(
     return await _render_license_response(service, id, REPRESENTATION_RDFXML, request, negotiated=False)
 
 
-@router.get("/licenses/{id:path}/original")
+@router.get(
+    "/licenses/{id:path}/original",
+    status_code=307,
+    response_class=Response,
+    responses={
+        307: {"description": "Redirect to curated original source"},
+        404: {"model": ProblemDetails},
+    },
+)
 @router.get("/licences/{id:path}/original", include_in_schema=False)
 async def get_license_original(
     id: str,
@@ -352,15 +386,39 @@ async def get_license_original(
         return _problem_404(id, request)
     source = service.get_original_source(resolved)
     if not source:
+        metadata = service.build_metadata(resolved)
         return _build_optional_representation_unavailable(
             request=request,
             representation=REPRESENTATION_ORIGINAL,
             links=service.representation_links(resolved),
+            metadata=metadata,
+        )
+    if not source.startswith("https://"):
+        metadata = service.build_metadata(resolved)
+        return problem_response(
+            status=404,
+            title="Representation Not Available",
+            detail="Original representation target is not an approved https URL.",
+            instance=str(request.url),
+            extra={"availableRepresentations": service.representation_links(resolved), "licenseMetadata": metadata},
         )
     return RedirectResponse(url=source, status_code=307)
 
 
-@router.get("/licenses/{id:path}/legal")
+@router.get(
+    "/licenses/{id:path}/legal",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"type": "string"}},
+                "text/html": {"schema": {"type": "string"}},
+            }
+        },
+        307: {"description": "Redirect to curated legal source"},
+        404: {"model": ProblemDetails},
+    },
+)
 @router.get("/licences/{id:path}/legal", include_in_schema=False)
 async def get_license_legal(
     id: str,
@@ -378,16 +436,34 @@ async def get_license_legal(
             request=request,
             representation="legal",
             links=service.representation_links(resolved),
+            metadata=service.build_metadata(resolved),
         )
-    media_type = legal.get("mediaType", "text/plain; charset=utf-8")
-    content = legal.get("content", "")
-    headers = {"Cache-Control": "public, max-age=3600"}
-    if legal.get("profile"):
-        headers["Link"] = f'<{legal["profile"]}>; rel="profile"'
-    return Response(content=content, media_type=media_type, headers=headers)
+    if legal.href and not legal.content:
+        return RedirectResponse(url=legal.href, status_code=307)
+    media_type = legal.mediaType
+    content = legal.content or ""
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "Link": f'<{legal.profile}>; rel="profile"' if legal.profile else f'<{request.base_url}api/v1/licenses/{id}>; rel="canonical"',
+    }
+    return Response(content=content if isinstance(content, str) else json.dumps(content), media_type=media_type, headers=headers)
 
 
-@router.get("/licenses/{id:path}/machine")
+@router.get(
+    "/licenses/{id:path}/machine",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "application/ld+json": {"schema": {"type": "string"}},
+                "text/turtle": {"schema": {"type": "string"}},
+                "application/rdf+xml": {"schema": {"type": "string"}},
+            }
+        },
+        307: {"description": "Redirect to authoritative machine representation"},
+        404: {"model": ProblemDetails},
+    },
+)
 @router.get("/licences/{id:path}/machine", include_in_schema=False)
 async def get_license_machine(
     id: str,
@@ -405,15 +481,26 @@ async def get_license_machine(
             request=request,
             representation=REPRESENTATION_MACHINE,
             links=service.representation_links(resolved),
+            metadata=service.build_metadata(resolved),
         )
-    headers = {"Cache-Control": "public, max-age=3600"}
+    if machine.href and not machine.content:
+        return RedirectResponse(url=machine.href, status_code=307)
+    headers = {"Cache-Control": "public, max-age=3600", "Link": f'<{request.base_url}api/v1/licenses/{id}>; rel="canonical"'}
     if machine.profile:
-        headers["Link"] = f'<{machine.profile}>; rel="profile"'
+        headers["Link"] = headers["Link"] + f', <{machine.profile}>; rel="profile"'
     body = machine.content if isinstance(machine.content, str) else json.dumps(machine.content)
-    return Response(content=body, media_type=machine.media_type, headers=headers)
+    return Response(content=body, media_type=machine.mediaType, headers=headers)
 
 
-@router.get("/licenses/{id:path}/encoding")
+@router.get(
+    "/licenses/{id:path}/encoding",
+    status_code=307,
+    response_class=Response,
+    responses={
+        307: {"description": "Redirect to curated encoding reference"},
+        404: {"model": ProblemDetails},
+    },
+)
 @router.get("/licences/{id:path}/encoding", include_in_schema=False)
 async def get_license_encoding(
     id: str,
@@ -431,11 +518,31 @@ async def get_license_encoding(
             request=request,
             representation=REPRESENTATION_ENCODING,
             links=service.representation_links(resolved),
+            metadata=service.build_metadata(resolved),
         )
     return RedirectResponse(url=encoding["href"], status_code=307)
 
 
-@router.get("/licenses/{id:path}")
+@router.get(
+    "/licenses/{id:path}",
+    responses={
+        200: {
+            "content": {
+                "application/json": {"schema": LicenseDetail.model_json_schema()},
+                "text/html": {"schema": {"type": "string"}},
+                "application/ld+json": {"schema": {"type": "string"}},
+                "text/turtle": {"schema": {"type": "string"}},
+                "application/rdf+xml": {"schema": {"type": "string"}},
+            }
+        },
+        404: {
+            "model": ProblemDetails,
+        },
+        406: {
+            "model": ProblemDetails,
+        },
+    },
+)
 @router.get("/licences/{id:path}", include_in_schema=False)
 async def get_license(
     id: str,
@@ -477,6 +584,6 @@ async def _render_license_response(
         return _problem_404(identifier, request)
     body, media_type = service.render_representation(resolved, representation)
     links = service.representation_links(resolved)
-    content_location = links[representation]
+    content_location = links["self"] if negotiated else links[representation]
     headers = _response_headers(content_location, include_vary=negotiated)
     return Response(content=body, media_type=media_type, headers=headers)

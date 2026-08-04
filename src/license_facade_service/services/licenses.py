@@ -10,13 +10,28 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 from uuid import UUID, NAMESPACE_DNS, uuid5
 
 import httpx
 from pydantic import BaseModel, Field
 
 from src.license_facade_service.utils.rdf_transformer import json_to_rdf
+from src.license_facade_service.services.contract import (
+    ConformanceRequirement,
+    ConformanceStatus,
+    CrossReference,
+    EncodingRepresentation,
+    LicenseDetail,
+    LicenseInventoryItem,
+    LegalRepresentation,
+    MachineRepresentation,
+    OriginalRepresentation,
+    RepresentationDescriptor,
+    is_valid_json_document,
+    parse_rdf,
+    safe_escape_text,
+)
 
 SPDX_LICENSES_URL = "https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json"
 SPDX_DETAILS_BASE_URL = "https://raw.githubusercontent.com/spdx/license-list-data/main/json/details"
@@ -47,7 +62,18 @@ REPRESENTATION_MEDIA_TYPES = {
     REPRESENTATION_RDFXML: "application/rdf+xml; charset=utf-8",
 }
 
-ALLOWED_REL_MARKERS = ("odrl", "ccrel", "dalicc", "openrel")
+ALLOWED_REL_IRIS = {
+    "https://www.w3.org/ns/odrl/2/",
+    "https://www.w3.org/ns/odrl.jsonld",
+    "http://creativecommons.org/ns#",
+    "https://opensource.creativecommons.org/ccrel/",
+    "https://dalicc.github.io/",
+    "https://www.w3.org/ns/odrl-profile/",
+    "https://openrel.org/ns#",
+    "https://www.dublincore.org/specifications/dublin-core/dcmi-terms/",
+    "http://schema.org/",
+    "https://schema.org/",
+}
 
 
 class LicenseNotFoundError(Exception):
@@ -69,13 +95,6 @@ class ResolvedLicense:
     record: dict[str, Any]
     details: dict[str, Any]
     uri: str
-
-
-class MachineRepresentation(BaseModel):
-    content: str | dict[str, Any]
-    media_type: str
-    profile: str | None = None
-    vocabulary: str | None = None
 
 
 class LicenseSnapshotStatus(BaseModel):
@@ -174,6 +193,7 @@ class SnapshotCache:
         self.current_file = self.cache_root / "current_snapshot.json"
         self.version_file = self.cache_root / "version.json"
         self.legacy_list_file = self.cache_root / "licenses_list.json"
+        self.curated_representations_file = self.cache_root / "curated_representations.json"
         self.lock_file = self.cache_root / ".refresh.lock"
 
     def _active_snapshot_dir(self) -> Path | None:
@@ -219,6 +239,10 @@ class SnapshotCache:
         if snapshot_dir:
             return _safe_json_load(snapshot_dir / f"{license_id}.json")
         return _safe_json_load(self.cache_root / f"{license_id}.json")
+
+    def load_curated_representations(self) -> dict[str, Any]:
+        data = _safe_json_load(self.curated_representations_file)
+        return data or {}
 
     async def refresh(self, spdx: SPDXClient) -> LicenseSnapshotStatus:
         with _exclusive_lock(self.lock_file):
@@ -329,7 +353,7 @@ class LicenseService:
         for item in licenses:
             lic = dict(item)
             lic["uri"] = lic.get("uri") or generate_license_uri(lic["licenseId"])
-            enriched.append(lic)
+            enriched.append(self.build_inventory_item(lic).model_dump(exclude_none=True))
         licenses_list["licenses"] = enriched
         return licenses_list
 
@@ -403,104 +427,315 @@ class LicenseService:
             "encoding": f"/api/v1/licenses/{raw_id}/encoding",
         }
 
-    def _transform_cross_refs(self, cross_refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        transformed: list[dict[str, Any]] = []
-        for cross_ref in cross_refs:
+    def _curated_store(self) -> dict[str, Any]:
+        return self.cache.load_curated_representations()
+
+    def _representations_for(self, license_id: str) -> dict[str, Any]:
+        store = self._curated_store()
+        entry = store.get(license_id) or {}
+        if not isinstance(entry, dict):
+            return {}
+        return entry
+
+    def _normalize_rel(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        return value
+
+    def _validate_vocabulary(self, descriptor: RepresentationDescriptor) -> bool:
+        iris = [self._normalize_rel(descriptor.profile), self._normalize_rel(descriptor.vocabulary)]
+        iris = [iri for iri in iris if iri]
+        if not iris:
+            return False
+        for iri in iris:
+            if iri not in ALLOWED_REL_IRIS:
+                return False
+        return True
+
+    def _validate_machine_representation(self, descriptor: MachineRepresentation) -> bool:
+        if descriptor.mediaType not in (
+            "application/ld+json",
+            "application/json",
+            "text/turtle",
+            "application/rdf+xml",
+        ):
+            return False
+        if not descriptor.content and not descriptor.href:
+            return False
+        if descriptor.content is not None:
+            if descriptor.mediaType in {"application/json", "application/ld+json"}:
+                if not is_valid_json_document(descriptor.content):
+                    return False
+                payload = json.loads(descriptor.content) if isinstance(descriptor.content, str) else descriptor.content
+                if isinstance(payload, dict):
+                    graph_text = json.dumps(payload)
+                else:
+                    graph_text = json.dumps(payload)
+            else:
+                graph_text = descriptor.content if isinstance(descriptor.content, str) else json.dumps(descriptor.content)
+                try:
+                    parse_rdf(graph_text, descriptor.mediaType)
+                except Exception:
+                    return False
+        if not self._validate_vocabulary(descriptor):
+            return False
+        return True
+
+    def _validate_original_representation(self, descriptor: OriginalRepresentation | None) -> bool:
+        if descriptor is None:
+            return False
+        if not descriptor.href:
+            return False
+        return True
+
+    def _validate_legal_representation(self, descriptor: LegalRepresentation | None) -> bool:
+        if descriptor is None:
+            return False
+        if not descriptor.content:
+            return False
+        return descriptor.mediaType in {"text/plain", "text/html", "text/markdown"}
+
+    def _validate_encoding_representation(self, descriptor: EncodingRepresentation | None) -> bool:
+        return bool(descriptor and descriptor.href)
+
+    def _crossrefs_from_spdx(self, details: dict[str, Any]) -> list[CrossReference]:
+        cross_refs: list[CrossReference] = []
+        for cross_ref in details.get("crossRef", []):
             if not isinstance(cross_ref, dict):
                 continue
-            item = dict(cross_ref)
-            if "url" in cross_ref and "URL" not in item:
-                item["URL"] = cross_ref["url"]
-            if "timestamp" in cross_ref and "timeStamp" not in item:
-                item["timeStamp"] = cross_ref["timestamp"]
-            transformed.append(item)
-        return transformed
+            url = cross_ref.get("url") or cross_ref.get("URL")
+            if not url:
+                continue
+            cross_refs.append(
+                CrossReference(
+                    type="upstream",
+                    URL=url,
+                    match=_coerce_optional_bool(cross_ref.get("match")),
+                    isValid=_coerce_optional_bool(cross_ref.get("isValid")),
+                    isLive=_coerce_optional_bool(cross_ref.get("isLive")),
+                    timeStamp=cross_ref.get("timestamp") or cross_ref.get("timeStamp"),
+                    isWayBackLink=_coerce_optional_bool(cross_ref.get("isWayBackLink")),
+                    order=cross_ref.get("order"),
+                    provenance="spdx",
+                    source=details.get("detailsUrl"),
+                )
+            )
+        return cross_refs
 
-    def _representation_payload(self, resolved: ResolvedLicense) -> dict[str, Any]:
-        representations: dict[str, Any] = {}
-        links = self.representation_links(resolved)
-        original = self.get_original_source(resolved)
-        legal = self.get_legal_representation(resolved)
-        machine = self.get_machine_representation(resolved)
-        encoding = resolved.details.get("lfsRepresentations", {}).get("encoding")
+    def _table6_crossrefs(self, resolved: ResolvedLicense, reps: dict[str, Any]) -> list[CrossReference]:
+        items = self._crossrefs_from_spdx(resolved.details)
+        for relation in ("original", "machine", "legal"):
+            rep = reps.get(relation)
+            if not rep:
+                continue
+            if isinstance(rep, dict):
+                href = rep.get("href") or rep.get("source")
+                authority = rep.get("authority")
+                curator = rep.get("curator")
+                provenance = rep.get("provenance")
+                source = rep.get("source")
+            else:
+                href = rep.href or rep.source
+                authority = rep.authority
+                curator = rep.curator
+                provenance = rep.provenance
+                source = rep.source
+            if not href:
+                continue
+            items.append(
+                CrossReference(
+                    type=relation,
+                    URL=str(href),
+                    authority=authority,
+                    curator=curator,
+                    provenance=provenance,
+                    source=source,
+                    relation=relation,
+                )
+            )
+        return items
 
-        representations["html"] = {"href": links["html"], "mediaType": "text/html"}
-        representations["json"] = {"href": links["json"], "mediaType": "application/json"}
-        representations["json-ld"] = {"href": links["json-ld"], "mediaType": "application/ld+json"}
-        representations["turtle"] = {"href": links["turtle"], "mediaType": "text/turtle"}
-        representations["rdfxml"] = {"href": links["rdfxml"], "mediaType": "application/rdf+xml"}
-        if original:
-            representations["original"] = {
-                "href": original,
-                "mediaType": "text/html",
-            }
-        if legal:
-            representations["legal"] = {
-                "href": links["legal"],
-                "mediaType": legal.get("mediaType", "text/plain"),
-                "profile": legal.get("profile"),
-                "vocabulary": legal.get("vocabulary"),
-            }
-        if machine:
-            representations["machine"] = {
-                "href": links["machine"],
-                "mediaType": machine.media_type,
-                "profile": machine.profile,
-                "vocabulary": machine.vocabulary,
-            }
-        if isinstance(encoding, dict) and encoding.get("href"):
-            representations["encoding"] = {
-                "href": encoding["href"],
-                "mediaType": encoding.get("mediaType"),
-                "profile": encoding.get("profile"),
-                "vocabulary": encoding.get("vocabulary"),
-            }
-        return representations
+    def _require_https_or_approved_exception(self, url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.scheme == "https":
+            return True
+        return False
+
+    def _select_original_representation(self, resolved: ResolvedLicense) -> OriginalRepresentation | None:
+        reps = self._representations_for(resolved.license_id)
+        original = reps.get("original")
+        if isinstance(original, dict):
+            try:
+                candidate = OriginalRepresentation.model_validate(original)
+            except Exception:
+                return None
+            if self._validate_original_representation(candidate):
+                return candidate
+        for cross_ref in resolved.details.get("crossRef", []):
+            if not isinstance(cross_ref, dict):
+                continue
+            if cross_ref.get("type") == "original" and cross_ref.get("url"):
+                candidate = OriginalRepresentation(
+                    href=str(cross_ref["url"]),
+                    relation="original",
+                    type="original",
+                    mediaType=cross_ref.get("mediaType", "text/html"),
+                    provenance="spdx-crossref",
+                    source=resolved.details.get("detailsUrl"),
+                )
+                if self._validate_original_representation(candidate):
+                    return candidate
+        return None
+
+    def _select_legal_representation(self, resolved: ResolvedLicense) -> LegalRepresentation | None:
+        reps = self._representations_for(resolved.license_id)
+        legal = reps.get("legal")
+        if isinstance(legal, dict):
+            try:
+                candidate = LegalRepresentation.model_validate(legal)
+            except Exception:
+                return None
+            if self._validate_legal_representation(candidate):
+                return candidate
+        return None
+
+    def _select_machine_representation(self, resolved: ResolvedLicense) -> MachineRepresentation | None:
+        reps = self._representations_for(resolved.license_id)
+        machine = reps.get("machine")
+        if isinstance(machine, dict):
+            try:
+                candidate = MachineRepresentation.model_validate(machine)
+            except Exception:
+                return None
+            if self._validate_machine_representation(candidate):
+                return candidate
+        return None
+
+    def _select_encoding_representation(self, resolved: ResolvedLicense) -> EncodingRepresentation | None:
+        reps = self._representations_for(resolved.license_id)
+        encoding = reps.get("encoding")
+        if isinstance(encoding, dict):
+            try:
+                candidate = EncodingRepresentation.model_validate(encoding)
+            except Exception:
+                return None
+            if self._validate_encoding_representation(candidate):
+                return candidate
+        return None
 
     def build_metadata(self, resolved: ResolvedLicense) -> dict[str, Any]:
         details = resolved.details
         record = resolved.record
-        cross_refs = self._transform_cross_refs(details.get("crossRef", []))
-        reference_number = record.get("referenceNumber")
+        original = self._select_original_representation(resolved)
+        legal = self._select_legal_representation(resolved)
+        machine = self._select_machine_representation(resolved)
+        encoding = self._select_encoding_representation(resolved)
+
+        missing = []
+        if original is None:
+            missing.append("original")
+        if machine is None:
+            missing.append("machine")
+
+        conformance = ConformanceStatus(
+            conformant=not missing,
+            specification="LICENCE FACADE SERVICE - Rights & Ethics",
+            requirements={
+                "LFS-REQ-2-04": ConformanceRequirement(
+                    status="passed" if not missing else "failed",
+                    missing=missing,
+                    note="Table 2 mandatory representation coverage",
+                ),
+                "LFS-REQ-4-01": ConformanceRequirement(
+                    status="passed" if not missing else "failed",
+                    missing=missing,
+                ),
+            },
+        )
+        representation_status = {
+            "original": {"available": original is not None, "mandatory": True},
+            "machine": {"available": machine is not None, "mandatory": True},
+            "legal": {"available": legal is not None, "mandatory": False},
+            "encoding": {"available": encoding is not None, "mandatory": False},
+        }
+
+        cross_refs = self._table6_crossrefs(
+            resolved,
+            {"original": original, "legal": legal, "machine": machine, "encoding": encoding},
+        )
+        details_url = f"/api/v1/licenses/{resolved.license_id}/json"
         metadata = {
             "uri": resolved.uri,
-            "uriRef": resolved.uri,
-            "referenceNumber": reference_number,
+            "referenceNumber": record.get("referenceNumber"),
             "licenseId": resolved.license_id,
             "licenseID": resolved.license_id,
             "licenceID": resolved.license_id,
             "name": record.get("name") or details.get("name"),
-            "isDeprecatedLicenseId": record.get("isDeprecatedLicenseId", False),
-            "isDeprecatedLicenseID": record.get("isDeprecatedLicenseId", False),
-            "isOsiApproved": record.get("isOsiApproved", False),
-            "seeAlso": record.get("seeAlso", []),
+            "detailsURL": details_url,
+            "spdxDetailsURL": record.get("detailsUrl") or record.get("detailsURL"),
             "reference": record.get("reference"),
-            "detailsURL": record.get("detailsUrl"),
-            "detailsUrl": record.get("detailsUrl"),
-            "licenseText": details.get("licenseText", ""),
-            "standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
-            "licenseTextHtml": details.get("licenseTextHtml", ""),
-            "crossRef": cross_refs,
-            "representations": self._representation_payload(resolved),
+            "isDeprecatedLicenseId": bool(record.get("isDeprecatedLicenseId", False)),
+            "isDeprecatedLicenseID": bool(record.get("isDeprecatedLicenseId", False)),
+            "seeAlso": record.get("seeAlso", []),
+            "isOsiApproved": bool(record.get("isOsiApproved", False)),
+            "licenseText": details.get("licenseText"),
+            "standardLicenseTemplate": details.get("standardLicenseTemplate"),
+            "licenseTextHtml": details.get("licenseTextHtml"),
+            "crossRef": [item.model_dump(exclude_none=True) for item in cross_refs],
+            "representations": {
+                key: value.model_dump(exclude_none=True)
+                for key, value in {
+                    "original": original,
+                    "legal": legal,
+                    "machine": machine,
+                    "encoding": encoding,
+                }.items()
+                if value is not None
+            },
+            "conformance": conformance.model_dump(exclude_none=True),
+            "representationStatus": representation_status,
             "_links": self.representation_links(resolved),
         }
         if "isFsfLibre" in details:
             metadata["isFsfLibre"] = details.get("isFsfLibre")
         return metadata
 
+    def build_inventory_item(self, record: dict[str, Any]) -> LicenseInventoryItem:
+        license_id = record.get("licenseId")
+        return LicenseInventoryItem(
+            uri=record.get("uri") or generate_license_uri(license_id),
+            licenseId=license_id,
+            name=record.get("name"),
+            isDeprecatedLicenseId=bool(record.get("isDeprecatedLicenseId", False)),
+            isOsiApproved=bool(record.get("isOsiApproved", False)),
+            seeAlso=record.get("seeAlso", []),
+            detailsURL=record.get("detailsUrl"),
+            reference=record.get("reference"),
+        )
+
     def _render_html(self, metadata: dict[str, Any]) -> str:
+        def safe_href(value: str | None) -> str:
+            if not value:
+                return "#"
+            parsed = urlparse(value)
+            if parsed.scheme and parsed.scheme != "https":
+                return "#"
+            return value
+
+        links = metadata.get("representations", {})
         return (
-            "<!doctype html>"
-            "<html><head><meta charset='utf-8'><title>"
-            f"{metadata.get('licenseId')}</title></head><body>"
-            f"<h1>{metadata.get('name')}</h1>"
-            f"<p><strong>License ID:</strong> {metadata.get('licenseId')}</p>"
-            f"<p><strong>URI:</strong> {metadata.get('uri')}</p>"
-            "<p>Representations:</p><ul>"
+            "<!doctype html><html><head><meta charset='utf-8'><title>"
+            f"{safe_escape_text(metadata.get('name'))}</title></head><body>"
+            f"<h1>{safe_escape_text(metadata.get('name'))}</h1>"
+            f"<p><strong>License ID:</strong> {safe_escape_text(metadata.get('licenseId'))}</p>"
+            f"<p><strong>URI:</strong> {safe_escape_text(metadata.get('uri'))}</p>"
+            "<ul>"
             + "".join(
-                f"<li><a href='{href}'>{name}</a></li>"
-                for name, href in metadata["_links"].items()
-                if name in {"json", "json-ld", "turtle", "rdfxml", "original", "legal", "machine"}
+                f"<li><a href=\"{safe_href(rep.get('href') or '')}\">{safe_escape_text(name)}</a></li>"
+                for name, rep in links.items()
             )
             + "</ul></body></html>"
         )
@@ -520,67 +755,30 @@ class LicenseService:
         raise ValueError("Unsupported representation")
 
     def get_original_source(self, resolved: ResolvedLicense) -> str | None:
-        representations = resolved.details.get("lfsRepresentations", {})
-        representation = representations.get("original")
-        if isinstance(representation, dict) and representation.get("href"):
-            return str(representation["href"])
-        reference = resolved.record.get("reference")
-        if isinstance(reference, str) and reference:
-            return reference
-        for cross_ref in resolved.details.get("crossRef", []):
-            url = cross_ref.get("url")
-            if url:
-                return str(url)
-        return None
+        original = self._select_original_representation(resolved)
+        return original.href if original else None
 
-    def get_legal_representation(self, resolved: ResolvedLicense) -> dict[str, Any] | None:
-        representation = resolved.details.get("lfsRepresentations", {}).get("legal")
-        if not isinstance(representation, dict):
-            return None
-        if not representation.get("content"):
-            return None
-        return representation
+    def get_legal_representation(self, resolved: ResolvedLicense) -> LegalRepresentation | None:
+        return self._select_legal_representation(resolved)
 
     def get_machine_representation(self, resolved: ResolvedLicense) -> MachineRepresentation | None:
-        representation = resolved.details.get("lfsRepresentations", {}).get("machine")
-        if not isinstance(representation, dict):
-            return None
+        return self._select_machine_representation(resolved)
 
-        content = representation.get("content")
-        media_type = representation.get("mediaType")
-        if not content or not media_type:
-            return None
-        profile = representation.get("profile")
-        vocabulary = representation.get("vocabulary")
-        marker_source = f"{profile or ''} {vocabulary or ''}".lower()
-        if not any(marker in marker_source for marker in ALLOWED_REL_MARKERS):
-            return None
-        return MachineRepresentation(
-            content=content,
-            media_type=media_type,
-            profile=profile,
-            vocabulary=vocabulary,
-        )
-
-    def get_encoding_representation(self, resolved: ResolvedLicense) -> dict[str, Any] | None:
-        representation = resolved.details.get("lfsRepresentations", {}).get("encoding")
-        if not isinstance(representation, dict):
-            return None
-        href = representation.get("href")
-        if not href:
-            return None
-        return representation
+    def get_encoding_representation(self, resolved: ResolvedLicense) -> EncodingRepresentation | None:
+        return self._select_encoding_representation(resolved)
 
 
 def negotiate_representation(accept_header: str | None) -> str | None:
     if accept_header is None or not accept_header.strip():
-        return REPRESENTATION_HTML
+        return REPRESENTATION_JSON
 
     media_ranges = [part.strip().split(";")[0].strip() for part in accept_header.split(",") if part.strip()]
     if not media_ranges or "*/*" in media_ranges:
-        return REPRESENTATION_HTML
+        return REPRESENTATION_JSON
 
     for media in media_ranges:
+        if media == "text/html":
+            return REPRESENTATION_HTML
         negotiated = SUPPORTED_ACCEPT_TYPES.get(media)
         if negotiated:
             return negotiated
@@ -589,4 +787,18 @@ def negotiate_representation(accept_header: str | None) -> str | None:
             for supported_media, mapped in SUPPORTED_ACCEPT_TYPES.items():
                 if supported_media.startswith(f"{family}/"):
                     return mapped
+    return None
+
+
+def _coerce_optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
     return None

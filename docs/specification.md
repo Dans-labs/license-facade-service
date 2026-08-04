@@ -1,50 +1,41 @@
-# API Specification (Implemented Contract)
+# API Specification Note
 
-## Canonical representation behavior
+This note aligns the implementation with `LICENCE FACADE SERVICE - Rights & Ethics.docx.pdf`.
 
-`GET /api/v1/licenses/{id}` negotiates by `Accept`.
-`/api/v1/licences/{id}` is a compatibility alias with identical behavior.
+## Normative ambiguity
 
-- Missing `Accept` or `*/*` => `text/html`.
-- Supported: `text/html`, `application/json`, `application/ld+json`, `text/turtle`, `application/rdf+xml`.
-- Unsupported media types => `406 application/problem+json`.
-- Responses include `Cache-Control`; negotiated responses include `Vary: Accept`; all include `Content-Location`.
+The introductory prose suggests HTML as the default landing page, but **normative Table 2** defines the base `/licences/{id}` endpoint as the mandatory machine-readable metadata resource.  
+This implementation follows the normative table:
 
-Convenience routes (`/html`, `/json`, `/json-ld`, `/turtle`, `/rdfxml`) reuse the same service-layer render logic as negotiated responses.
+- no `Accept` header → `application/json`
+- `Accept: */*` → `application/json`
+- `Accept: text/html` → HTML
+- unsupported media types → `406 application/problem+json`
 
-## Identifier resolution
+`/api/v1/licences/{id}` is the specification alias; `/api/v1/licenses/{id}` is the documented implementation path.
 
-- SPDX ID (exact match, case-sensitive)
-- LFS UUID (validated with UUID type)
-- URL-encoded full LFS URI
-- explicit aliases where present
+## Conformance matrix
 
-Invalid/non-existent identifiers return one consistent `404 application/problem+json`.
-
-## Representation table
-
-| Endpoint | Purpose | Media type | Status | When unavailable |
+| PDF endpoint | Status | Implemented media type | When unavailable | Upstream limitation |
 |---|---|---|---|---|
-| `/api/v1/licenses/{id}` | Canonical negotiated access | negotiated | Mandatory | `406` for unsupported `Accept`; `404` for unknown id |
-| `/api/v1/licenses/{id}/html` | Human landing page | `text/html` | Mandatory | `404` for unknown id |
-| `/api/v1/licenses/{id}/json` | SPDX-compatible metadata | `application/json` | Mandatory | `404` for unknown id |
-| `/api/v1/licenses/{id}/json-ld` | JSON-LD view | `application/ld+json` | Mandatory | `404` for unknown id |
-| `/api/v1/licenses/{id}/turtle` | RDF Turtle view | `text/turtle` | Mandatory | `404` for unknown id |
-| `/api/v1/licenses/{id}/rdfxml` | RDF/XML view | `application/rdf+xml` | Mandatory | `404` for unknown id |
-| `/api/v1/licenses/{id}/original` | Authoritative curated source | redirect to source URL | Optional per license | `404` with links to available representations |
-| `/api/v1/licenses/{id}/legal` | Curated legal representation | source-defined | Optional per license | `404` with links to available representations |
-| `/api/v1/licenses/{id}/machine` | Rights-expression representation | source-defined (REL profile/vocabulary) | Mandatory capability, optional per license | `404` with links to available representations |
-| `/api/v1/licenses/{id}/encoding` | Rights encoding by reference | redirect to encoding URL | Optional per license | `404` with links to available representations |
+| `/licences/{id}` | Mandatory | negotiated; default JSON | `406` on unsupported `Accept` | none |
+| `/licences/{id}/html` | Optional | `text/html` | 404/problem if unavailable | none |
+| `/licences/{id}/json-ld` | Optional | `application/ld+json` | 404/problem if unavailable | none |
+| `/licences/{id}/original` | Mandatory | redirect to curated `https://...` | 404/problem and conformance failure if missing | SPDX `reference` is **not** treated as original |
+| `/licences/{id}/machine` | Mandatory | `application/ld+json`, `text/turtle`, or `application/rdf+xml` depending on curated rep | 404/problem and conformance failure if missing | SPDX metadata alone does **not** satisfy machine |
+| `/licences/{id}/legal` | Optional | curated source-defined representation | 404/problem if unavailable | no invented legal code |
+| `/licences/{id}/encoding` | Optional | redirect to curated encoding URL | 404/problem if unavailable | no invented encoding URL |
 
-## Table 4 metadata fields
+## Table 4 response fields
 
-Canonical JSON metadata includes the Table 4 fields and aliases:
+Detailed JSON metadata includes:
 
 - `uri`
 - `referenceNumber`
 - `licenseId` / `licenseID` / `licenceID`
 - `name`
-- `detailsURL` / `detailsUrl`
+- `detailsURL` (local `/licenses/{id}/json`)
+- `spdxDetailsURL` (upstream SPDX details URL)
 - `reference`
 - `isDeprecatedLicenseId` / `isDeprecatedLicenseID`
 - `seeAlso`
@@ -52,12 +43,33 @@ Canonical JSON metadata includes the Table 4 fields and aliases:
 - `licenseText`
 - `standardLicenseTemplate`
 - `licenseTextHtml`
-- `crossRef` with `URL`, `timeStamp`, `match`, `isValid`, `isLive`, `isWayBackLink`, `order`
-- `representations` and `_links`
+- `crossRef`
+- `representations`
+- `representationStatus`
+- `conformance`
+- `_links`
 
-## Rights & Ethics discrepancy note
+Missing mandatory fields are not fabricated; the record is marked non-conformant instead.
 
-Normative requirements require `/machine` capability while current SPDX metadata does not guarantee rights-expression content per license. Implemented behavior follows the normative requirement without inventing provisions:
+## Table 6 mappings
 
-- endpoint exists and is mandatory as a capability;
-- returns `404` problem details when a license lacks curated REL-compliant machine representation.
+- `detailsURL` → `/api/v1/licenses/{id}/json`
+- `crossRef[type=original]` → `/api/v1/licenses/{id}/original`
+- `crossRef[type=machine]` → `/api/v1/licenses/{id}/machine`
+- `crossRef[type=legal]` → `/api/v1/licenses/{id}/legal`
+
+Upstream SPDX cross-references are preserved with provenance/source fields.
+
+## REL validation
+
+The implementation validates RELs syntactically and by registered vocabulary/profile IRIs:
+
+- ODRL
+- ccREL
+- DALICC
+- OpenREL
+- Dublin Core where allowed
+- schema.org for agents/concepts/things
+
+This is **syntax/vocabulary validation only**, not legal or semantic validation.
+

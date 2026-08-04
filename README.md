@@ -2,99 +2,72 @@
 
 FastAPI service for SPDX-compatible license metadata and negotiated public representations.
 
-## Build and run
+## Run
 
 ```bash
 uv sync
 uv run python -m src.license_facade_service.main
 ```
 
-Docker:
+## API contract
 
-```bash
-docker compose up --build
-```
+- Canonical lookup: `GET /api/v1/licenses/{id}`
+- Specification alias: `GET /api/v1/licences/{id}`
+- Default response: `application/json`
+- Explicit HTML: `Accept: text/html` or `/html`
 
-## Public API contract (v1)
+Supported negotiated media types:
 
-Canonical endpoint:
+- `application/json`
+- `text/html`
+- `application/ld+json`
+- `text/turtle`
+- `application/rdf+xml`
 
-- `GET /api/v1/licenses/{id}` with `Accept` negotiation:
-  - `text/html` (default when missing or `*/*`)
-  - `application/json`
-  - `application/ld+json`
-  - `text/turtle`
-  - `application/rdf+xml`
-- Unsupported `Accept` returns `406` with `application/problem+json`.
-- Compatibility alias: `/api/v1/licences/{id}` and the same sibling routes.
-
-Convenience endpoints map to the same service-layer implementation:
+Convenience routes:
 
 - `/api/v1/licenses/{id}/html`
 - `/api/v1/licenses/{id}/json`
 - `/api/v1/licenses/{id}/json-ld`
 - `/api/v1/licenses/{id}/turtle`
 - `/api/v1/licenses/{id}/rdfxml`
+- `/api/v1/licenses/{id}/original`
+- `/api/v1/licenses/{id}/legal`
+- `/api/v1/licenses/{id}/machine`
 - `/api/v1/licenses/{id}/encoding`
 
-Identifier resolution supports:
+## Representation rules
 
-- SPDX license ID (exact, case-sensitive)
-- LFS UUID
-- Full LFS URI (URL-encoded)
-- Explicit aliases if present in source data
+- `/original` uses curated original-source metadata only; SPDX `reference` is not treated as original.
+- `/machine` requires a curated rights-expression representation; SPDX JSON alone is not enough.
+- Missing mandatory representations return `404` problem details and non-conformance metadata.
 
-Static routes take precedence over `{id}`:
+## Metadata
 
-- `/api/v1/licenses/taxonomy`
-- `/api/v1/licenses/cache/status`
-- `/api/v1/licenses/spdx3/minimal`
+Detailed JSON responses include the Table 4 fields plus:
 
-## Optional representations
+- `spdxDetailsURL`
+- `representations`
+- `representationStatus`
+- `conformance`
+- `_links`
 
-- `/api/v1/licenses/{id}/original`: redirects to authoritative curated source if known; otherwise `404` problem details.
-- `/api/v1/licenses/{id}/legal`: returns separately curated legal representation if available; otherwise `404`.
-- `/api/v1/licenses/{id}/machine`: returns rights-expression representation only when explicitly available and profile/vocabulary indicates an allowed REL (ODRL, ccREL, DALICC, OpenREL); otherwise `404`.
-- `/api/v1/licenses/{id}/encoding`: redirects to a curated encoding reference if available; otherwise `404`.
+## Authentication
 
-Canonical JSON metadata includes the Table 4 fields and aliases:
-
-- `uri`, `referenceNumber`, `licenseId`/`licenseID`/`licenceID`
-- `name`, `detailsURL`/`detailsUrl`, `reference`
-- `isDeprecatedLicenseId`/`isDeprecatedLicenseID`
-- `seeAlso`, `isOsiApproved`, `licenseText`, `standardLicenseTemplate`, `licenseTextHtml`
-- `crossRef`, `representations`, and `_links`
-
-## Authentication for mutation endpoints
-
-Protected endpoints:
-
-- `POST /api/v1/licenses/cache/update`
-- `POST /api/v1/licenses/cache/refresh`
-- `POST /api/v1/licenses/spdx3/minimal`
-- `POST /api/v1/licenses/spdx3/complete/{license_id}`
-
-Configuration (no hard-coded defaults):
+Mutation endpoints require bearer auth via env/secret file:
 
 - `LFS_ADMIN_TOKEN` or `LFS_ADMIN_TOKEN_FILE`
 - `LFS_CURATOR_TOKEN` or `LFS_CURATOR_TOKEN_FILE`
 
-Behavior:
+`401` means missing/invalid credentials; `403` means insufficient role.
 
-- missing/invalid token: `401`
-- authenticated but role not `admin|curator`: `403`
+## Deployment defaults
 
-## Runtime and ops defaults
+- reload disabled by default
+- explicit CORS origins only
+- pinned Fuseki image
+- non-root container user
+- Fuseki not host-published by default
 
-- reload disabled by default (`RELOAD_ENABLE=false`)
-- CORS origins configured explicitly through `CORS_ORIGINS` (comma-separated)
-- no wildcard CORS defaults with credentials
-- Fuseki image pinned in compose
-- service runs as non-root in Dockerfile
-- readiness split:
-  - `GET /api/v1/health` (liveness)
-  - `GET /api/v1/ready` (license snapshot readiness + Fuseki status when enabled)
+See `docs/specification.md` and `docs/migration-note.md` for details.
 
-## Migration note
-
-See `docs/migration-note.md` for behavior changes from previous route/auth/representation behavior.

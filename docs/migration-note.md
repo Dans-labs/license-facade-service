@@ -2,18 +2,11 @@
 
 ## Behavior changes
 
-1. `GET /api/v1/licenses/{id}` is now a single canonical handler with explicit `Accept` negotiation and `406` for unsupported representations.
-2. Static routes (`/taxonomy`, `/cache/status`, `/spdx3/minimal`) are protected from `{id}` shadowing.
-3. Identifier resolution is unified (SPDX ID, UUID, encoded URI, aliases) and uses UUID validation instead of string-length heuristics.
-4. Optional `/original`, `/legal`, `/machine` semantics are strict:
-   - no silent fallback from `/legal` to generic SPDX text;
-   - `/machine` requires explicit REL-compliant representation metadata;
-   - unavailable optional representations return `404` problem details with links.
-   - `/encoding` now exposes curated rights-encoding references when present.
-5. Mutation endpoints now require bearer auth (`401`/`403` split) with token configuration from env or secret file only.
-6. Cache refresh now uses atomic snapshot switching with locking and rollback safety.
-7. Defaults hardened:
-   - reload off by default,
-   - no wildcard CORS defaults,
-   - no default admin credentials in application/compose,
-   - Fuseki image pinned and not host-published by default.
+1. `GET /api/v1/licenses/{id}` now defaults to JSON for no `Accept` or `*/*`.
+2. `text/html` is explicit only.
+3. `/original` no longer falls back to SPDX `reference`; missing curated originals are reported as non-conformant.
+4. `/machine` requires curated REL metadata; SPDX JSON alone does not satisfy it.
+5. Detailed JSON now exposes `spdxDetailsURL`, `representationStatus`, `conformance`, and Table 6 cross-reference mappings.
+6. British `/api/v1/licences/*` aliases remain available but are hidden from OpenAPI.
+7. Cached SPDX snapshots remain the source of inventory/details; curated representations live in a separate local store.
+

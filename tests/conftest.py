@@ -50,6 +50,7 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
                 "detailsUrl": "https://spdx.org/licenses/MIT.json",
                 "reference": "https://spdx.org/licenses/MIT.html",
                 "uri": generate_license_uri("MIT"),
+                "referenceNumber": "1",
             },
             {
                 "licenseId": "Apache-2.0",
@@ -61,6 +62,40 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
                 "reference": "https://spdx.org/licenses/Apache-2.0.html",
                 "uri": generate_license_uri("Apache-2.0"),
                 "aliases": ["Apache2"],
+                "referenceNumber": "2",
+            },
+            {
+                "licenseId": "CC-BY-4.0",
+                "name": "Creative Commons Attribution 4.0 International",
+                "isDeprecatedLicenseId": False,
+                "isOsiApproved": False,
+                "seeAlso": ["https://creativecommons.org/licenses/by/4.0/"],
+                "detailsUrl": "https://spdx.org/licenses/CC-BY-4.0.json",
+                "reference": "https://spdx.org/licenses/CC-BY-4.0.html",
+                "uri": generate_license_uri("CC-BY-4.0"),
+                "referenceNumber": "3",
+            },
+            {
+                "licenseId": "Legacy-No-Original",
+                "name": "Legacy No Original License",
+                "isDeprecatedLicenseId": True,
+                "isOsiApproved": False,
+                "seeAlso": ["https://example.org/licenses/legacy-no-original"],
+                "detailsUrl": "https://spdx.org/licenses/Legacy-No-Original.json",
+                "reference": "https://spdx.org/licenses/Legacy-No-Original.html",
+                "uri": generate_license_uri("Legacy-No-Original"),
+                "referenceNumber": "4",
+            },
+            {
+                "licenseId": "Bad-REL",
+                "name": "Bad REL License",
+                "isDeprecatedLicenseId": False,
+                "isOsiApproved": False,
+                "seeAlso": ["https://example.org/licenses/bad-rel"],
+                "detailsUrl": "https://spdx.org/licenses/Bad-REL.json",
+                "reference": "https://spdx.org/licenses/Bad-REL.html",
+                "uri": generate_license_uri("Bad-REL"),
+                "referenceNumber": "5",
             },
         ],
     }
@@ -80,14 +115,30 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
             "licenseTextHtml": "<p>Apache text</p>",
             "standardLicenseTemplate": "Apache template",
             "crossRef": [{"url": "https://www.apache.org/licenses/LICENSE-2.0"}],
-            "lfsRepresentations": {
-                "machine": {
-                    "content": {"@context": "https://www.w3.org/ns/odrl.jsonld"},
-                    "mediaType": "application/ld+json",
-                    "profile": "https://www.w3.org/ns/odrl/2/",
-                    "vocabulary": "https://www.w3.org/ns/odrl/2/",
-                }
-            },
+        },
+        "CC-BY-4.0": {
+            "licenseId": "CC-BY-4.0",
+            "name": "Creative Commons Attribution 4.0 International",
+            "licenseText": "CC text",
+            "licenseTextHtml": "<p>CC text</p>",
+            "standardLicenseTemplate": "CC template",
+            "crossRef": [{"url": "https://creativecommons.org/licenses/by/4.0/"}],
+        },
+        "Legacy-No-Original": {
+            "licenseId": "Legacy-No-Original",
+            "name": "Legacy No Original License",
+            "licenseText": "Legacy text",
+            "licenseTextHtml": "<p>Legacy text</p>",
+            "standardLicenseTemplate": "Legacy template",
+            "crossRef": [{"url": "https://example.org/licenses/legacy-no-original"}],
+        },
+        "Bad-REL": {
+            "licenseId": "Bad-REL",
+            "name": "Bad REL License",
+            "licenseText": "Bad REL text",
+            "licenseTextHtml": "<p>Bad REL text</p>",
+            "standardLicenseTemplate": "Bad template",
+            "crossRef": [{"url": "https://example.org/licenses/bad-rel"}],
         },
     }
 
@@ -109,6 +160,113 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
     current = base_dir / "resources" / "data" / "licenses" / "current_snapshot.json"
     current.parent.mkdir(parents=True, exist_ok=True)
     current.write_text(json.dumps({"snapshot": "seed"}), encoding="utf-8")
+    curated = {
+        "MIT": {
+            "original": {
+                "href": "https://opensource.org/licenses/MIT",
+                "relation": "original",
+                "type": "original",
+                "mediaType": "text/html",
+                "authority": "Open Source Initiative",
+                "curator": "OSI",
+                "provenance": "curated",
+                "source": "https://opensource.org/licenses/MIT",
+            }
+        },
+        "Apache-2.0": {
+            "original": {
+                "href": "https://www.apache.org/licenses/LICENSE-2.0",
+                "relation": "original",
+                "type": "original",
+                "mediaType": "text/html",
+                "authority": "Apache Software Foundation",
+                "curator": "Apache",
+                "provenance": "curated",
+                "source": "https://www.apache.org/licenses/LICENSE-2.0",
+            },
+            "machine": {
+                "content": {
+                    "@context": "https://www.w3.org/ns/odrl.jsonld",
+                    "@type": "odrl:Policy",
+                    "odrl:permission": [],
+                },
+                "mediaType": "application/ld+json",
+                "profile": "https://www.w3.org/ns/odrl/2/",
+                "vocabulary": "https://www.w3.org/ns/odrl/2/",
+                "version": "1.0",
+                "digest": "sha256:apache-odrl",
+                "provenance": "curated",
+                "source": "https://example.org/curated/apache-odrl",
+            },
+        },
+        "CC-BY-4.0": {
+            "original": {
+                "href": "https://creativecommons.org/licenses/by/4.0/",
+                "relation": "original",
+                "type": "original",
+                "mediaType": "text/html",
+                "authority": "Creative Commons",
+                "curator": "Creative Commons",
+                "provenance": "curated",
+                "source": "https://creativecommons.org/licenses/by/4.0/",
+            },
+            "machine": {
+                "content": {
+                    "@context": "http://creativecommons.org/ns#",
+                    "@type": "cc:License",
+                    "cc:permits": [],
+                },
+                "mediaType": "application/ld+json",
+                "profile": "http://creativecommons.org/ns#",
+                "vocabulary": "http://creativecommons.org/ns#",
+                "version": "1.0",
+                "digest": "sha256:ccrel",
+                "provenance": "curated",
+                "source": "https://example.org/curated/ccrel",
+            },
+        },
+        "Legacy-No-Original": {
+            "machine": {
+                "content": {
+                    "@context": "https://www.w3.org/ns/odrl.jsonld",
+                    "@type": "odrl:Policy",
+                },
+                "mediaType": "application/ld+json",
+                "profile": "https://www.w3.org/ns/odrl/2/",
+                "vocabulary": "https://www.w3.org/ns/odrl/2/",
+                "version": "1.0",
+                "digest": "sha256:legacy",
+                "provenance": "curated",
+                "source": "https://example.org/curated/legacy",
+            },
+        },
+        "Bad-REL": {
+            "original": {
+                "href": "https://example.org/licenses/bad-rel",
+                "relation": "original",
+                "type": "original",
+                "mediaType": "text/html",
+                "authority": "Example",
+                "curator": "Example",
+                "provenance": "curated",
+                "source": "https://example.org/licenses/bad-rel",
+            },
+            "machine": {
+                "content": "{not-json",
+                "mediaType": "application/ld+json",
+                "profile": "https://example.org/unknown-rel/",
+                "vocabulary": "https://example.org/unknown-rel/",
+                "version": "1.0",
+                "digest": "sha256:bad",
+                "provenance": "curated",
+                "source": "https://example.org/curated/bad-rel",
+            },
+        },
+    }
+    (base_dir / "resources" / "data" / "licenses" / "curated_representations.json").write_text(
+        json.dumps(curated),
+        encoding="utf-8",
+    )
     return licenses, details
 
 
