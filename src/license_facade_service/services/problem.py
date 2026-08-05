@@ -9,11 +9,22 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProblemDetails(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    type: str = Field(default="about:blank")
-    title: str
-    status: int
-    detail: str
-    instance: str | None = None
+    type: str = Field(
+        default="about:blank",
+        description="Problem type URI identifying the error category.",
+        examples=["https://eosc-eden.eu/problems/resolution-not-found"],
+    )
+    title: str = Field(description="Short human-readable summary of the problem.", examples=["Resolution Not Found"])
+    status: int = Field(description="HTTP status code generated for this problem response.", examples=[404])
+    detail: str = Field(
+        description="Human-readable explanation specific to this occurrence of the problem.",
+        examples=["No record or fallback SPDX entry could be resolved for the supplied identifier."],
+    )
+    instance: str | None = Field(
+        default=None,
+        description="Request URI for the failing operation, when available.",
+        examples=["https://license.example.org/api/v1/licenses/resolution?identifier=MIT"],
+    )
 
 
 def problem_response(
@@ -39,4 +50,3 @@ def problem_response(
         content=payload,
         media_type="application/problem+json",
     )
-

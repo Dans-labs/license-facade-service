@@ -17,7 +17,7 @@ SUPPORTED_JSON_MEDIA_TYPES = {"application/json", "application/ld+json"}
 
 class CrossReference(BaseModel):
     type: str = Field(..., description="original, machine, legal, or upstream")
-    URL: str
+    URL: str = Field(description="Curated HTTPS target for the related representation or upstream reference.")
     match: bool | None = None
     isValid: bool | None = None
     isLive: bool | None = None
@@ -40,19 +40,19 @@ class CrossReference(BaseModel):
 
 
 class RepresentationDescriptor(BaseModel):
-    href: str | None = None
-    relation: str | None = None
-    type: str | None = None
-    mediaType: str
-    authority: str | None = None
-    curator: str | None = None
-    provenance: str | None = None
-    source: str | None = None
-    profile: str | None = None
-    vocabulary: str | None = None
-    version: str | None = None
-    digest: str | None = None
-    content: str | dict[str, Any] | None = None
+    href: str | None = Field(default=None, description="Curated external URL for the representation, when the service links out instead of embedding content.")
+    relation: str | None = Field(default=None, description="Relationship of the representation to the licence, such as original, legal, or encoding.")
+    type: str | None = Field(default=None, description="Application-specific representation classification.")
+    mediaType: str = Field(description="Media type for the representation content or linked resource.")
+    authority: str | None = Field(default=None, description="Authority responsible for the representation, when known.")
+    curator: str | None = Field(default=None, description="Curator responsible for the representation metadata, when known.")
+    provenance: str | None = Field(default=None, description="Provenance note describing how the representation was curated.")
+    source: str | None = Field(default=None, description="Source URL from which the representation metadata was curated.")
+    profile: str | None = Field(default=None, description="Optional profile URI describing the representation semantics.")
+    vocabulary: str | None = Field(default=None, description="Optional vocabulary URI used by the representation.")
+    version: str | None = Field(default=None, description="Optional representation version label.")
+    digest: str | None = Field(default=None, description="Optional digest of the representation content.")
+    content: str | dict[str, Any] | None = Field(default=None, description="Embedded representation content when the service returns it directly.")
 
     @field_validator("href")
     @classmethod
@@ -95,27 +95,27 @@ class EncodingRepresentation(RepresentationDescriptor):
 
 
 class ConformanceRequirement(BaseModel):
-    status: Literal["passed", "failed", "unknown"]
-    missing: list[str] = Field(default_factory=list)
-    note: str | None = None
+    status: Literal["passed", "failed", "unknown"] = Field(description="Conformance result for a single requirement.")
+    missing: list[str] = Field(default_factory=list, description="Representation names or fields still missing for this requirement.")
+    note: str | None = Field(default=None, description="Additional conformance note for this requirement.")
 
 
 class ConformanceStatus(BaseModel):
-    conformant: bool
-    specification: str
-    requirements: dict[str, ConformanceRequirement] = Field(default_factory=dict)
+    conformant: bool = Field(description="Whether the current metadata set satisfies the documented LFS conformance checks.")
+    specification: str = Field(description="Specification or profile name used for conformance evaluation.")
+    requirements: dict[str, ConformanceRequirement] = Field(default_factory=dict, description="Per-requirement conformance results.")
 
 
 class LicenseDetail(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    uri: str
+    uri: str = Field(description="Canonical public URI for the licence record.")
     referenceNumber: str | None = None
-    licenseId: str
+    licenseId: str = Field(description="Primary SPDX licence ID or equivalent local identifier.")
     licenseID: str | None = None
     licenceID: str | None = None
-    name: str
-    detailsURL: str
+    name: str = Field(description="Human-readable licence name.")
+    detailsURL: str = Field(description="Convenience JSON metadata endpoint for this licence.")
     spdxDetailsURL: str | None = None
     reference: str | None = None
     isDeprecatedLicenseId: bool
@@ -126,25 +126,25 @@ class LicenseDetail(BaseModel):
     standardLicenseTemplate: str | None = None
     licenseTextHtml: str | None = None
     crossRef: list[CrossReference] = Field(default_factory=list)
-    representations: dict[str, RepresentationDescriptor] = Field(default_factory=dict)
-    conformance: ConformanceStatus
+    representations: dict[str, RepresentationDescriptor] = Field(default_factory=dict, description="Curated available representations keyed by representation name.")
+    conformance: ConformanceStatus = Field(description="Conformance summary for this licence metadata record.")
     links: dict[str, str] = Field(default_factory=dict, alias="_links")
 
 
 class LicenseInventoryItem(BaseModel):
-    uri: str
-    licenseId: str
-    name: str
-    isDeprecatedLicenseId: bool
-    isOsiApproved: bool
+    uri: str = Field(description="Canonical public URI for the licence record.")
+    licenseId: str = Field(description="Primary SPDX licence ID or equivalent local identifier.")
+    name: str = Field(description="Human-readable licence name.")
+    isDeprecatedLicenseId: bool = Field(description="Whether the identifier is deprecated in SPDX data.")
+    isOsiApproved: bool = Field(description="Whether SPDX marks the licence as OSI-approved.")
     seeAlso: list[str] = Field(default_factory=list)
     detailsURL: str | None = None
     reference: str | None = None
 
 
 class LicenseInventoryResponse(BaseModel):
-    licenseListVersion: str | None = None
-    licenses: list[LicenseInventoryItem] = Field(default_factory=list)
+    licenseListVersion: str | None = Field(default=None, description="SPDX licence list version represented by the local cache snapshot.")
+    licenses: list[LicenseInventoryItem] = Field(default_factory=list, description="Licence inventory items available from the local cache snapshot.")
 
 
 def safe_escape_text(value: Any) -> str:

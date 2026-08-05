@@ -63,6 +63,16 @@ Mutation endpoints require bearer auth via env/secret file:
 
 `401` means missing/invalid credentials; `403` means insufficient role.
 
+## OpenAPI and Swagger
+
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`
+- Raw OpenAPI schema: `/openapi.json`
+
+Public endpoint groups are documented under **Service status**, **Licences**, **Licence representations**, **Federation discovery**, **Federation outbound**, and **Federation resolution**.
+
+Protected endpoint groups are documented under **Federation administration** and **Federation conflicts**. In Swagger UI, use **Authorize** and paste a bearer token value such as `Bearer example-token` for admin/curator operations. Missing or invalid credentials return `401`; authenticated callers without the required role return `403`.
+
 ## Deployment defaults
 
 - reload disabled by default

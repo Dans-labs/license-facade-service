@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Query, Request
+from typing import Any
+
+from fastapi import APIRouter, Body, Path, Query, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 
 from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.api.v1.licenses import get_auth_service
@@ -25,6 +29,31 @@ from src.license_facade_service.services.auth import AuthService, Authentication
 from src.license_facade_service.services.problem import ProblemDetails, problem_response
 
 router = APIRouter()
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description=(
+        "Bearer token for protected federation administration operations. "
+        "Admin is required for peer management, status inspection, manual sync, and publication. "
+        "Curator or admin may review and decide conflicts."
+    ),
+)
+
+
+class PublishRecordResponse(BaseModel):
+    canonicalId: str = Field(description="Canonical ID assigned to the newly published local authoritative record.")
+    recordId: str = Field(description="Local PostgreSQL UUID of the published record.")
+
+
+def _problem_response_doc(description: str, example: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "description": description,
+        "content": {
+            "application/problem+json": {
+                "schema": ProblemDetails.model_json_schema(),
+                "example": example,
+            }
+        },
+    }
 
 
 def _guard(request: Request, allowed_roles: set[str]) -> Principal:
@@ -139,12 +168,26 @@ def _resolution_problem(request: Request, error: ResolutionError):
 @router.get(
     "/api/v1/admin/federation/peers",
     response_model=PeerListResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="List trusted federation peers",
+    description=(
+        "Lists administratively enrolled federation peers.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. "
+        "Use this endpoint to audit explicit peer trust configuration, pagination state, and last synchronization outcomes."
+    ),
+    operation_id="listFederationPeers",
+    response_description="Configured trusted peers.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}),
+        403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}),
+        404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+    },
 )
 async def list_peers(
     request: Request,
-    limit: int = Query(default=20, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=200, description="Maximum number of peers to return.", examples=[20]),
+    offset: int = Query(default=0, ge=0, description="Zero-based peer list offset.", examples=[0]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
     try:
         _admin_guard(request)
@@ -158,9 +201,31 @@ async def list_peers(
 @router.post(
     "/api/v1/admin/federation/peers",
     response_model=PeerResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="Enroll a trusted federation peer",
+    description=(
+        "Creates an explicitly trusted federation peer configuration.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. "
+        "Enrollment verifies discovery metadata, expected node identity, pinned public-key material, and SSRF restrictions "
+        "before the peer can participate in synchronization."
+    ),
+    operation_id="createFederationPeer",
+    response_description="Created trusted peer configuration.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}),
+        403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}),
+        404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+        400: _problem_response_doc("Peer identity, pinned key, or remote response validation failed.", {"type": "https://eosc-eden.eu/problems/peer-node-mismatch", "title": "Peer Identity Mismatch", "status": 400, "detail": "Discovery nodeId does not match requested peerNodeId."}),
+        409: _problem_response_doc("A peer with the same node identity already exists.", {"type": "https://eosc-eden.eu/problems/peer-exists", "title": "Peer Already Exists", "status": 409, "detail": "Trusted peer already exists."}),
+        502: _problem_response_doc("The remote peer responded with invalid or unexpected data.", {"type": "https://eosc-eden.eu/problems/remote-http-error", "title": "Remote Peer Error", "status": 502, "detail": "Remote endpoint returned HTTP 500."}),
+        503: _problem_response_doc("The remote peer could not be reached under the current security policy.", {"type": "https://eosc-eden.eu/problems/remote-unreachable", "title": "Remote Peer Unavailable", "status": 503, "detail": "Remote endpoint is unreachable."}),
+    },
 )
-async def create_peer(request: Request, payload: PeerCreateRequest):
+async def create_peer(
+    request: Request,
+    payload: PeerCreateRequest = Body(description="Trusted peer enrollment request with pinned key material and SSRF allow-list controls."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         peer_service, _, _ = _services(request)
@@ -172,9 +237,21 @@ async def create_peer(request: Request, payload: PeerCreateRequest):
 @router.get(
     "/api/v1/admin/federation/peers/{peer_id}",
     response_model=PeerResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="Get one trusted federation peer",
+    description=(
+        "Returns one explicitly enrolled peer by local peer UUID.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="getFederationPeer",
+    response_description="Trusted peer configuration.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("Peer not found or federation disabled.", {"type": "https://eosc-eden.eu/problems/peer-not-found", "title": "Peer Not Found", "status": 404, "detail": "Trusted peer was not found."})},
 )
-async def get_peer(request: Request, peer_id: uuid.UUID):
+async def get_peer(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration.", examples=["11111111-1111-4111-8111-111111111111"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         peer_service, _, _ = _services(request)
@@ -186,9 +263,22 @@ async def get_peer(request: Request, peer_id: uuid.UUID):
 @router.get(
     "/api/v1/admin/federation/peers/{peer_id}/imports",
     response_model=ImportedRecordListResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="List retained imported records for a peer",
+    description=(
+        "Lists imported non-authoritative records retained locally for one trusted peer.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. Imported records remain resolvable "
+        "locally but are not re-exported through the authoritative outbound catalog or changes feed."
+    ),
+    operation_id="listFederationPeerImports",
+    response_description="Imported records retained for the selected peer.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("Peer not found or federation disabled.", {"type": "https://eosc-eden.eu/problems/peer-not-found", "title": "Peer Not Found", "status": 404, "detail": "Trusted peer was not found."})},
 )
-async def list_imported_records(request: Request, peer_id: uuid.UUID):
+async def list_imported_records(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration.", examples=["11111111-1111-4111-8111-111111111111"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         peer_service, _, _ = _services(request)
@@ -200,9 +290,23 @@ async def list_imported_records(request: Request, peer_id: uuid.UUID):
 @router.patch(
     "/api/v1/admin/federation/peers/{peer_id}",
     response_model=PeerResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="Update a trusted federation peer",
+    description=(
+        "Updates mutable configuration for an explicitly enrolled peer.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. "
+        "Use this endpoint to change operational state, allow-lists, metadata labels, or pinned key material."
+    ),
+    operation_id="updateFederationPeer",
+    response_description="Updated trusted peer configuration.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("Peer not found or federation disabled.", {"type": "https://eosc-eden.eu/problems/peer-not-found", "title": "Peer Not Found", "status": 404, "detail": "Trusted peer was not found."}), 409: _problem_response_doc("The requested update conflicts with current peer state.", {"type": "https://eosc-eden.eu/problems/peer-disabled", "title": "Peer Disabled", "status": 409, "detail": "Peer is disabled."})},
 )
-async def patch_peer(request: Request, peer_id: uuid.UUID, payload: PeerPatchRequest):
+async def patch_peer(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration.", examples=["11111111-1111-4111-8111-111111111111"]),
+    payload: PeerPatchRequest = Body(description="Partial update for a trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         peer_service, _, _ = _services(request)
@@ -214,9 +318,22 @@ async def patch_peer(request: Request, peer_id: uuid.UUID, payload: PeerPatchReq
 @router.delete(
     "/api/v1/admin/federation/peers/{peer_id}",
     response_model=PeerResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="Archive a trusted federation peer",
+    description=(
+        "Archives a trusted peer configuration.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. Archived peers are retained for audit "
+        "and provenance purposes but are excluded from normal synchronization and resolution unless policy says otherwise."
+    ),
+    operation_id="archiveFederationPeer",
+    response_description="Archived trusted peer configuration.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("Peer not found or federation disabled.", {"type": "https://eosc-eden.eu/problems/peer-not-found", "title": "Peer Not Found", "status": 404, "detail": "Trusted peer was not found."})},
 )
-async def delete_peer(request: Request, peer_id: uuid.UUID):
+async def delete_peer(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration.", examples=["11111111-1111-4111-8111-111111111111"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         peer_service, _, _ = _services(request)
@@ -228,14 +345,29 @@ async def delete_peer(request: Request, peer_id: uuid.UUID):
 @router.post(
     "/api/v1/admin/federation/peers/{peer_id}/sync",
     response_model=SyncResultResponse,
+    tags=["Federation administration"],
+    summary="Run manual inbound synchronization for one peer",
+    description=(
+        "Triggers a synchronous/manual inbound synchronization against one trusted peer.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. "
+        "Synchronization pulls signed changes, verifies discovery metadata, signatures, digests, node identity, authority, "
+        "and canonical identifiers before import. Imported records are stored as non-authoritative. Cursors advance only "
+        "after successful commit, repeated synchronization is idempotent, and a lock conflict may return HTTP 409."
+    ),
+    operation_id="syncFederationPeer",
+    response_description="Outcome of the manual synchronization attempt.",
     responses={
-        401: {"model": ProblemDetails},
-        403: {"model": ProblemDetails},
-        404: {"model": ProblemDetails},
-        409: {"model": ProblemDetails},
+        401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}),
+        403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}),
+        404: _problem_response_doc("Peer not found or federation disabled.", {"type": "https://eosc-eden.eu/problems/peer-not-found", "title": "Peer Not Found", "status": 404, "detail": "Trusted peer was not found."}),
+        409: _problem_response_doc("Synchronization is already running for this peer.", {"type": "https://eosc-eden.eu/problems/already-running", "title": "Synchronization Already Running", "status": 409, "detail": "Synchronization already in progress."}),
     },
 )
-async def sync_peer(request: Request, peer_id: uuid.UUID):
+async def sync_peer(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration.", examples=["11111111-1111-4111-8111-111111111111"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         _, sync_service, _ = _services(request)
@@ -260,9 +392,18 @@ async def sync_peer(request: Request, peer_id: uuid.UUID):
 @router.get(
     "/api/v1/admin/federation/status",
     response_model=AdminStatusResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation administration"],
+    summary="Inspect local federation administration status",
+    description=(
+        "Returns local federation runtime and synchronization counters.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. Use this endpoint to inspect peer counts, "
+        "accepted and rejected inbound events, imported-record totals, and worker timing configuration."
+    ),
+    operation_id="getFederationAdminStatus",
+    response_description="Current federation administration status snapshot.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."})},
 )
-async def federation_status(request: Request):
+async def federation_status(request: Request, _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme)):
     try:
         _admin_guard(request)
         _, sync_service, _ = _services(request)
@@ -273,9 +414,23 @@ async def federation_status(request: Request):
 
 @router.post(
     "/api/v1/admin/federation/publish",
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    response_model=PublishRecordResponse,
+    tags=["Federation administration"],
+    summary="Publish a local authoritative federation record",
+    description=(
+        "Creates a new locally authoritative record for outbound federation publication.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. Published records become part of the "
+        "authoritative outbound catalog and change feed. Imported records are never added to the authoritative outbound feed."
+    ),
+    operation_id="publishFederationRecord",
+    response_description="Canonical ID and local record UUID of the published authoritative record.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."})},
 )
-async def publish_record(request: Request, payload: AdminPublishRequest):
+async def publish_record(
+    request: Request,
+    payload: AdminPublishRequest = Body(description="Authoritative record payload to wrap and publish."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _admin_guard(request)
         _, _, publication = _services(request)
@@ -297,9 +452,24 @@ async def publish_record(request: Request, payload: AdminPublishRequest):
 @router.get(
     "/api/v1/admin/federation/conflicts",
     response_model=list[ConflictResponse],
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}},
+    tags=["Federation conflicts"],
+    summary="List federation resolution conflicts",
+    description=(
+        "Lists current federation resolution conflicts for curator review.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Conflicts track ambiguous imported candidates and append-only decision history without allowing imported data "
+        "to override a local authoritative record."
+    ),
+    operation_id="listFederationConflicts",
+    response_description="Conflicts available for curator review.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."})},
 )
-async def list_conflicts(request: Request, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0)):
+async def list_conflicts(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum number of conflicts to return.", examples=[50]),
+    offset: int = Query(default=0, ge=0, description="Zero-based conflict list offset.", examples=[0]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _curator_guard(request)
         service = _resolution_service(request)
@@ -311,9 +481,21 @@ async def list_conflicts(request: Request, limit: int = Query(default=50, ge=1, 
 @router.get(
     "/api/v1/admin/federation/conflicts/{conflict_id}",
     response_model=ConflictResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}},
+    tags=["Federation conflicts"],
+    summary="Get one federation resolution conflict",
+    description=(
+        "Returns the current state of one federation resolution conflict.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient."
+    ),
+    operation_id="getFederationConflict",
+    response_description="Conflict details including candidate summary and latest decision event.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("The requested conflict does not exist.", {"type": "https://eosc-eden.eu/problems/conflict-not-found", "title": "Conflict Not Found", "status": 404, "detail": "Conflict not found."})},
 )
-async def get_conflict(request: Request, conflict_id: uuid.UUID):
+async def get_conflict(
+    request: Request,
+    conflict_id: uuid.UUID = Path(..., description="Conflict UUID to inspect.", examples=["22222222-2222-4222-8222-222222222222"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         _curator_guard(request)
         service = _resolution_service(request)
@@ -325,9 +507,23 @@ async def get_conflict(request: Request, conflict_id: uuid.UUID):
 @router.post(
     "/api/v1/admin/federation/conflicts/{conflict_id}/decisions",
     response_model=ConflictDecisionResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}},
+    tags=["Federation conflicts"],
+    summary="Record a conflict decision event",
+    description=(
+        "Appends a curator/admin conflict decision event for the selected conflict.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Optimistic concurrency is enforced through the `expectedVersion` request field; stale writes return 409."
+    ),
+    operation_id="decideFederationConflict",
+    response_description="Recorded conflict decision event.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("The requested conflict does not exist.", {"type": "https://eosc-eden.eu/problems/conflict-not-found", "title": "Conflict Not Found", "status": 404, "detail": "Conflict not found."}), 409: _problem_response_doc("The conflict version changed or the decision is not allowed in the current state.", {"type": "https://eosc-eden.eu/problems/conflict-stale", "title": "Conflict Version Changed", "status": 409, "detail": "Conflict version changed."})},
 )
-async def decide_conflict(request: Request, conflict_id: uuid.UUID, payload: ConflictDecisionRequest):
+async def decide_conflict(
+    request: Request,
+    conflict_id: uuid.UUID = Path(..., description="Conflict UUID to update.", examples=["22222222-2222-4222-8222-222222222222"]),
+    payload: ConflictDecisionRequest = Body(description="Append-only conflict decision event request with optimistic-concurrency version."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         principal = _curator_guard(request)
         service = _resolution_service(request)
@@ -344,9 +540,23 @@ async def decide_conflict(request: Request, conflict_id: uuid.UUID, payload: Con
 @router.post(
     "/api/v1/admin/federation/conflicts/{conflict_id}/reversals",
     response_model=ConflictDecisionResponse,
-    responses={401: {"model": ProblemDetails}, 403: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}},
+    tags=["Federation conflicts"],
+    summary="Append a conflict reversal event",
+    description=(
+        "Appends a reversal event for the selected conflict.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "The request still uses optimistic concurrency through `expectedVersion`; the endpoint forces `decisionType=reverse`."
+    ),
+    operation_id="reverseFederationConflict",
+    response_description="Recorded conflict reversal event.",
+    responses={401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}), 403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}), 404: _problem_response_doc("The requested conflict does not exist.", {"type": "https://eosc-eden.eu/problems/conflict-not-found", "title": "Conflict Not Found", "status": 404, "detail": "Conflict not found."}), 409: _problem_response_doc("The conflict version changed or the reversal is not allowed in the current state.", {"type": "https://eosc-eden.eu/problems/conflict-stale", "title": "Conflict Version Changed", "status": 409, "detail": "Conflict version changed."})},
 )
-async def reverse_conflict(request: Request, conflict_id: uuid.UUID, payload: ConflictDecisionRequest):
+async def reverse_conflict(
+    request: Request,
+    conflict_id: uuid.UUID = Path(..., description="Conflict UUID to reverse.", examples=["22222222-2222-4222-8222-222222222222"]),
+    payload: ConflictDecisionRequest = Body(description="Conflict reversal request. `decisionType` is forced to `reverse` by the server."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
     try:
         principal = _curator_guard(request)
         service = _resolution_service(request)

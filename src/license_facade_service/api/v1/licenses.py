@@ -6,9 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path as ApiPath, Query, Request, Security
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
-from pydantic import BaseModel
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 
 from src.license_facade_service.services.auth import (
     AuthService,
@@ -28,6 +29,7 @@ from src.license_facade_service.services.licenses import (
     REPRESENTATION_RDFXML,
     REPRESENTATION_TURTLE,
     negotiate_representation,
+    LicenseSnapshotStatus,
 )
 from src.license_facade_service.services.contract import LicenseDetail, LicenseInventoryItem
 from src.license_facade_service.services.contract import LicenseInventoryResponse
@@ -37,9 +39,82 @@ from src.license_facade_service.federation.resolution import FederationResolutio
 from src.license_facade_service.federation.resolution_models import LicenseProvenanceResponse, LicenseResolutionResponse
 
 router = APIRouter()
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description=(
+        "Bearer token used for protected administrative operations. "
+        "Curator or admin tokens can refresh cache data and generate SPDX helper documents."
+    ),
+)
+
+PROBLEM_EXAMPLES = {
+    "not_found": {
+        "type": "https://eosc-eden.eu/problems/resolution-not-found",
+        "title": "Resolution Not Found",
+        "status": 404,
+        "detail": "No record or candidate exists for identifier 'Example-License'.",
+        "instance": "https://license.example.org/api/v1/licenses/resolution?identifier=Example-License",
+    },
+    "unauthorized": {
+        "type": "https://eosc-eden.eu/problems/unauthorized",
+        "title": "Unauthorized",
+        "status": 401,
+        "detail": "Missing or invalid bearer token.",
+        "instance": "https://license.example.org/api/v1/licenses/cache/refresh",
+    },
+    "forbidden": {
+        "type": "https://eosc-eden.eu/problems/forbidden",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Authenticated principal lacks required curator/admin role.",
+        "instance": "https://license.example.org/api/v1/licenses/cache/refresh",
+    },
+    "not_acceptable": {
+        "type": "about:blank",
+        "title": "Not Acceptable",
+        "status": 406,
+        "detail": "Requested representation is not supported.",
+        "instance": "https://license.example.org/api/v1/licenses/MIT",
+    },
+}
+
 
 _license_service: LicenseService | None = None
 _auth_service: AuthService | None = None
+
+
+class TaxonomyResponse(BaseModel):
+    description: str = Field(description="Human-readable taxonomy overview for common licence families.")
+
+
+class CacheMutationResponse(BaseModel):
+    status: str = Field(description="Mutation outcome.", examples=["success"])
+    cache: LicenseSnapshotStatus = Field(description="Snapshot status after the cache mutation completed.")
+
+
+class MinimalSpdx3Request(BaseModel):
+    name: str = Field(
+        default="Minimal SPDX 3.0 Document",
+        description="Human-readable document name for the generated SPDX 3.0 JSON-LD example.",
+        examples=["Minimal SPDX 3.0 Document"],
+    )
+    namespace: str = Field(
+        default="https://example.org/spdx3/minimal-doc-1",
+        description="Base namespace used when generating example identifiers in the SPDX 3.0 document.",
+        examples=["https://example.example/spdx3/minimal-doc-1"],
+    )
+
+
+def _problem_response_doc(description: str, example: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "description": description,
+        "content": {
+            "application/problem+json": {
+                "schema": ProblemDetails.model_json_schema(),
+                "example": example,
+            }
+        },
+    }
 
 
 def get_license_service() -> LicenseService:
@@ -143,7 +218,19 @@ def _resolution_problem(request: Request, error: ResolutionError):
     )
 
 
-@router.get("/licenses", response_model=LicenseInventoryResponse)
+@router.get(
+    "/licenses",
+    response_model=LicenseInventoryResponse,
+    tags=["Licences"],
+    summary="List cached licences",
+    description=(
+        "Returns the locally cached SPDX licence inventory enriched with LFS public URIs.\n\n"
+        "Use this endpoint to browse the currently cached licence list. The response reflects the active "
+        "local snapshot and does not require federation to be enabled."
+    ),
+    operation_id="listLicences",
+    response_description="Cached licence inventory from the active local snapshot.",
+)
 @router.get("/licences", include_in_schema=False)
 @router.get("/licenses/", include_in_schema=False)
 @router.get("/licences/", include_in_schema=False)
@@ -152,7 +239,19 @@ async def list_licenses(service: LicenseService = Depends(get_license_service)):
     return await service.get_all_licenses()
 
 
-@router.get("/licenses/taxonomy")
+@router.get(
+    "/licenses/taxonomy",
+    response_model=TaxonomyResponse,
+    tags=["Licences"],
+    summary="Show licence taxonomy overview",
+    description=(
+        "Returns a static taxonomy summary for common licence families.\n\n"
+        "Use this endpoint to present a lightweight, human-readable overview in UIs without having to "
+        "derive categories from SPDX metadata client-side."
+    ),
+    operation_id="getLicenceTaxonomy",
+    response_description="Static taxonomy summary for common licence families.",
+)
 @router.get("/licences/taxonomy", include_in_schema=False)
 async def get_license_taxonomy():
     """Return a static taxonomy overview that cannot be shadowed by dynamic routes."""
@@ -165,19 +264,58 @@ async def get_license_taxonomy():
     }
 
 
-@router.get("/licenses/cache/status")
+@router.get(
+    "/licenses/cache/status",
+    response_model=LicenseSnapshotStatus,
+    tags=["Licences"],
+    summary="Inspect local cache status",
+    description=(
+        "Returns status information about the current SPDX cache snapshot.\n\n"
+        "The response intentionally does not expose internal filesystem paths. Use it to confirm whether "
+        "the service has a usable snapshot, which version is active, and when it was last updated."
+    ),
+    operation_id="getLicenceCacheStatus",
+    response_description="Current SPDX cache snapshot status.",
+)
 @router.get("/licences/cache/status", include_in_schema=False)
 async def cache_status(service: LicenseService = Depends(get_license_service)):
     """Return cache status without exposing the cache filesystem path."""
     return service.cache_status().model_dump()
 
 
-@router.post("/licenses/cache/update")
+@router.post(
+    "/licenses/cache/update",
+    response_model=CacheMutationResponse,
+    tags=["Licences"],
+    summary="Refresh the SPDX cache snapshot",
+    description=(
+        "Downloads and activates a newer SPDX cache snapshot when available.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Missing or invalid credentials return 401; insufficient permission returns 403."
+    ),
+    operation_id="updateLicenceCache",
+    response_description="Result of the cache refresh operation.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
+        403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        500: _problem_response_doc(
+            "Cache refresh failed before a new snapshot could be activated.",
+            {
+                "type": "about:blank",
+                "title": "Cache Update Failed",
+                "status": 500,
+                "detail": "Failed to refresh SPDX cache snapshot.",
+                "instance": "https://license.example.org/api/v1/licenses/cache/update",
+            },
+        ),
+    },
+)
 @router.post("/licences/cache/update", include_in_schema=False)
 async def update_cache(
     request: Request,
     service: LicenseService = Depends(get_license_service),
     auth: AuthService = Depends(get_auth_service),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
     """Refresh the SPDX snapshot after bearer-token authorization."""
     try:
@@ -209,28 +347,66 @@ async def update_cache(
     return {"status": "success", "cache": status.model_dump()}
 
 
-@router.post("/licenses/cache/refresh")
+@router.post(
+    "/licenses/cache/refresh",
+    response_model=CacheMutationResponse,
+    tags=["Licences"],
+    summary="Force a cache refresh",
+    description=(
+        "Alias for the SPDX cache update operation.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Missing or invalid credentials return 401; insufficient permission returns 403."
+    ),
+    operation_id="refreshLicenceCache",
+    response_description="Result of the forced cache refresh operation.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
+        403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        500: _problem_response_doc(
+            "Cache refresh failed before a new snapshot could be activated.",
+            {
+                "type": "about:blank",
+                "title": "Cache Update Failed",
+                "status": 500,
+                "detail": "Failed to refresh SPDX cache snapshot.",
+                "instance": "https://license.example.org/api/v1/licenses/cache/refresh",
+            },
+        ),
+    },
+)
 @router.post("/licences/cache/refresh", include_in_schema=False)
 async def refresh_cache(
     request: Request,
     service: LicenseService = Depends(get_license_service),
     auth: AuthService = Depends(get_auth_service),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
     """Force refresh the SPDX snapshot after bearer-token authorization."""
     return await update_cache(request=request, service=service, auth=auth)
 
 
-class MinimalSpdx3Request(BaseModel):
-    name: str = "Minimal SPDX 3.0 Document"
-    namespace: str = "https://example.org/spdx3/minimal-doc-1"
-
-
-@router.post("/licenses/spdx3/minimal")
+@router.post(
+    "/licenses/spdx3/minimal",
+    tags=["Licences"],
+    summary="Generate a minimal SPDX 3.0 JSON-LD document",
+    description=(
+        "Creates a minimal example SPDX 3.0 JSON-LD document.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "This helper does not publish or persist any federation state."
+    ),
+    operation_id="createMinimalSpdx3Document",
+    response_description="Generated minimal SPDX 3.0 JSON-LD document.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
+        403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+    },
+)
 @router.post("/licences/spdx3/minimal", include_in_schema=False)
 async def create_minimal_spdx3(
     payload: MinimalSpdx3Request,
     request: Request,
     auth: AuthService = Depends(get_auth_service),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
     """Create a minimal SPDX 3.0 JSON-LD document after bearer-token authorization."""
     try:
@@ -273,13 +449,34 @@ async def create_minimal_spdx3(
     }
 
 
-@router.post("/licenses/spdx3/complete/{license_id}")
+@router.post(
+    "/licenses/spdx3/complete/{license_id}",
+    tags=["Licences"],
+    summary="Generate a complete SPDX 3.0 JSON-LD document for one licence",
+    description=(
+        "Builds a complete SPDX 3.0 JSON-LD document for a single resolved licence.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Use this endpoint when you need a richer SPDX 3.0 representation derived from the current local snapshot."
+    ),
+    operation_id="createCompleteSpdx3Document",
+    response_description="Generated SPDX 3.0 JSON-LD document for the requested licence.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
+        403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        404: _problem_response_doc("No licence matched the supplied licence ID.", PROBLEM_EXAMPLES["not_found"]),
+    },
+)
 @router.post("/licences/spdx3/complete/{license_id}", include_in_schema=False)
 async def create_complete_spdx3(
-    license_id: str,
     request: Request,
+    license_id: str = ApiPath(
+        ...,
+        description="SPDX licence ID or another supported identifier resolvable by the local service.",
+        examples=["MIT"],
+    ),
     service: LicenseService = Depends(get_license_service),
     auth: AuthService = Depends(get_auth_service),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
     """Create a complete SPDX 3.0 JSON-LD document for a specific license."""
     try:
@@ -334,23 +531,43 @@ async def create_complete_spdx3(
 @router.get(
     "/licenses/{id:path}/html",
     response_class=HTMLResponse,
+    tags=["Licence representations"],
+    summary="Get the HTML landing page for a licence",
+    description=(
+        "Returns the human-readable HTML landing page for a licence.\n\n"
+        "Use this explicit endpoint when you want a browser-friendly representation without content negotiation. "
+        "The path parameter supports SPDX IDs, local UUIDs, and URL-encoded full URIs that must be decoded exactly once."
+    ),
+    operation_id="getLicenceHtmlRepresentation",
+    response_description="HTML landing page for the selected licence.",
     responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
 )
 @router.get("/licences/{id:path}/html", include_in_schema=False)
 async def get_license_html(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["MIT"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return the HTML landing page for a license."""
     return await _render_license_response(service, id, REPRESENTATION_HTML, request, negotiated=False)
 
 
-@router.get("/licenses/{id:path}/json", response_model=LicenseDetail)
+@router.get(
+    "/licenses/{id:path}/json",
+    response_model=LicenseDetail,
+    tags=["Licence representations"],
+    summary="Get SPDX-compatible JSON metadata for a licence",
+    description=(
+        "Returns SPDX-compatible JSON metadata for a single licence.\n\n"
+        "Use this explicit endpoint when clients want machine-readable JSON without using the `Accept` header."
+    ),
+    operation_id="getLicenceJsonRepresentation",
+    response_description="SPDX-compatible JSON metadata for the selected licence.",
+)
 @router.get("/licences/{id:path}/json", include_in_schema=False)
 async def get_license_json(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["MIT"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return SPDX-compatible JSON metadata for a license."""
@@ -360,12 +577,20 @@ async def get_license_json(
 @router.get(
     "/licenses/{id:path}/json-ld",
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Get the JSON-LD representation for a licence",
+    description=(
+        "Returns the JSON-LD representation for a single licence.\n\n"
+        "Use this explicit endpoint when clients need linked-data JSON without negotiating through the canonical route."
+    ),
+    operation_id="getLicenceJsonLdRepresentation",
+    response_description="JSON-LD representation for the selected licence.",
     responses={200: {"content": {"application/ld+json": {"schema": {"type": "string"}}}}},
 )
 @router.get("/licences/{id:path}/json-ld", include_in_schema=False)
 async def get_license_jsonld(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["MIT"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return JSON-LD metadata for a license."""
@@ -375,12 +600,20 @@ async def get_license_jsonld(
 @router.get(
     "/licenses/{id:path}/turtle",
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Get Turtle RDF for a licence",
+    description=(
+        "Returns the Turtle RDF representation for a single licence.\n\n"
+        "Use this explicit endpoint when RDF clients want Turtle without content negotiation."
+    ),
+    operation_id="getLicenceTurtleRepresentation",
+    response_description="Turtle RDF representation for the selected licence.",
     responses={200: {"content": {"text/turtle": {"schema": {"type": "string"}}}}},
 )
 @router.get("/licences/{id:path}/turtle", include_in_schema=False)
 async def get_license_turtle(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["MIT"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return Turtle RDF for a license."""
@@ -390,12 +623,20 @@ async def get_license_turtle(
 @router.get(
     "/licenses/{id:path}/rdfxml",
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Get RDF/XML for a licence",
+    description=(
+        "Returns the RDF/XML representation for a single licence.\n\n"
+        "Use this explicit endpoint when RDF clients need RDF/XML without content negotiation."
+    ),
+    operation_id="getLicenceRdfXmlRepresentation",
+    response_description="RDF/XML representation for the selected licence.",
     responses={200: {"content": {"application/rdf+xml": {"schema": {"type": "string"}}}}},
 )
 @router.get("/licences/{id:path}/rdfxml", include_in_schema=False)
 async def get_license_rdfxml(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["MIT"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return RDF/XML for a license."""
@@ -406,15 +647,24 @@ async def get_license_rdfxml(
     "/licenses/{id:path}/original",
     status_code=307,
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Follow the curated original source for a licence",
+    description=(
+        "Redirects to the authoritative human-readable source maintained by the curating organisation, when available.\n\n"
+        "This endpoint never invents an original source from generic SPDX references. When no approved curated original "
+        "source exists, the service returns an RFC 9457 problem response with links to available alternatives."
+    ),
+    operation_id="getLicenceOriginalRepresentation",
+    response_description="Redirect to the curated original source for the selected licence.",
     responses={
         307: {"description": "Redirect to curated original source"},
-        404: {"model": ProblemDetails},
+        404: _problem_response_doc("No curated original source is available for this licence.", PROBLEM_EXAMPLES["not_found"]),
     },
 )
 @router.get("/licences/{id:path}/original", include_in_schema=False)
 async def get_license_original(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["Apache-2.0"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Redirect to the curated original source when available."""
@@ -446,6 +696,15 @@ async def get_license_original(
 @router.get(
     "/licenses/{id:path}/legal",
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Get the curated legal representation for a licence",
+    description=(
+        "Returns or redirects to a separately curated legal representation when one exists.\n\n"
+        "This endpoint does not silently substitute generic SPDX licence text and claim it is a jurisdictionally valid "
+        "legal text. When no curated legal representation is available, the service returns an RFC 9457 problem response."
+    ),
+    operation_id="getLicenceLegalRepresentation",
+    response_description="Curated legal representation for the selected licence.",
     responses={
         200: {
             "content": {
@@ -454,13 +713,13 @@ async def get_license_original(
             }
         },
         307: {"description": "Redirect to curated legal source"},
-        404: {"model": ProblemDetails},
+        404: _problem_response_doc("No curated legal representation is available for this licence.", PROBLEM_EXAMPLES["not_found"]),
     },
 )
 @router.get("/licences/{id:path}/legal", include_in_schema=False)
 async def get_license_legal(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["Apache-2.0"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return a curated legal representation when available."""
@@ -490,6 +749,15 @@ async def get_license_legal(
 @router.get(
     "/licenses/{id:path}/machine",
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Get a machine-readable rights expression for a licence",
+    description=(
+        "Returns a curated machine-readable rights-expression representation when one exists.\n\n"
+        "Supported media types include JSON-LD, Turtle, and RDF/XML. General SPDX JSON metadata is not treated as a "
+        "machine-readable rights expression. When no curated machine representation exists, the service returns 404."
+    ),
+    operation_id="getLicenceMachineRepresentation",
+    response_description="Curated machine-readable rights-expression representation.",
     responses={
         200: {
             "content": {
@@ -499,13 +767,13 @@ async def get_license_legal(
             }
         },
         307: {"description": "Redirect to authoritative machine representation"},
-        404: {"model": ProblemDetails},
+        404: _problem_response_doc("No curated machine-readable rights expression is available for this licence.", PROBLEM_EXAMPLES["not_found"]),
     },
 )
 @router.get("/licences/{id:path}/machine", include_in_schema=False)
 async def get_license_machine(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["CC-BY-4.0"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return an explicit machine-readable rights expression when available."""
@@ -534,15 +802,24 @@ async def get_license_machine(
     "/licenses/{id:path}/encoding",
     status_code=307,
     response_class=Response,
+    tags=["Licence representations"],
+    summary="Follow a curated encoding reference for a licence",
+    description=(
+        "Redirects to a curated encoding reference when one exists.\n\n"
+        "Use this endpoint to discover an externally hosted encoding resource while keeping the canonical licence metadata "
+        "in this service. When no curated encoding reference exists, the service returns 404."
+    ),
+    operation_id="getLicenceEncodingRepresentation",
+    response_description="Redirect to the curated encoding reference for the selected licence.",
     responses={
         307: {"description": "Redirect to curated encoding reference"},
-        404: {"model": ProblemDetails},
+        404: _problem_response_doc("No curated encoding reference is available for this licence.", PROBLEM_EXAMPLES["not_found"]),
     },
 )
 @router.get("/licences/{id:path}/encoding", include_in_schema=False)
 async def get_license_encoding(
-    id: str,
     request: Request,
+    id: str = ApiPath(..., description="Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, and URL-encoded URIs.", examples=["CC-BY-4.0"]),
     service: LicenseService = Depends(get_license_service),
 ):
     """Redirect to a curated rights-encoding reference when available."""
@@ -564,12 +841,59 @@ async def get_license_encoding(
 @router.get(
     "/licenses/resolution",
     response_model=LicenseResolutionResponse,
-    responses={400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}, 410: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+   tags=["Federation resolution"],
+   summary="Resolve an arbitrary licence identifier",
+   description=(
+       "Resolves an identifier through local authoritative records, retained imported records, and SPDX fallback.\n\n"
+       "Send URI-like identifiers through this canonical query endpoint and URL-encode them exactly once. "
+       "Local authoritative records always win. Imported records remain non-authoritative and are not re-exported "
+       "through the local authoritative federation catalog or change feed."
+   ),
+   operation_id="resolveLicenceIdentifier",
+   response_description="Resolved licence selection and provenance summary for the supplied identifier.",
+   responses={
+       400: _problem_response_doc("The identifier was malformed, decoded more than once, or exceeded limits.", {
+           "type": "https://eosc-eden.eu/problems/invalid-identifier",
+           "title": "Invalid Identifier",
+           "status": 400,
+           "detail": "Identifier must be decoded exactly once.",
+           "instance": "https://license.example.org/api/v1/licenses/resolution?identifier=https%253A%252F%252Fexample.org%252Flicence",
+       }),
+       404: _problem_response_doc("No local, imported, or SPDX fallback record matched the identifier.", PROBLEM_EXAMPLES["not_found"]),
+       409: _problem_response_doc("Multiple eligible imported candidates remain unresolved or the identifier is conflicted.", {
+           "type": "https://eosc-eden.eu/problems/resolution-ambiguous",
+           "title": "Ambiguous Resolution",
+           "status": 409,
+           "detail": "Multiple imported candidates remain eligible for identifier 'shared-alias'.",
+           "instance": "https://license.example.org/api/v1/licenses/resolution?identifier=shared-alias",
+       }),
+       410: _problem_response_doc("The selected identity is tombstoned.", {
+           "type": "https://eosc-eden.eu/problems/resolution-tombstoned",
+           "title": "Tombstoned Resolution",
+           "status": 410,
+           "detail": "The selected identity has been tombstoned.",
+           "instance": "https://license.example.org/api/v1/licenses/resolution?identifier=tomb-example",
+       }),
+       503: _problem_response_doc("Known records exist but cannot currently be served under trust or operational policy.", {
+           "type": "https://eosc-eden.eu/problems/resolution-unavailable",
+           "title": "Resolution Unavailable",
+           "status": 503,
+           "detail": "Known records exist but all candidates are excluded by trust or operational policy.",
+           "instance": "https://license.example.org/api/v1/licenses/resolution?identifier=disabled-alias",
+       }),
+   },
 )
 @router.get("/licences/resolution", include_in_schema=False)
 async def resolve_license(
-    request: Request,
-    identifier: str,
+   request: Request,
+   identifier: str = Query(
+       ...,
+       description=(
+           "Identifier to resolve. Supports SPDX licence IDs, retained resolving UUIDs, canonical IDs, approved aliases, "
+           "and URL-encoded full URIs. URI-like values should be sent through this query parameter and encoded exactly once."
+       ),
+       examples=["MIT", "lfs:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:MIT:1", "https://licenses.example.org/MIT"],
+   ),
 ):
     try:
         return _resolution_service(request).resolve(identifier)
@@ -580,12 +904,55 @@ async def resolve_license(
 @router.get(
     "/licenses/provenance",
     response_model=LicenseProvenanceResponse,
-    responses={400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 409: {"model": ProblemDetails}, 410: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+   tags=["Federation resolution"],
+   summary="Get provenance for a resolved licence identifier",
+   description=(
+       "Returns provenance details for a resolved identifier, including source peer, authority node, signed event history, "
+       "digests, and relevant timestamps.\n\n"
+       "Use this endpoint to audit where imported data came from and which signed source events were retained locally."
+   ),
+   operation_id="getLicenceProvenance",
+   response_description="Provenance and retained signed event history for the supplied identifier.",
+   responses={
+       400: _problem_response_doc("The identifier was malformed, decoded more than once, or exceeded limits.", {
+           "type": "https://eosc-eden.eu/problems/invalid-identifier",
+           "title": "Invalid Identifier",
+           "status": 400,
+           "detail": "Identifier must be decoded exactly once.",
+           "instance": "https://license.example.org/api/v1/licenses/provenance?identifier=https%253A%252F%252Fexample.org%252Flicence",
+       }),
+       404: _problem_response_doc("No resolvable record exists for the supplied identifier.", PROBLEM_EXAMPLES["not_found"]),
+       409: _problem_response_doc("The identifier is currently conflicted or ambiguous.", {
+           "type": "https://eosc-eden.eu/problems/resolution-conflicted",
+           "title": "Conflicted Resolution",
+           "status": 409,
+           "detail": "The identifier is linked to an unresolved imported conflict.",
+           "instance": "https://license.example.org/api/v1/licenses/provenance?identifier=shared-alias",
+       }),
+       410: _problem_response_doc("The selected identity is tombstoned.", {
+           "type": "https://eosc-eden.eu/problems/resolution-tombstoned",
+           "title": "Tombstoned Resolution",
+           "status": 410,
+           "detail": "The selected identity has been tombstoned.",
+           "instance": "https://license.example.org/api/v1/licenses/provenance?identifier=tomb-example",
+       }),
+       503: _problem_response_doc("Known records exist but cannot currently be served under trust or operational policy.", {
+           "type": "https://eosc-eden.eu/problems/resolution-unavailable",
+           "title": "Resolution Unavailable",
+           "status": 503,
+           "detail": "Known records exist but all candidates are excluded by trust or operational policy.",
+           "instance": "https://license.example.org/api/v1/licenses/provenance?identifier=disabled-alias",
+       }),
+   },
 )
 @router.get("/licences/provenance", include_in_schema=False)
 async def get_license_provenance(
-    request: Request,
-    identifier: str,
+   request: Request,
+   identifier: str = Query(
+       ...,
+       description="Identifier to audit. Use the canonical query endpoint for URI-like values and URL-encode them exactly once.",
+       examples=["MIT", "lfs:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:MIT:1"],
+   ),
 ):
     try:
         return _resolution_service(request).provenance(identifier)
@@ -595,6 +962,17 @@ async def get_license_provenance(
 
 @router.get(
     "/licenses/{id:path}",
+    tags=["Licence representations"],
+    summary="Get the canonical negotiated licence representation",
+    description=(
+        "Returns the canonical representation for a licence using the `Accept` header.\n\n"
+        "Supported media types are `text/html`, `application/json`, `application/ld+json`, `text/turtle`, "
+        "and `application/rdf+xml`. In the current implementation, missing `Accept` or `*/*` resolves to "
+        "`application/json`. If the requested representation is unsupported, the service returns 406 with an "
+        "RFC 9457 problem response."
+    ),
+    operation_id="getLicenceRepresentation",
+    response_description="Canonical negotiated representation for the selected licence.",
     responses={
         200: {
             "content": {
@@ -605,18 +983,21 @@ async def get_license_provenance(
                 "application/rdf+xml": {"schema": {"type": "string"}},
             }
         },
-        404: {
-            "model": ProblemDetails,
-        },
-        406: {
-            "model": ProblemDetails,
-        },
+        404: _problem_response_doc("No licence record matched the supplied identifier.", PROBLEM_EXAMPLES["not_found"]),
+        406: _problem_response_doc("The requested media type is not supported for canonical negotiation.", PROBLEM_EXAMPLES["not_acceptable"]),
     },
 )
 @router.get("/licences/{id:path}", include_in_schema=False)
 async def get_license(
-    id: str,
     request: Request,
+    id: str = ApiPath(
+        ...,
+        description=(
+            "Licence identifier to resolve. Supports SPDX IDs, retained UUIDs, canonical IDs, and URL-encoded full URIs. "
+            "For arbitrary URI-like identifiers, prefer the query-based `/api/v1/licenses/resolution` endpoint."
+        ),
+        examples=["MIT"],
+    ),
     service: LicenseService = Depends(get_license_service),
 ):
     """Return the negotiated canonical representation for a license."""
