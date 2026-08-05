@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request
+from typing import Any
+
+from fastapi import APIRouter, Header, Path, Query, Request
 from fastapi.responses import Response
 
 from src.license_facade_service.federation.canonical_json import canonicalize_to_bytes
@@ -20,6 +22,18 @@ from src.license_facade_service.federation.models import (
 from src.license_facade_service.services.problem import ProblemDetails, problem_response
 
 router = APIRouter()
+
+
+def _problem_response_doc(description: str, example: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "description": description,
+        "content": {
+            "application/problem+json": {
+                "schema": ProblemDetails.model_json_schema(),
+                "example": example,
+            }
+        },
+    }
 
 
 def _federation_service(request: Request) -> FederationOutboundService:
@@ -87,9 +101,25 @@ def _response_with_etag(
 @router.get(
     "/.well-known/lfs",
     response_model=FederationDiscoveryResponse,
-    responses={304: {"description": "Not Modified"}, 404: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+    tags=["Federation discovery"],
+    summary="Get the federation discovery document",
+    description=(
+        "Returns the public federation discovery document for this node.\n\n"
+        "Use this endpoint during peer enrollment to learn the node identity, public base URL, active signing key ID, "
+        "and advertised federation endpoints. Conditional GET with `If-None-Match` is supported and may return 304."
+    ),
+    operation_id="getFederationDiscoveryDocument",
+    response_description="Discovery document describing this federation node and its public endpoints.",
+    responses={
+        304: {"description": "Discovery document unchanged for the supplied ETag."},
+        404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+        503: _problem_response_doc("Federation runtime is not ready to serve discovery metadata.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
+    },
 )
-async def federation_discovery(request: Request):
+async def federation_discovery(
+    request: Request,
+    _if_none_match: str | None = Header(default=None, alias="If-None-Match", description="Strong ETag validator for conditional GET. Matching ETags return 304."),
+):
     try:
         service = _federation_service(request)
         payload = service.discovery().model_dump(mode="json")
@@ -102,12 +132,27 @@ async def federation_discovery(request: Request):
 @router.get(
     "/api/v1/federation/catalog",
     response_model=FederationCatalogResponse,
-    responses={304: {"description": "Not Modified"}, 400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+    tags=["Federation outbound"],
+    summary="List authoritative outbound federation records",
+    description=(
+        "Returns the authoritative outbound catalog for this node.\n\n"
+        "Only locally authoritative published records are included. Imported records are never re-exported here. "
+        "Pagination uses an opaque keyset cursor plus a stable watermark, and conditional GET with `If-None-Match` may return 304."
+    ),
+    operation_id="listFederationCatalog",
+    response_description="Page of locally authoritative records published by this node.",
+    responses={
+        304: {"description": "Catalog page unchanged for the supplied ETag."},
+        400: _problem_response_doc("The supplied cursor or page size was invalid.", {"type": "https://eosc-eden.eu/problems/invalid-cursor", "title": "Invalid Cursor", "status": 400, "detail": "Cursor is invalid."}),
+        404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+        503: _problem_response_doc("Federation runtime is not ready to serve the outbound catalog.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
+    },
 )
 async def federation_catalog(
     request: Request,
-    cursor: str | None = Query(default=None, description="Opaque keyset cursor."),
-    limit: int | None = Query(default=None, description="Page size (1-200)."),
+    cursor: str | None = Query(default=None, description="Opaque keyset cursor from a previous catalog page.", examples=["v1.node-a-k1.catalog.example"]),
+    limit: int | None = Query(default=None, description="Page size in the range 1-200.", examples=[100]),
+    _if_none_match: str | None = Header(default=None, alias="If-None-Match", description="Strong ETag validator for conditional GET. Matching ETags return 304."),
 ):
     try:
         service = _federation_service(request)
@@ -122,12 +167,28 @@ async def federation_catalog(
 @router.get(
     "/api/v1/federation/changes",
     response_model=FederationChangesResponse,
-    responses={304: {"description": "Not Modified"}, 400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+    tags=["Federation outbound"],
+    summary="List signed authoritative change events",
+    description=(
+        "Returns the signed authoritative change feed for this node.\n\n"
+        "Clients should verify signatures and digests for every event and envelope before import. "
+        "`since` requests events strictly after the supplied cursor, `nextCursor` advances page traversal, and "
+        "`resumeCursor` is safe to persist only after the client commits the page successfully."
+    ),
+    operation_id="listFederationChanges",
+    response_description="Page of signed authoritative change events.",
+    responses={
+        304: {"description": "Change-feed page unchanged for the supplied ETag."},
+        400: _problem_response_doc("The supplied cursor or page size was invalid.", {"type": "https://eosc-eden.eu/problems/invalid-cursor", "title": "Invalid Cursor", "status": 400, "detail": "Cursor is invalid."}),
+        404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+        503: _problem_response_doc("Federation runtime is not ready to serve the outbound change feed.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
+    },
 )
 async def federation_changes(
     request: Request,
-    since: str | None = Query(default=None, description="Opaque cursor; returns events strictly after cursor position."),
-    limit: int | None = Query(default=None, description="Page size (1-200)."),
+    since: str | None = Query(default=None, description="Opaque cursor. The response starts strictly after the cursor position.", examples=["v1.node-a-k1.changes.example"]),
+    limit: int | None = Query(default=None, description="Page size in the range 1-200.", examples=[100]),
+    _if_none_match: str | None = Header(default=None, alias="If-None-Match", description="Strong ETag validator for conditional GET. Matching ETags return 304."),
 ):
     try:
         service = _federation_service(request)
@@ -142,9 +203,27 @@ async def federation_changes(
 @router.get(
     "/api/v1/federation/records/{encoded_id}",
     response_model=FederationRecordResponse,
-    responses={304: {"description": "Not Modified"}, 400: {"model": ProblemDetails}, 404: {"model": ProblemDetails}, 503: {"model": ProblemDetails}},
+    tags=["Federation outbound"],
+    summary="Get one signed authoritative federation record",
+    description=(
+        "Returns one signed authoritative record from the local outbound federation view.\n\n"
+        "The `encoded_id` parameter is the URL-safe encoded canonical identifier from the catalog. Only locally authoritative "
+        "records are served. Conditional GET with `If-None-Match` may return 304."
+    ),
+    operation_id="getFederationRecord",
+    response_description="Signed authoritative federation record and lifecycle state.",
+    responses={
+        304: {"description": "Record unchanged for the supplied ETag."},
+        400: _problem_response_doc("The canonical identifier encoding was invalid.", {"type": "https://eosc-eden.eu/problems/invalid-cursor", "title": "Invalid Cursor", "status": 400, "detail": "Cursor is invalid."}),
+        404: _problem_response_doc("No locally authoritative published record exists for the supplied canonical ID.", {"type": "https://eosc-eden.eu/problems/record-not-found", "title": "Record Not Found", "status": 404, "detail": "Record not found."}),
+        503: _problem_response_doc("Federation runtime is not ready to serve outbound records.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
+    },
 )
-async def federation_record(request: Request, encoded_id: str):
+async def federation_record(
+    request: Request,
+    encoded_id: str = Path(..., description="URL-safe encoded canonical identifier obtained from the outbound catalog.", examples=["bGZzOmFhYWFhYWFhLWFhYWEtNGFhYS04YWFhLWFhYWFhYWFhYWFhYTpNSVQ6MQ"]),
+    _if_none_match: str | None = Header(default=None, alias="If-None-Match", description="Strong ETag validator for conditional GET. Matching ETags return 304."),
+):
     try:
         service = _federation_service(request)
         payload_model = service.get_record(encoded_canonical_id=encoded_id)

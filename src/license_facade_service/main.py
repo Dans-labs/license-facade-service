@@ -17,6 +17,40 @@ from src.license_facade_service.utils.commons import get_project_details
 
 APP_NAME = os.environ.get("APP_NAME", "License Facade Service")
 EXPOSE_PORT = int(os.environ.get("EXPOSE_PORT", "12104"))
+OPENAPI_TAGS = [
+    {
+        "name": "Service status",
+        "description": "Liveness, readiness, and simple service-level diagnostics for monitoring and operators.",
+    },
+    {
+        "name": "Licences",
+        "description": "Public SPDX-compatible licence inventory, cache administration, and SPDX 3 helper endpoints.",
+    },
+    {
+        "name": "Licence representations",
+        "description": "Public canonical licence lookup and explicit representation endpoints for HTML, JSON, JSON-LD, Turtle, RDF/XML, and curated links.",
+    },
+    {
+        "name": "Federation discovery",
+        "description": "Public discovery metadata and verification keys used by trusted federation peers.",
+    },
+    {
+        "name": "Federation outbound",
+        "description": "Public authoritative outbound federation feed containing locally authoritative records only.",
+    },
+    {
+        "name": "Federation resolution",
+        "description": "Public resolution and provenance APIs that combine local authority, imported records, and SPDX fallback.",
+    },
+    {
+        "name": "Federation administration",
+        "description": "Protected administrative federation endpoints for peer management, manual synchronization, publication, and status inspection.",
+    },
+    {
+        "name": "Federation conflicts",
+        "description": "Protected curator/admin workflows for reviewing imported-resolution conflicts and recording append-only decisions.",
+    },
+]
 
 
 def _cors_origins() -> list[str]:
@@ -49,6 +83,7 @@ def create_app() -> FastAPI:
         description=details["description"],
         lifespan=lifespan,
         swagger_ui_parameters={"defaultModelsExpandDepth": -1},
+        openapi_tags=OPENAPI_TAGS,
     )
     app.state.federation_runtime = None
     app.state.federation_state = FederationRuntimeState(enabled=False, ready=True, errors=[])
@@ -73,11 +108,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(metrics.router, tags=["Metrics"], prefix="/api/v1")
-    app.include_router(licenses.router, tags=["Licenses"], prefix="/api/v1")
-    app.include_router(federation_outbound.router, tags=["Federation"])
-    app.include_router(federation_jwks.router, tags=["Federation"])
-    app.include_router(federation_admin.router, tags=["Federation Admin"])
+    app.include_router(metrics.router, prefix="/api/v1")
+    app.include_router(licenses.router, prefix="/api/v1")
+    app.include_router(federation_outbound.router)
+    app.include_router(federation_jwks.router)
+    app.include_router(federation_admin.router)
     return app
 
 

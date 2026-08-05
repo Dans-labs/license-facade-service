@@ -12,9 +12,18 @@ from src.license_facade_service.services.auth import AuthService, Principal
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense
 
 
+def _openapi_operations(client):
+    openapi = client.get("/openapi.json").json()
+    operations = []
+    for path, methods in openapi["paths"].items():
+        for method, operation in methods.items():
+            operations.append((path, method, operation))
+    return openapi, operations
+
+
 def test_openapi_has_no_duplicate_operations(app_client):
     client, *_ = app_client
-    openapi = client.get("/openapi.json").json()
+    openapi, _ = _openapi_operations(client)
     keys = [(path, method) for path, methods in openapi["paths"].items() for method in methods]
     assert len(keys) == len(set(keys))
     seen = set()
@@ -28,6 +37,83 @@ def test_openapi_has_no_duplicate_operations(app_client):
             key = (route.path, method)
             assert key not in seen
             seen.add(key)
+
+
+def test_openapi_operations_have_summary_description_tags_and_unique_operation_ids(app_client):
+    client, *_ = app_client
+    openapi, operations = _openapi_operations(client)
+    tag_descriptions = {tag["name"]: tag.get("description") for tag in openapi.get("tags", [])}
+    operation_ids = [operation["operationId"] for _, _, operation in operations]
+
+    assert operation_ids
+    assert len(operation_ids) == len(set(operation_ids))
+
+    for path, method, operation in operations:
+        assert operation.get("summary"), f"missing summary for {method.upper()} {path}"
+        assert operation.get("description"), f"missing description for {method.upper()} {path}"
+        assert "\n" in operation["description"], f"description should be multiline for {method.upper()} {path}"
+        assert operation.get("tags"), f"missing tags for {method.upper()} {path}"
+        for tag in operation["tags"]:
+            assert tag in tag_descriptions, f"missing app-level tag description for {tag}"
+            assert tag_descriptions[tag], f"empty app-level tag description for {tag}"
+
+
+def test_openapi_security_scheme_marks_only_protected_operations(app_client):
+    client, *_ = app_client
+    openapi, operations = _openapi_operations(client)
+    assert "HTTPBearer" in openapi["components"]["securitySchemes"]
+
+    protected = {
+        ("post", "/api/v1/licenses/cache/update"),
+        ("post", "/api/v1/licenses/cache/refresh"),
+        ("post", "/api/v1/licenses/spdx3/minimal"),
+        ("post", "/api/v1/licenses/spdx3/complete/{license_id}"),
+        ("get", "/api/v1/admin/federation/peers"),
+        ("post", "/api/v1/admin/federation/peers"),
+        ("get", "/api/v1/admin/federation/peers/{peer_id}"),
+        ("patch", "/api/v1/admin/federation/peers/{peer_id}"),
+        ("delete", "/api/v1/admin/federation/peers/{peer_id}"),
+        ("get", "/api/v1/admin/federation/peers/{peer_id}/imports"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/sync"),
+        ("get", "/api/v1/admin/federation/status"),
+        ("post", "/api/v1/admin/federation/publish"),
+        ("get", "/api/v1/admin/federation/conflicts"),
+        ("get", "/api/v1/admin/federation/conflicts/{conflict_id}"),
+        ("post", "/api/v1/admin/federation/conflicts/{conflict_id}/decisions"),
+        ("post", "/api/v1/admin/federation/conflicts/{conflict_id}/reversals"),
+    }
+
+    seen_protected = set()
+    for path, method, operation in operations:
+        key = (method, path)
+        security = operation.get("security")
+        if key in protected:
+            seen_protected.add(key)
+            assert security == [{"HTTPBearer": []}], f"missing bearer auth for {method.upper()} {path}"
+        else:
+            assert not security, f"unexpected auth metadata for public operation {method.upper()} {path}"
+    assert seen_protected == protected
+
+
+def test_openapi_problem_media_types_and_public_response_types(app_client):
+    client, *_ = app_client
+    openapi, _ = _openapi_operations(client)
+
+    assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["406"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/resolution"]["get"]["responses"]["404"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/provenance"]["get"]["responses"]["409"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/admin/federation/peers"]["post"]["responses"]["401"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/admin/federation/conflicts/{conflict_id}/decisions"]["post"]["responses"]["409"]["content"]
+
+    assert list(openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["200"]["content"].keys()) == [
+        "application/json",
+        "text/html",
+        "application/ld+json",
+        "text/turtle",
+        "application/rdf+xml",
+    ]
+    assert {"200", "304", "404", "503"}.issubset(openapi["paths"]["/.well-known/lfs"]["get"]["responses"].keys())
+    assert "application/json" in openapi["paths"]["/.well-known/jwks.json"]["get"]["responses"]["200"]["content"]
 
 
 def test_static_routes_take_precedence(app_client):
@@ -63,6 +149,11 @@ def test_static_routes_take_precedence(app_client):
     assert list(openapi["paths"]["/api/v1/licenses/{id}/json-ld"]["get"]["responses"]["200"]["content"].keys()) == ["application/ld+json"]
     assert list(openapi["paths"]["/api/v1/licenses/{id}/turtle"]["get"]["responses"]["200"]["content"].keys()) == ["text/turtle"]
     assert list(openapi["paths"]["/api/v1/licenses/{id}/rdfxml"]["get"]["responses"]["200"]["content"].keys()) == ["application/rdf+xml"]
+    assert "/.well-known/lfs" in openapi["paths"]
+    assert "/.well-known/jwks.json" in openapi["paths"]
+    assert "/api/v1/federation/catalog" in openapi["paths"]
+    assert "/api/v1/federation/changes" in openapi["paths"]
+    assert "/api/v1/federation/records/{encoded_id}" in openapi["paths"]
 
 
 def test_default_json_and_aliases(app_client):

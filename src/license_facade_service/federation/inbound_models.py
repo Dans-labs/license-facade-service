@@ -19,144 +19,201 @@ class StrictModel(BaseModel):
 
 
 class RemoteDiscoveryResponse(StrictModel):
-    protocolVersion: str
-    nodeId: str
-    nodeName: str
-    operator: str
-    publicBaseUrl: str
-    currentSigningKid: str
-    jwksUrl: str
-    catalogUrl: str
-    changesUrl: str
-    recordUrlTemplate: str
-    conformance: list[str] = Field(default_factory=list)
+    protocolVersion: str = Field(description="Advertised federation protocol version from the remote node.")
+    nodeId: str = Field(description="Stable UUID identifying the remote node.")
+    nodeName: str = Field(description="Human-readable node name exposed by the peer.")
+    operator: str = Field(description="Human-readable operator name exposed by the peer.")
+    publicBaseUrl: str = Field(description="Base URL peers should use when calling this node.")
+    currentSigningKid: str = Field(description="Currently active signing key identifier advertised by the peer.")
+    jwksUrl: str = Field(description="Remote JWKS endpoint exposing verification keys only.")
+    catalogUrl: str = Field(description="Remote authoritative catalog endpoint.")
+    changesUrl: str = Field(description="Remote signed changes endpoint.")
+    recordUrlTemplate: str = Field(description="Remote URI template for fetching one authoritative record by encoded canonical ID.")
+    conformance: list[str] = Field(default_factory=list, description="Federation features advertised by the remote node.")
 
 
 class RemoteJwksResponse(StrictModel):
-    keys: list[JwkKey] = Field(default_factory=list)
+    keys: list[JwkKey] = Field(default_factory=list, description="Verification keys exposed by the remote node. Private signing material is never included.")
 
 
 class RemoteChangeEventItem(StrictModel):
-    payload: SignedFederationChangeEventPayload
-    signed: SignedDomainObject
+    payload: SignedFederationChangeEventPayload = Field(description="Unsigned change event payload received from a trusted peer.")
+    signed: SignedDomainObject = Field(description="Digest and detached signature metadata for the change event payload.")
 
 
 class RemoteChangesResponse(StrictModel):
-    events: list[RemoteChangeEventItem] = Field(default_factory=list)
-    limit: int
-    hasMore: bool
-    nextCursor: str | None = None
-    resumeCursor: str
-    snapshotWatermark: int
-    envelope: dict[str, Any] | None = None
+    events: list[RemoteChangeEventItem] = Field(default_factory=list, description="Signed change events returned by the remote page request.")
+    limit: int = Field(description="Applied page size.")
+    hasMore: bool = Field(description="Whether another page of changes is available.")
+    nextCursor: str | None = Field(default=None, description="Opaque cursor for the next page.")
+    resumeCursor: str = Field(description="Opaque cursor that may be persisted after successful commit.")
+    snapshotWatermark: int = Field(description="Stable page watermark emitted by the remote node.")
+    envelope: dict[str, Any] | None = Field(default=None, description="Optional signed batch envelope summarizing the returned page.")
 
 
 class RemoteRecordResponse(StrictModel):
-    record: SignedFederationRecordPayload
-    signed: SignedDomainObject
-    currentState: Literal["published", "deprecated", "tombstoned"]
-    latestEventPosition: int
-    latestEventDigestSha256: str
+    record: SignedFederationRecordPayload = Field(description="Unsigned authoritative record payload returned by the remote node.")
+    signed: SignedDomainObject = Field(description="Digest and detached signature metadata for the record payload.")
+    currentState: Literal["published", "deprecated", "tombstoned"] = Field(description="Lifecycle state at the remote authority.")
+    latestEventPosition: int = Field(description="Latest authoritative event position known by the remote node.")
+    latestEventDigestSha256: str = Field(description="Digest of the latest authoritative change event for the record.")
 
 
 class PeerVerificationKeyRequest(StrictModel):
-    kid: str
-    fingerprint: str
+    kid: str = Field(description="Expected remote signing key identifier to pin during enrollment.", examples=["node-a-k1"])
+    fingerprint: str = Field(
+        description="Expected SHA-256 fingerprint of the remote Ed25519 public key.",
+        examples=["c76e746a0f2b78e0bf2ca8f1478b1f087834b23499f9f8e640b8d89cd5233d7a"],
+    )
 
 
 class PeerCreateRequest(StrictModel):
-    peerNodeId: str
-    baseUrl: str
-    peerName: str
-    operatorName: str
-    verificationKey: PeerVerificationKeyRequest | None = None
-    allowPrivateNetwork: bool = False
-    allowedHostnames: list[str] = Field(default_factory=list)
-    allowedCidrs: list[str] = Field(default_factory=list)
-    demoTofuConfirm: bool = False
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "peerNodeId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "baseUrl": "https://node-a.example.org",
+                "peerName": "Example Authority Node",
+                "operatorName": "Example Operator",
+                "verificationKey": {
+                    "kid": "node-a-k1",
+                    "fingerprint": "c76e746a0f2b78e0bf2ca8f1478b1f087834b23499f9f8e640b8d89cd5233d7a",
+                },
+                "allowPrivateNetwork": False,
+                "allowedHostnames": ["node-a.example.org"],
+                "allowedCidrs": [],
+                "demoTofuConfirm": False,
+            }
+        },
+    )
+
+    peerNodeId: str = Field(description="Expected remote node UUID. Enrollment fails if discovery advertises a different node ID.")
+    baseUrl: str = Field(description="Remote peer base URL. Production use should be HTTPS.", examples=["https://node-a.example.org"])
+    peerName: str = Field(description="Friendly label stored locally for the trusted peer.")
+    operatorName: str = Field(description="Friendly operator name stored locally for the trusted peer.")
+    verificationKey: PeerVerificationKeyRequest | None = Field(
+        default=None,
+        description="Pinned remote verification key material required for explicit trust enrollment.",
+    )
+    allowPrivateNetwork: bool = Field(default=False, description="Allow private-network targets for controlled demos only.")
+    allowedHostnames: list[str] = Field(default_factory=list, description="Additional hostnames explicitly allowed by SSRF protections.")
+    allowedCidrs: list[str] = Field(default_factory=list, description="Additional CIDR ranges explicitly allowed by SSRF protections.")
+    demoTofuConfirm: bool = Field(default=False, description="Unsafe demo-only confirmation for trust-on-first-use flows when enabled.")
 
 
 class PeerPatchRequest(StrictModel):
-    baseUrl: str | None = None
-    peerName: str | None = None
-    operatorName: str | None = None
-    syncEnabled: bool | None = None
-    trustStatus: Literal["trusted", "disabled", "archived"] | None = None
-    verificationKey: PeerVerificationKeyRequest | None = None
-    allowPrivateNetwork: bool | None = None
-    allowedHostnames: list[str] | None = None
-    allowedCidrs: list[str] | None = None
+    baseUrl: str | None = Field(default=None, description="Updated base URL for the peer.")
+    peerName: str | None = Field(default=None, description="Updated friendly peer name.")
+    operatorName: str | None = Field(default=None, description="Updated friendly operator name.")
+    syncEnabled: bool | None = Field(default=None, description="Whether inbound synchronization from this peer is enabled.")
+    trustStatus: Literal["trusted", "disabled", "archived"] | None = Field(
+        default=None,
+        description="Operational trust state used during normal resolution and synchronization.",
+    )
+    verificationKey: PeerVerificationKeyRequest | None = Field(default=None, description="Replacement pinned verification key metadata.")
+    allowPrivateNetwork: bool | None = Field(default=None, description="Whether private-network targets are allowed for this peer.")
+    allowedHostnames: list[str] | None = Field(default=None, description="Replacement hostname allow-list used by SSRF protections.")
+    allowedCidrs: list[str] | None = Field(default=None, description="Replacement CIDR allow-list used by SSRF protections.")
 
 
 class PeerResponse(StrictModel):
-    id: UUID
-    peerNodeId: str
-    baseUrl: str
-    peerName: str
-    operatorName: str | None
-    trustStatus: str
-    syncEnabled: bool
-    lastSyncAttemptAt: datetime | None = None
-    lastSyncSuccessAt: datetime | None = None
-    lastSyncStatus: str | None = None
-    lastSyncErrorCode: str | None = None
-    expectedKeyKid: str | None = None
-    expectedKeyFingerprint: str | None = None
-    archivedAt: datetime | None = None
+    id: UUID = Field(description="Local UUID assigned to the trusted peer configuration.")
+    peerNodeId: str = Field(description="Remote node UUID that this peer must continue to advertise.")
+    baseUrl: str = Field(description="Remote base URL currently configured for the peer.")
+    peerName: str = Field(description="Friendly peer name stored locally.")
+    operatorName: str | None = Field(default=None, description="Friendly operator name stored locally.")
+    trustStatus: str = Field(description="Current trust/operational state of the peer.")
+    syncEnabled: bool = Field(description="Whether normal synchronization from this peer is enabled.")
+    lastSyncAttemptAt: datetime | None = Field(default=None, description="Timestamp of the most recent synchronization attempt.")
+    lastSyncSuccessAt: datetime | None = Field(default=None, description="Timestamp of the most recent successful synchronization.")
+    lastSyncStatus: str | None = Field(default=None, description="Status of the most recent synchronization attempt.")
+    lastSyncErrorCode: str | None = Field(default=None, description="Last machine-readable synchronization error code, when available.")
+    expectedKeyKid: str | None = Field(default=None, description="Pinned signing key identifier expected from the peer.")
+    expectedKeyFingerprint: str | None = Field(default=None, description="Pinned signing key fingerprint expected from the peer.")
+    archivedAt: datetime | None = Field(default=None, description="Timestamp at which the peer was archived, when applicable.")
 
 
 class PeerListResponse(StrictModel):
-    items: list[PeerResponse]
-    limit: int
-    offset: int
-    total: int
+    items: list[PeerResponse] = Field(description="Page of configured trusted peers.")
+    limit: int = Field(description="Applied page size.")
+    offset: int = Field(description="Applied page offset.")
+    total: int = Field(description="Total number of configured peers.")
 
 
 class SyncResultResponse(StrictModel):
-    status: Literal["complete", "partial", "failed", "already-running"]
-    pagesProcessed: int
-    eventsProcessed: int
-    importedRecords: int
-    cursorBefore: str | None = None
-    cursorAfter: str | None = None
-    detail: str | None = None
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "status": "complete",
+                "pagesProcessed": 1,
+                "eventsProcessed": 2,
+                "importedRecords": 1,
+                "cursorBefore": "v1.node-a-k1.before.example",
+                "cursorAfter": "v1.node-a-k1.after.example",
+                "detail": "Synchronization completed successfully.",
+            }
+        },
+    )
+
+    status: Literal["complete", "partial", "failed", "already-running"] = Field(
+        description="Overall synchronization outcome. `partial` means some data committed before a later failure. `already-running` indicates a conflicting lock.",
+    )
+    pagesProcessed: int = Field(description="Number of change-feed pages processed during the operation.")
+    eventsProcessed: int = Field(description="Number of remote change events examined during the operation.")
+    importedRecords: int = Field(description="Number of records newly imported or updated in PostgreSQL.")
+    cursorBefore: str | None = Field(default=None, description="Persisted cursor before the synchronization attempt started.")
+    cursorAfter: str | None = Field(default=None, description="Persisted cursor after successful commit of the latest page.")
+    detail: str | None = Field(default=None, description="Additional human-readable outcome details.")
 
 
 class AdminStatusResponse(StrictModel):
-    nodeId: str | None
-    federationEnabled: bool
-    inboundEnabled: bool
-    peers: int
-    trustedPeers: int
-    disabledPeers: int
-    importedRecords: int
-    inboundEventsAccepted: int
-    inboundEventsRejected: int
-    workerIntervalSeconds: int
-    maxSyncSeconds: int
+    nodeId: str | None = Field(default=None, description="Local federation node UUID, when configured.")
+    federationEnabled: bool = Field(description="Whether federation features are enabled at runtime.")
+    inboundEnabled: bool = Field(description="Whether inbound synchronization is enabled at runtime.")
+    peers: int = Field(description="Total number of configured peers.")
+    trustedPeers: int = Field(description="Number of peers currently in normal trusted operation.")
+    disabledPeers: int = Field(description="Number of peers excluded from normal synchronization.")
+    importedRecords: int = Field(description="Number of imported records retained in PostgreSQL.")
+    inboundEventsAccepted: int = Field(description="Count of inbound events accepted and committed.")
+    inboundEventsRejected: int = Field(description="Count of inbound events rejected during validation.")
+    workerIntervalSeconds: int = Field(description="Configured background synchronization polling interval.")
+    maxSyncSeconds: int = Field(description="Configured upper bound for one synchronization run.")
 
 
 class ImportedRecordResponse(StrictModel):
-    canonicalId: str
-    authorityNodeId: str
-    localId: str
-    version: str
-    isAuthoritative: bool
-    lifecycleState: str
-    payloadDigestSha256: str
-    verificationStatus: str | None = None
-    sourceEventId: str | None = None
-    sourceEventPosition: int | None = None
-    sourceSignatureKid: str | None = None
-    lastVerifiedAt: datetime | None = None
+    canonicalId: str = Field(description="Canonical ID of the imported record.")
+    authorityNodeId: str = Field(description="Authority node that owns the imported record.")
+    localId: str = Field(description="Authority-local record identifier.")
+    version: str = Field(description="Authority-local record version.")
+    isAuthoritative: bool = Field(description="Always false for imported records stored on this node.")
+    lifecycleState: str = Field(description="Lifecycle state of the imported record as last accepted.")
+    payloadDigestSha256: str = Field(description="Digest of the last accepted imported payload.")
+    verificationStatus: str | None = Field(default=None, description="Result of signature and digest verification.")
+    sourceEventId: str | None = Field(default=None, description="Remote event UUID from which this record was imported.")
+    sourceEventPosition: int | None = Field(default=None, description="Remote event position last accepted for this record.")
+    sourceSignatureKid: str | None = Field(default=None, description="Remote key identifier used to sign the imported event.")
+    lastVerifiedAt: datetime | None = Field(default=None, description="Timestamp at which the imported record was last verified successfully.")
 
 
 class ImportedRecordListResponse(StrictModel):
-    items: list[ImportedRecordResponse]
-    total: int
+    items: list[ImportedRecordResponse] = Field(description="Imported records retained for the selected peer.")
+    total: int = Field(description="Total imported records retained for the selected peer.")
 
 
 class AdminPublishRequest(StrictModel):
-    localId: str
-    version: str
-    payload: dict[str, Any]
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "localId": "Demo-License",
+                "version": "1",
+                "payload": {"licenseId": "Demo-License", "name": "Demo License"},
+            }
+        },
+    )
+
+    localId: str = Field(description="Authority-local identifier to publish as a local authoritative federation record.")
+    version: str = Field(description="Authority-local version string to publish.")
+    payload: dict[str, Any] = Field(description="Authoritative business payload to wrap and sign for outbound federation.")
