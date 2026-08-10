@@ -70,8 +70,73 @@ Mutation endpoints require bearer auth via env/secret file:
 - Raw OpenAPI schema: `/openapi.json`
 
 Public endpoint groups are documented under **Service status**, **Licences**, **Licence representations**, **Federation discovery**, **Federation outbound**, and **Federation resolution**.
+OpenREL endpoints are documented under **OpenREL** (see `/docs#/OpenREL`; use `/docs` if the fragment target changes in your Swagger UI build).
 
 Protected endpoint groups are documented under **Federation administration** and **Federation conflicts**. In Swagger UI, use **Authorize** and paste a bearer token value such as `Bearer example-token` for admin/curator operations. Missing or invalid credentials return `401`; authenticated callers without the required role return `403`.
+
+## OpenREL read-only facade
+
+### Purpose
+
+LFS can expose a read-only facade over a configured external OpenREL provider.
+OpenREL responses are vocabulary/knowledge-base data from that provider; they are not authoritative LFS licence records, are not imported into PostgreSQL, are not indexed into LFS RDF/Fuseki, and are not included in federation catalog/changes.
+Provider outages affect only OpenREL endpoints.
+
+### Routes
+
+- Base prefix: `/openrel/api/v0.4`
+- Routes are visible in Swagger under **OpenREL** on `/docs` (fragment shortcut: `/docs#/OpenREL`).
+
+### Configuration
+
+| Variable | Purpose |
+|---|---|
+| `OPENREL_ENABLED` | Enable/disable OpenREL facade (default `false`). |
+| `OPENREL_BASE_URL` | Upstream provider API root URL (for example `https://provider.example/openrel/api/v0.4`). |
+| `OPENREL_ALLOW_HTTP_FOR_DEMO` | Allow HTTP only for demo/private setups. |
+| `OPENREL_CONNECT_TIMEOUT_SECONDS`, `OPENREL_READ_TIMEOUT_SECONDS`, `OPENREL_WRITE_TIMEOUT_SECONDS`, `OPENREL_POOL_TIMEOUT_SECONDS`, `OPENREL_TOTAL_TIMEOUT_SECONDS` | Outbound timeout controls. |
+| `OPENREL_RETRY_ATTEMPTS`, `OPENREL_RETRY_BASE_SECONDS`, `OPENREL_RETRY_MAX_SECONDS` | Retry and backoff controls for retryable upstream failures. |
+| `OPENREL_MAX_LIST_RESPONSE_BYTES`, `OPENREL_MAX_DETAIL_RESPONSE_BYTES` | Response size limits for list/detail responses. |
+| `OPENREL_MAX_ID_LENGTH`, `OPENREL_MAX_PREFIX_LENGTH` | Public input length limits for identifiers and `prefix`. |
+| `OPENREL_ALLOWED_PORTS` | Allowed upstream destination ports. |
+| `OPENREL_ALLOWED_HOSTNAMES`, `OPENREL_ALLOWED_CIDRS` | Demo/private-network allow-list controls for non-public destinations. |
+
+### Examples
+
+```bash
+# List actions
+curl -sS "http://localhost:12104/openrel/api/v0.4/actions"
+
+# List actions with prefix filter
+curl -sS "http://localhost:12104/openrel/api/v0.4/actions?prefix=odrl"
+
+# Get one action (identifier percent-encoded)
+curl -sS \
+  "http://localhost:12104/openrel/api/v0.4/actions/odrl%3Ause"
+# %3A is the percent-encoded colon (:)
+
+# List mappings
+curl -sS "http://localhost:12104/openrel/api/v0.4/mappings"
+
+# Inspect readiness (OpenREL readiness is configuration-only)
+curl -sS "http://localhost:12104/api/v1/ready"
+
+# Typical disabled OpenREL response
+curl -sS "http://localhost:12104/openrel/api/v0.4/actions" | jq .
+
+# Provider-unavailable behavior example (status only)
+curl -sS -o /dev/null -w "%{http_code}\n" "http://localhost:12104/openrel/api/v0.4/actions"
+```
+
+### Security and limitations
+
+- Caller `Authorization` headers/cookies are never forwarded upstream.
+- Upstream redirects are rejected.
+- Request total time and response sizes are bounded.
+- Upstream JSON is parsed with duplicate-key rejection and validated against strict response contracts.
+- Full-IRI-like path identifiers are best-effort across reverse proxies, especially where encoded slashes are normalized.
+- DNS/policy destination checks reduce SSRF risk, but production egress restrictions are still required.
+- Successful OpenREL responses are returned unwrapped.
 
 ## Deployment defaults
 

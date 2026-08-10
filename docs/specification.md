@@ -196,3 +196,75 @@ Implemented Phase 4 boundaries:
   - `requeue`
   - `rebuild`
   - `reconcile`
+
+## OpenREL integration (read-only facade)
+
+Architecture:
+
+- LFS implements a read-only, LFS-controlled proxy facade for external OpenREL provider resources.
+- Public canonical prefix: `/openrel/api/v0.4`.
+- Provider URL is deployment configuration (`OpenRelSettings`), not derived from caller input.
+
+### Exact public operation contract
+
+| Method | Path | Operation ID | `prefix` |
+|---|---|---|---|
+| GET | `/openrel/api/v0.4/actions` | `openrel_list_actions` | optional |
+| GET | `/openrel/api/v0.4/actions/{id}` | `openrel_get_action` | optional |
+| GET | `/openrel/api/v0.4/constraints` | `openrel_list_constraints` | none |
+| GET | `/openrel/api/v0.4/constraints/{id}` | `openrel_get_constraint` | none |
+| GET | `/openrel/api/v0.4/leftoperands` | `openrel_list_left_operands` | none |
+| GET | `/openrel/api/v0.4/leftoperands/{id}` | `openrel_get_left_operand` | none |
+| GET | `/openrel/api/v0.4/mappings` | `openrel_list_mappings` | optional |
+| GET | `/openrel/api/v0.4/actionclasses` | `openrel_list_action_classes` | optional |
+| GET | `/openrel/api/v0.4/actionclasses/{id}` | `openrel_get_action_class` | optional |
+| GET | `/openrel/api/v0.4/assetclasses` | `openrel_list_asset_classes` | optional |
+| GET | `/openrel/api/v0.4/assetclasses/{id}` | `openrel_get_asset_class` | optional |
+| GET | `/openrel/api/v0.4/constraintclasses` | `openrel_list_constraint_classes` | optional |
+| GET | `/openrel/api/v0.4/constraintclasses/{id}` | `openrel_get_constraint_class` | optional |
+| GET | `/openrel/api/v0.4/leftoperandclasses` | `openrel_list_left_operand_classes` | optional |
+| GET | `/openrel/api/v0.4/leftoperandclasses/{id}` | `openrel_get_left_operand_class` | optional |
+| GET | `/openrel/api/v0.4/ruleclasses` | `openrel_list_rule_classes` | optional |
+| GET | `/openrel/api/v0.4/ruleclasses/{id}` | `openrel_get_rule_class` | optional |
+
+Exactly 13 operations support optional `prefix` (all except both `constraints` and both `leftoperands` routes).
+
+### Response contracts
+
+- List/detail resources use `OpenRELResource`; mappings list uses `OpenRELMapping`.
+- `iri` is required and non-empty/non-whitespace.
+- `label` and `definition` are optional, may be omitted, and are not nullable.
+- Unknown provider fields are accepted as input and omitted from LFS output.
+- Successful responses are unwrapped and preserve provider ordering.
+
+### Upstream handling and error mapping
+
+- Success requires upstream `200` with accepted JSON media type.
+- Accepted content types are `application/json` and `application/*+json` (application subtype ending in `+json`).
+- Redirects are forbidden.
+- Timeouts/retries: bounded per-attempt timeouts plus bounded total timeout budget; retries for retryable transport/timeouts and 502/503/504 only.
+- RFC 9457 `application/problem+json` mapping is centralized and stable, including: disabled/configuration, invalid ID/prefix, destination/DNS/connection/timeout, provider status classes, redirect/content/JSON/schema/shape/size failures.
+- Rate-limited responses use an LFS-controlled bounded `Retry-After`; upstream header strings are never forwarded directly.
+
+### SSRF and DNS policy
+
+- Destination host is normalized and resolved per attempt.
+- Loopback/private/link-local/multicast/reserved/unspecified and metadata destinations are blocked by default.
+- Non-public demo destinations require allow-listed hostname + CIDR + port (+ HTTP demo flag where relevant).
+- Redirect following is disabled.
+- Residual DNS rebinding race remains possible between validation and connect; production egress controls are still required.
+
+### Security boundaries and side effects
+
+- Caller authorization/cookies are not forwarded upstream.
+- OpenREL requests do not write PostgreSQL, federation state, or RDF/Fuseki graphs.
+- OpenREL responses are not persisted and response caching is not implemented.
+- OpenREL data is not imported into federation catalog/changes.
+
+### Readiness semantics
+
+- `/api/v1/ready` reports OpenREL as optional configuration readiness only:
+  - disabled: `enabled=false`, `ready=null`, `errors=[]`;
+  - enabled + config valid: `enabled=true`, `ready=true`, `errors=[]`;
+  - enabled + config invalid: `enabled=true`, `ready=false`, sanitized errors.
+- Readiness never probes OpenREL DNS/HTTP and does not affect overall service readiness when only OpenREL is invalid.
