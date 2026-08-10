@@ -114,6 +114,29 @@ def test_openapi_problem_media_types_and_public_response_types(app_client):
     ]
     assert {"200", "304", "404", "503"}.issubset(openapi["paths"]["/.well-known/lfs"]["get"]["responses"].keys())
     assert "application/json" in openapi["paths"]["/.well-known/jwks.json"]["get"]["responses"]["200"]["content"]
+    ready_schema_ref = openapi["paths"]["/api/v1/ready"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    ready_schema_name = ready_schema_ref.rsplit("/", 1)[-1]
+    assert "openrel" in openapi["components"]["schemas"][ready_schema_name]["properties"]
+
+
+def test_openapi_openrel_contract_guardrails(app_client):
+    client, *_ = app_client
+    openapi, operations = _openapi_operations(client)
+    openrel_ops = [(path, method, operation) for path, method, operation in operations if path.startswith("/openrel/api/v0.4")]
+
+    assert len(openrel_ops) == 17
+    assert {method for _, method, _ in openrel_ops} == {"get"}
+    assert all(operation.get("tags") == ["OpenREL"] for _, _, operation in openrel_ops)
+    assert all("requestBody" not in operation for _, _, operation in openrel_ops)
+    assert all(operation["operationId"].startswith("openrel_") for _, _, operation in openrel_ops)
+    assert all(
+        "application/problem+json" in response.get("content", {})
+        for _, _, operation in openrel_ops
+        for status_code, response in operation.get("responses", {}).items()
+        if status_code in {"400", "404", "500", "502", "503", "504"}
+    )
+    serialized_openapi = json.dumps(openapi)
+    assert "provider.example" not in serialized_openapi
 
 
 def test_static_routes_take_precedence(app_client):
@@ -154,6 +177,8 @@ def test_static_routes_take_precedence(app_client):
     assert "/api/v1/federation/catalog" in openapi["paths"]
     assert "/api/v1/federation/changes" in openapi["paths"]
     assert "/api/v1/federation/records/{encoded_id}" in openapi["paths"]
+    assert "/openrel/api/v0.4/actions" in openapi["paths"]
+    assert "/openrel/api/v0.4/mappings/{id}" not in openapi["paths"]
 
 
 def test_default_json_and_aliases(app_client):

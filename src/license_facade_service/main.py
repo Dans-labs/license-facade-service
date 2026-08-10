@@ -7,12 +7,15 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from src.license_facade_service.api import openrel as openrel_api
 from src.license_facade_service.api.federation import admin as federation_admin
 from src.license_facade_service.api.federation import jwks as federation_jwks
 from src.license_facade_service.api.federation import outbound as federation_outbound
 from src.license_facade_service.api.v1 import licenses, metrics
 from src.license_facade_service.config.federation import FederationSettings
+from src.license_facade_service.config.openrel import OpenRelSettings
 from src.license_facade_service.federation.runtime import FederationRuntime, FederationRuntimeState
+from src.license_facade_service.openrel.client import OpenRelClient
 from src.license_facade_service.utils.commons import get_project_details
 
 APP_NAME = os.environ.get("APP_NAME", "License Facade Service")
@@ -50,6 +53,15 @@ OPENAPI_TAGS = [
         "name": "Federation conflicts",
         "description": "Protected curator/admin workflows for reviewing imported-resolution conflicts and recording append-only decisions.",
     },
+    {
+        "name": "OpenREL",
+        "description": (
+            "Read-only access to vocabulary and knowledge-base resources supplied "
+            "by the configured OpenREL provider. These resources are external "
+            "provider data, not authoritative LFS licence or federation records. "
+            "Provider availability affects only the OpenREL endpoints."
+        ),
+    },
 ]
 
 
@@ -62,16 +74,30 @@ def _cors_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    service = licenses.get_license_service()
+    openrel_client: OpenRelClient | None = None
     try:
-        await service.ensure_cache_updated()
-    except Exception:
-        # Service should remain available with last valid snapshot.
-        pass
-    runtime: FederationRuntime | None = getattr(app.state, "federation_runtime", None)
-    if runtime is not None:
-        app.state.federation_state = runtime.initialize()
-    yield
+        openrel_settings: OpenRelSettings = getattr(app.state, "openrel_settings")
+        openrel_client = OpenRelClient(openrel_settings)
+        app.state.openrel_client = openrel_client
+
+        service = licenses.get_license_service()
+        try:
+            await service.ensure_cache_updated()
+        except Exception:
+            # Service should remain available with last valid snapshot.
+            pass
+
+        runtime: FederationRuntime | None = getattr(app.state, "federation_runtime", None)
+        if runtime is not None:
+            app.state.federation_state = runtime.initialize()
+
+        yield
+    finally:
+        try:
+            if openrel_client is not None:
+                await openrel_client.aclose()
+        finally:
+            app.state.openrel_client = None
 
 
 def create_app() -> FastAPI:
@@ -97,6 +123,8 @@ def create_app() -> FastAPI:
             errors=["Federation runtime has not completed startup initialization yet."],
             node_id=settings.node_id,
         )
+    app.state.openrel_settings = OpenRelSettings.from_env()
+    app.state.openrel_client = None
 
     origins = _cors_origins()
     allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
@@ -110,6 +138,7 @@ def create_app() -> FastAPI:
 
     app.include_router(metrics.router, prefix="/api/v1")
     app.include_router(licenses.router, prefix="/api/v1")
+    app.include_router(openrel_api.router)
     app.include_router(federation_outbound.router)
     app.include_router(federation_jwks.router)
     app.include_router(federation_admin.router)
