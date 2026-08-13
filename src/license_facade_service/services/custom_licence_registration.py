@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from src.license_facade_service.config.custom_licence import CustomLicenceRegistrationSettings
+from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.custom_licences.models import (
     CustomLicenceLifecycleStatus,
     FederationStatus,
@@ -23,9 +24,16 @@ from src.license_facade_service.db.models.custom_licence import (
     CustomLicence,
     CustomLicenceAlias,
     CustomLicenceAuditEvent,
+    CustomLicenceFederationOutbox,
     normalize_alias,
 )
 from src.license_facade_service.db.session import Database
+from src.license_facade_service.services.custom_licence_federation_publication import (
+    OUTBOX_OPERATION_UPSERT,
+    OUTBOX_STATUS_PENDING,
+    CustomLicenceFederationPublicationError,
+    CustomLicenceFederationPublicationService,
+)
 from src.license_facade_service.services.spdx_custom_license import (
     SpdxCustomLicenseBuilder,
     SpdxCustomLicenseBuilderInput,
@@ -147,18 +155,24 @@ class CustomLicenceRegistrationService:
         self,
         *,
         settings: CustomLicenceRegistrationSettings,
+        federation_settings: FederationSettings | None = None,
+        federation_ready: bool = False,
         spdx_builder: SpdxCustomLicenseBuilder | None = None,
         failure_injection: RegistrationFailureInjection | None = None,
     ) -> None:
         self.settings = settings
+        self.federation_settings = federation_settings or FederationSettings.from_env()
+        self.federation_ready = federation_ready
         self.spdx_builder = spdx_builder or SpdxCustomLicenseBuilder()
         self._db: Database | None = None
+        self._publication_service: CustomLicenceFederationPublicationService | None = None
         self.failure_injection = failure_injection or RegistrationFailureInjection()
 
     def close(self) -> None:
         if self._db is not None:
             self._db.close()
             self._db = None
+        self._publication_service = None
 
     @property
     def db(self) -> Database:
@@ -188,6 +202,28 @@ class CustomLicenceRegistrationService:
                 title="Custom Licence Registration Unavailable",
                 detail="Custom licence registration is unavailable for this deployment.",
             )
+
+    def _assert_federated_configuration(self) -> None:
+        try:
+            self.publication_service.assert_federated_registration_supported()
+        except CustomLicenceFederationPublicationError as exc:
+            raise CustomLicenceRegistrationError(
+                status=exc.status,
+                type_slug=exc.code,
+                title="Custom Licence Registration Unavailable",
+                detail=exc.detail,
+            ) from exc
+
+    @property
+    def publication_service(self) -> CustomLicenceFederationPublicationService:
+        if self._publication_service is None:
+            self._publication_service = CustomLicenceFederationPublicationService(
+                db=self.db,
+                custom_settings=self.settings,
+                federation_settings=self.federation_settings,
+                federation_ready=self.federation_ready,
+            )
+        return self._publication_service
 
     def _validate_generated_lengths(
         self,
@@ -225,15 +261,12 @@ class CustomLicenceRegistrationService:
         assert self.settings.authority_base_iri is not None
         assert self.settings.creator_organization_name is not None
 
-        if payload.scope == PublicLicenseScope.FEDERATED:
-            raise CustomLicenceRegistrationError(
-                status=422,
-                type_slug="custom-licence-federated-scope-unavailable",
-                title="Federated Scope Not Available",
-                detail="The federated registration scope is not available in Phase 2; it is deferred to Phase 3.",
-            )
         if payload.scope == PublicLicenseScope.LOCAL:
             federation_status = FederationStatus.NOT_PUBLISHED
+            spdx_submission_status = SpdxSubmissionStatus.NOT_REQUESTED
+        elif payload.scope == PublicLicenseScope.FEDERATED:
+            self._assert_federated_configuration()
+            federation_status = FederationStatus.PENDING
             spdx_submission_status = SpdxSubmissionStatus.NOT_REQUESTED
         elif payload.scope == PublicLicenseScope.SPDX_SUBMISSION:
             federation_status = FederationStatus.NOT_PUBLISHED
@@ -405,6 +438,26 @@ class CustomLicenceRegistrationService:
                         created_at=created_at,
                     )
                 )
+                if payload.scope == PublicLicenseScope.FEDERATED:
+                    session.add(
+                        CustomLicenceFederationOutbox(
+                            id=uuid.uuid4(),
+                            custom_licence_id=record.id,
+                            operation=OUTBOX_OPERATION_UPSERT,
+                            status=OUTBOX_STATUS_PENDING,
+                            attempt_count=0,
+                            available_at=created_at,
+                            lease_owner=None,
+                            lease_expires_at=None,
+                            last_error_class=None,
+                            last_error_at=None,
+                            federation_record_id=None,
+                            federation_event_id=None,
+                            created_at=created_at,
+                            updated_at=created_at,
+                            published_at=None,
+                        )
+                    )
                 session.flush()
                 if self.failure_injection.fail_before_commit:
                     raise RuntimeError("forced-pre-commit-failure")

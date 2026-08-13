@@ -173,6 +173,23 @@ Security notes:
 - SSRF protections validate resolved addresses and reject loopback/private/link-local/metadata ranges by default;
 - DNS is revalidated per request; deployment should still enforce outbound network policy to close resolver-to-connect rebinding gaps.
 
+## Custom licence federation publication (Phase 3)
+
+Implemented Phase 3 boundaries:
+
+- `POST /api/v1/licenses` accepts `scope=federated` and persists local custom-licence state plus a durable publication outbox intent in one PostgreSQL transaction;
+- registration response for federated scope is `federationStatus=pending` and does not perform publication inline;
+- custom-licence publication uses the existing federation publication/signing path and emits authoritative outbound records/events only after worker processing;
+- publication remains pull-based for peers (no push delivery);
+- imported copies remain non-authoritative on remote nodes and are not re-exported as local authority;
+- admin operations are available for status/requeue under:
+  - `GET /api/v1/admin/licenses/{record_id}/federation`
+  - `POST /api/v1/admin/licenses/{record_id}/federation/retry`
+
+Operational worker:
+
+- `python -m src.license_facade_service.custom_licence_federation_worker`
+
 ## Federation Phase 4 resolution and RDF outbox
 
 Implemented Phase 4 boundaries:

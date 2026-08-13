@@ -78,6 +78,8 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
         ("post", "/api/v1/admin/federation/peers/{peer_id}/sync"),
         ("get", "/api/v1/admin/federation/status"),
         ("post", "/api/v1/admin/federation/publish"),
+        ("get", "/api/v1/admin/licenses/{record_id}/federation"),
+        ("post", "/api/v1/admin/licenses/{record_id}/federation/retry"),
         ("get", "/api/v1/admin/federation/conflicts"),
         ("get", "/api/v1/admin/federation/conflicts/{conflict_id}"),
         ("post", "/api/v1/admin/federation/conflicts/{conflict_id}/decisions"),
@@ -135,6 +137,7 @@ def test_openapi_custom_licence_registration_contract(app_client):
     scopes = {example["scope"] for example in examples}
     assert "local" in scopes
     assert "spdx-submission" in scopes
+    assert "federated" in scopes
 
 
 def test_openapi_openrel_contract_guardrails(app_client):

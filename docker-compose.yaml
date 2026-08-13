@@ -295,6 +295,45 @@ services:
     networks:
       - federation-demo
 
+  node-a-custom-licence-worker:
+    profiles: ["federation-demo"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.license_facade_service.custom_licence_federation_worker"]
+    environment:
+      APP_NAME: License Facade Service Node A Custom Licence Federation Worker
+      BASE_DIR: /home/akmi/lfs
+      FUSEKI_ENABLE: "false"
+      FEDERATION_ENABLED: "true"
+      FEDERATION_INBOUND_ENABLED: "false"
+      FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-a-db:5432/lfs_a
+      FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_A_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}
+      FEDERATION_PUBLIC_BASE_URL: http://node-a:12104
+      FEDERATION_NODE_NAME: Demo Node A
+      FEDERATION_OPERATOR: Demo Operator A
+      FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_A_KID:-node-a-k1}
+      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-a-signing-key.pem
+      FEDERATION_JWKS_ENABLED: "true"
+      FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
+      CUSTOM_LICENCE_REGISTRATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-a-db:5432/lfs_a
+      CUSTOM_LICENCE_AUTHORITY_ID: ${FEDERATION_DEMO_NODE_A_CUSTOM_AUTHORITY_ID:-lfs-demo-node-a}
+      CUSTOM_LICENCE_AUTHORITY_BASE_IRI: ${FEDERATION_DEMO_NODE_A_CUSTOM_AUTHORITY_BASE_IRI:-http://node-a:12104}
+      CUSTOM_LICENCE_CREATOR_ORGANIZATION_NAME: ${FEDERATION_DEMO_NODE_A_CUSTOM_ORG_NAME:-Demo Operator A}
+      CUSTOM_LICENCE_CREATOR_ORGANIZATION_IRI: ${FEDERATION_DEMO_NODE_A_CUSTOM_ORG_IRI:-http://node-a:12104/spdx/agents/lfs-operator}
+      CUSTOM_LICENCE_FEDERATION_WORKER_INTERVAL_SECONDS: "5"
+      CUSTOM_LICENCE_FEDERATION_BATCH_SIZE: "25"
+      CUSTOM_LICENCE_FEDERATION_LEASE_SECONDS: "60"
+    volumes:
+      - ${FEDERATION_DEMO_NODE_A_KEY_FILE:-/tmp/lfs-node-a-key.pem}:/run/secrets/node-a-signing-key.pem:ro
+    depends_on:
+      node-a-db:
+        condition: service_healthy
+      node-a:
+        condition: service_healthy
+    networks:
+      - federation-demo
+
 volumes:
   fuseki-data:
     driver: local

@@ -48,6 +48,7 @@ class RemoteChangesResponse(StrictModel):
     nextCursor: str | None = Field(default=None, description="Opaque cursor for the next page.")
     resumeCursor: str = Field(description="Opaque cursor that may be persisted after successful commit.")
     snapshotWatermark: int = Field(description="Stable page watermark emitted by the remote node.")
+    etag: str | None = Field(default=None, description="Optional response ETag echoed by some peers in the JSON body.")
     envelope: dict[str, Any] | None = Field(default=None, description="Optional signed batch envelope summarizing the returned page.")
 
 
@@ -57,6 +58,7 @@ class RemoteRecordResponse(StrictModel):
     currentState: Literal["published", "deprecated", "tombstoned"] = Field(description="Lifecycle state at the remote authority.")
     latestEventPosition: int = Field(description="Latest authoritative event position known by the remote node.")
     latestEventDigestSha256: str = Field(description="Digest of the latest authoritative change event for the record.")
+    etag: str | None = Field(default=None, description="Optional response ETag echoed by some peers in the JSON body.")
 
 
 class PeerVerificationKeyRequest(StrictModel):

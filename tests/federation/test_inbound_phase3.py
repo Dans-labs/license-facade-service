@@ -7,6 +7,7 @@ import socket
 import subprocess
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -45,9 +46,11 @@ from src.license_facade_service.federation.inbound import (
     ed25519_key_fingerprint_hex,
 )
 from src.license_facade_service.federation.inbound_models import PeerCreateRequest, PeerPatchRequest, PeerVerificationKeyRequest
+from src.license_facade_service.federation.inbound_models import RemoteChangesResponse, RemoteRecordResponse
 from src.license_facade_service.federation.json_strict import DuplicateJsonKeyError, loads_json_no_duplicates
 from src.license_facade_service.federation.license_identity import build_canonical_license_identity
-from src.license_facade_service.federation.outbound import FederationError
+from src.license_facade_service.federation.keys import SigningKeyService
+from src.license_facade_service.federation.outbound import FederationError, FederationOutboundService, FederationPublicationService
 from src.license_facade_service.federation.runtime import FederationRuntime
 from src.license_facade_service.federation.security import FederationUrlPolicy, UrlSecurityError
 from src.license_facade_service.main import create_app
@@ -367,6 +370,165 @@ def test_successful_import_and_resume_cursor_and_non_authoritative_catalog_exclu
         cat = client.get("/api/v1/federation/catalog")
         assert cat.status_code == 200
         assert all(item["canonicalId"] != bundle["record"]["canonicalId"] for item in cat.json()["items"])
+
+
+def test_custom_licence_payload_sync_uses_real_outbound_and_preserves_imported_copy(fed_env, tmp_path: Path):
+    source_db_name = f"lfs_source_{uuid4().hex[:8]}"
+    source_dsn = fed_env["dsn"].rsplit("/", 1)[0] + f"/{source_db_name}"
+    with psycopg.connect(fed_env["dsn"].replace("+psycopg", "").rsplit("/", 1)[0] + "/postgres") as conn:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(f'CREATE DATABASE "{source_db_name}"')
+    _run_alembic(source_dsn, "upgrade", "head")
+
+    key_a = Ed25519PrivateKey.generate()
+    key_path = tmp_path / "node-a-signing-key.pem"
+    key_path.write_bytes(
+        key_a.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    settings_a = replace(
+        fed_env["settings"],
+        node_id=NODE_A_ID,
+        public_base_url="http://node-a:12104",
+        node_name="Node A",
+        operator_name="Operator A",
+        database_url=source_dsn,
+        signing_key_path=str(key_path),
+        active_kid="node-a-k1",
+        allow_http_for_demo=True,
+        validation_errors=tuple(),
+    )
+    db_a = Database.from_url(source_dsn)
+    runtime_a = FederationRuntime(settings_a)
+    assert runtime_a.initialize().ready
+    publication_a = FederationPublicationService(db_a, settings_a)
+    outbound_a = FederationOutboundService(db_a, settings_a)
+
+    local_id = f"custom-{uuid4()}"
+    canonical_id = f"lfs:{NODE_A_ID}:{local_id}:1.0"
+    licence_text = "Copyright 2026 DANS.\n\nPermission is granted..."
+    payload = {
+        "schema": "lfs.custom-licence.federation.v1",
+        "customLicenceId": str(uuid4()),
+        "customCanonicalId": "lfs-custom:lfs-local-authority:DANS-Custom-1.0:1.0",
+        "customResolvingUuid": str(uuid4()),
+        "customResolvingUri": "https://node-a.example/custom-licences/lfs-local-authority/DANS-Custom-1.0/1.0",
+        "requestedLicenseId": "DANS-Custom-1.0",
+        "version": "1.0",
+        "name": "DANS Custom License 1.0",
+        "summary": "Custom license for federation sync test.",
+        "description": "Custom terms managed by Node A.",
+        "licenseText": licence_text,
+        "normalizedTextDigest": canonical_json_sha256_hex({"text": licence_text}),
+        "spdxJsonld": {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "type": "License",
+            "licenseId": "DANS-Custom-1.0",
+            "name": "DANS Custom License 1.0",
+        },
+        "customAuthorityId": "lfs-local-authority",
+        "publishingFederationNodeId": NODE_A_ID,
+        "sourceRecordUuid": str(uuid4()),
+        "scope": "federated",
+        "lifecycleStatus": "registered",
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "aliases": ["DANS Custom License"],
+    }
+    publication_a.publish_new_version(
+        canonical_id=canonical_id,
+        authority_node_id=NODE_A_ID,
+        local_id=local_id,
+        version="1.0",
+        payload=payload,
+    )
+
+    discovery = outbound_a.discovery().model_dump(mode="json")
+    jwks = SigningKeyService(db_a, settings_a).jwks().model_dump(mode="json")
+    changes = outbound_a.get_changes(since=None, limit=200).model_dump(mode="json")
+    resume = changes["resumeCursor"]
+    changes_resume = outbound_a.get_changes(since=resume, limit=200).model_dump(mode="json")
+    encoded = base64.urlsafe_b64encode(canonical_id.encode()).decode().rstrip("=")
+    record = outbound_a.get_record(encoded_canonical_id=encoded).model_dump(mode="json")
+    RemoteChangesResponse.model_validate(changes)
+    RemoteChangesResponse.model_validate(changes_resume)
+    RemoteRecordResponse.model_validate(record)
+    responses = {
+        "/.well-known/lfs": discovery,
+        "/.well-known/jwks.json": jwks,
+        "changes:": changes,
+        f"changes:{resume}": changes_resume,
+        f"record:{encoded}": record,
+    }
+
+    peers, sync = _create_peer_and_sync_service(fed_env, responses)
+    peer = peers.create_peer(
+        payload=PeerCreateRequest(
+            peerNodeId=NODE_A_ID,
+            baseUrl="http://node-a:12104",
+            peerName="Node A",
+            operatorName="Operator A",
+            verificationKey=PeerVerificationKeyRequest(
+                kid="node-a-k1",
+                fingerprint=ed25519_key_fingerprint_hex(
+                    _b64url(
+                        key_a.public_key().public_bytes(
+                            encoding=serialization.Encoding.Raw,
+                            format=serialization.PublicFormat.Raw,
+                        )
+                    )
+                ),
+            ),
+            allowPrivateNetwork=True,
+            allowedHostnames=["node-a"],
+        ),
+        actor="admin",
+    )
+    first = sync.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
+    second = sync.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
+    assert first.status == "complete", first.detail
+    assert first.importedRecords == 1
+    assert second.status == "complete"
+    assert second.importedRecords == 0
+
+    with fed_env["db"].transaction() as session:
+        imported = session.execute(select(FederationRecord).where(FederationRecord.canonical_id == canonical_id)).scalar_one()
+        assert imported.is_authoritative is False
+        assert imported.imported_from_peer_id == peer.id
+        assert imported.authority_node_id == NODE_A_ID
+        assert imported.payload["licenseText"] == licence_text
+        assert imported.payload["spdxJsonld"]["licenseId"] == "DANS-Custom-1.0"
+        assert imported.payload["customAuthorityId"] == "lfs-local-authority"
+        provenance_count = session.execute(
+            select(func.count()).select_from(FederationRecordProvenance).where(FederationRecordProvenance.record_id == imported.id)
+        ).scalar_one()
+        assert provenance_count >= 1
+
+    with TestClient(create_app()) as client:
+        catalog = client.get("/api/v1/federation/catalog")
+        assert catalog.status_code == 200
+        assert all(item["canonicalId"] != canonical_id for item in catalog.json()["items"])
+        changes_b = client.get("/api/v1/federation/changes?limit=200")
+        assert changes_b.status_code == 200
+        assert all(evt["payload"]["record"]["canonicalId"] != canonical_id for evt in changes_b.json()["events"])
+
+    sync_offline = FederationInboundSyncService(
+        fed_env["db"],
+        fed_env["settings"],
+        remote_client=_RemoteScenario(fed_env["settings"], responses=responses, offline=True),
+    )
+    offline_result = sync_offline.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
+    assert offline_result.status in {"partial", "failed"}
+    with fed_env["db"].transaction() as session:
+        retained = session.execute(select(func.count()).select_from(FederationRecord).where(FederationRecord.canonical_id == canonical_id)).scalar_one()
+        assert retained == 1
+    db_a.close()
+    if runtime_a.db is not None:
+        runtime_a.db.close()
 
 
 def test_multi_page_and_incremental_resume_cursor(fed_env):

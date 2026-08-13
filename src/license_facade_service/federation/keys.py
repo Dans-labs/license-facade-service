@@ -108,10 +108,16 @@ class SigningKeyService:
     def verify_bytes(self, payload: bytes, *, signature_b64url: str, kid: str) -> bool:
         with self.db.transaction() as session:
             row = session.execute(select(FederationSigningKey).where(FederationSigningKey.kid == kid)).scalar_one_or_none()
-        if row is None:
-            return False
         try:
-            public_bytes = _b64url_decode(row.x)
+            if row is not None:
+                public_bytes = _b64url_decode(row.x)
+            elif self.settings.active_kid == kid:
+                public_bytes = self._load_private_key().public_key().public_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PublicFormat.Raw,
+                )
+            else:
+                return False
             key = Ed25519PublicKey.from_public_bytes(public_bytes)
             key.verify(_b64url_decode(signature_b64url), payload)
             return True

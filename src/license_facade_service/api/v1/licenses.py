@@ -136,6 +136,15 @@ class RegisterCustomLicenceRequest(BaseModel):
                     "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
                     "scope": "spdx-submission",
                 },
+                {
+                    "requestedLicenseId": "DANS-Federated-1.0",
+                    "version": "1.0",
+                    "name": "DANS Federated License 1.0",
+                    "summary": "A custom licence queued for federated publication.",
+                    "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                    "scope": "federated",
+                    "aliases": ["DANS Federated License"],
+                },
             ]
         },
     )
@@ -149,8 +158,8 @@ class RegisterCustomLicenceRequest(BaseModel):
     scope: PublicLicenseScope = Field(
         description=(
             "Registration scope. "
-            "`local` and `spdx-submission` are supported in Phase 2. "
-            "`federated` is recognized but rejected until Phase 3."
+            "`local` and `spdx-submission` register without federation publication. "
+            "`federated` registers locally and queues asynchronous federation publication."
         )
     )
     aliases: list[str] = Field(default_factory=list, max_length=64)
@@ -543,11 +552,14 @@ async def refresh_cache(
     description=(
         "Registers one authoritative custom licence in the local LFS PostgreSQL store.\n\n"
         "Bearer authentication is required. Curator or admin role is sufficient. "
-        "Supported registration scopes are `local` and `spdx-submission`. "
+        "Supported registration scopes are `local`, `spdx-submission`, and `federated`. "
+        "For `federated`, registration creates a durable publication job and returns "
+        "`federationStatus=pending`; publication is asynchronous. "
         "The `spdx-submission` scope only marks a record as ready for later review; "
         "it does not create a pull request, does not contact SPDX, and does not imply acceptance. "
-        "The `federated` scope is recognized but rejected in Phase 2; federation publication is deferred to Phase 3.\n\n"
-        "Phase 2 does not emit a `Location` header because custom-licence resolver routing is deferred.\n\n"
+        "Registration does not publish directly to peers; remote peers pull from the existing "
+        "signed changes feed using synchronization workers.\n\n"
+        "This endpoint does not emit a `Location` header because custom-licence resolver routing is deferred.\n\n"
         "The endpoint performs offline SPDX 3.0.1 structural validation using the vendored schema only "
         "(no OWL/SHACL semantic validation)."
     ),
@@ -568,8 +580,8 @@ async def refresh_cache(
                         "name": "DANS Custom License 1.0",
                         "summary": "A custom licence maintained by DANS.",
                         "description": "Local DANS terms.",
-                        "scope": "local",
-                        "federationStatus": "not_published",
+                        "scope": "federated",
+                        "federationStatus": "pending",
                         "spdxSubmissionStatus": "not_requested",
                         "lifecycleStatus": "registered",
                         "normalizedTextDigest": "7f322671e3304f875411cbf36f6332aacc2f067a1c6fd9d0f1d8f8d542668ce8",
@@ -617,12 +629,12 @@ async def refresh_cache(
             },
         ),
         422: _problem_response_doc(
-            "Request validation failed or the requested scope is unavailable in Phase 2.",
+            "Request validation failed.",
             {
-                "type": "https://eosc-eden.eu/problems/custom-licence-federated-scope-unavailable",
-                "title": "Federated Scope Not Available",
+                "type": "https://eosc-eden.eu/problems/custom-licence-request-invalid",
+                "title": "Invalid Registration Request",
                 "status": 422,
-                "detail": "The federated registration scope is not available in Phase 2; it is deferred to Phase 3.",
+                "detail": "The registration request payload is invalid.",
                 "instance": "https://license.example.org/api/v1/licenses",
             },
         ),
@@ -637,7 +649,7 @@ async def refresh_cache(
             },
         ),
         503: _problem_response_doc(
-            "Custom licence registration configuration is unavailable or invalid.",
+            "Custom licence registration or federated publication configuration is unavailable or invalid.",
             {
                 "type": "https://eosc-eden.eu/problems/custom-licence-registration-config-invalid",
                 "title": "Custom Licence Registration Unavailable",
@@ -656,7 +668,7 @@ def register_custom_licence(
     service: CustomLicenceRegistrationService = Depends(get_custom_licence_registration_service),
     _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
-    """Register a local or SPDX-submission custom licence in one DB transaction."""
+    """Register a custom licence and optionally enqueue federated publication."""
     try:
         principal = _require_mutation_auth(request, auth)
     except PermissionError as exc:

@@ -211,6 +211,32 @@ Implemented:
 - worker entrypoint: `python -m src.license_facade_service.worker`;
 - imported records are persisted as `is_authoritative=false` and are not re-exported via outbound authoritative catalog/changes.
 
+## Custom licence federation publication (Phase 3)
+
+`POST /api/v1/licenses` now supports `scope=federated`.
+
+- Registration remains synchronous and local: custom licence, aliases, and audit event are committed first.
+- For `scope=federated`, registration also creates a durable publication outbox job and returns:
+  - `scope=federated`
+  - `federationStatus=pending`
+  - `spdxSubmissionStatus=not_requested`
+  - `lifecycleStatus=registered`
+- No peer/network publication is performed inside the HTTP registration request.
+- Publication is pull-based: workers publish signed authoritative records/events to Node A feed; Node B imports by syncing that feed.
+
+Worker:
+
+```bash
+uv run python -m src.license_facade_service.custom_licence_federation_worker
+```
+
+Admin endpoints:
+
+- `GET /api/v1/admin/licenses/{record_id}/federation`
+- `POST /api/v1/admin/licenses/{record_id}/federation/retry`
+
+Both endpoints require admin bearer auth and return RFC 9457 problems for failures.
+
 Security behavior:
 
 - no automatic peer enrollment;

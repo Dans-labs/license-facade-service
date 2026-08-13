@@ -5,7 +5,7 @@ import unicodedata
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,14 @@ _ALLOWED_FEDERATION_STATUSES = ("not_published", "pending", "published", "public
 _ALLOWED_SPDX_SUBMISSION_STATUSES = ("not_requested", "ready_for_review")
 _ALLOWED_LIFECYCLE_STATUSES = ("registered", "deprecated", "withdrawn", "tombstoned")
 _ALLOWED_ALIAS_TYPES = ("requested_id", "canonical_id", "resolving_uuid", "resolving_uri", "legacy")
+_ALLOWED_CUSTOM_LICENCE_OUTBOX_OPERATIONS = ("upsert",)
+_ALLOWED_CUSTOM_LICENCE_OUTBOX_STATUSES = (
+    "pending",
+    "processing",
+    "published",
+    "retryable_failed",
+    "permanently_failed",
+)
 
 
 def normalize_alias(value: str) -> str:
@@ -124,9 +132,101 @@ class CustomLicenceAuditEvent(Base):
     )
 
 
+class CustomLicenceFederationOutbox(Base):
+    __tablename__ = "custom_licence_federation_outbox"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    custom_licence_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("custom_licences.id", ondelete="RESTRICT"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="upsert")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_class: Mapped[str | None] = mapped_column(String(128))
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    federation_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="RESTRICT")
+    )
+    federation_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("federation_change_events.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("custom_licence_id", "operation", name="uq_custom_licence_federation_outbox_licence_operation"),
+        CheckConstraint(
+            "operation IN ('upsert')",
+            name="ck_custom_licence_federation_outbox_operation",
+        ),
+        CheckConstraint(
+            "status IN ('pending','processing','published','retryable_failed','permanently_failed')",
+            name="ck_custom_licence_federation_outbox_status",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_custom_licence_federation_outbox_attempt_count_nonneg"),
+        CheckConstraint(
+            "(status = 'processing') = (lease_owner IS NOT NULL)",
+            name="ck_custom_licence_federation_outbox_processing_requires_owner",
+        ),
+        CheckConstraint(
+            "(lease_owner IS NULL) = (lease_expires_at IS NULL)",
+            name="ck_custom_licence_federation_outbox_lease_fields_consistent",
+        ),
+        CheckConstraint(
+            "status != 'published' OR (federation_record_id IS NOT NULL AND federation_event_id IS NOT NULL AND published_at IS NOT NULL)",
+            name="ck_custom_licence_federation_outbox_published_requires_linkage",
+        ),
+        CheckConstraint(
+            "(published_at IS NULL) OR (status = 'published')",
+            name="ck_custom_licence_federation_outbox_published_at_iff_published",
+        ),
+        CheckConstraint(
+            "(last_error_class IS NULL) = (last_error_at IS NULL)",
+            name="ck_custom_licence_federation_outbox_error_fields_consistent",
+        ),
+        Index(
+            "ix_custom_licence_federation_outbox_status_available_at",
+            "status",
+            "available_at",
+        ),
+        Index(
+            "ix_custom_licence_federation_outbox_status_lease_expires_at",
+            "status",
+            "lease_expires_at",
+        ),
+        Index(
+            "ix_custom_licence_federation_outbox_custom_licence_id",
+            "custom_licence_id",
+        ),
+        Index(
+            "uix_custom_licence_federation_outbox_federation_record_id",
+            "federation_record_id",
+            unique=True,
+            postgresql_where=text("federation_record_id IS NOT NULL"),
+        ),
+        Index(
+            "uix_custom_licence_federation_outbox_federation_event_id",
+            "federation_event_id",
+            unique=True,
+            postgresql_where=text("federation_event_id IS NOT NULL"),
+        ),
+    )
+
+
 __all__ = [
     "CustomLicence",
     "CustomLicenceAlias",
     "CustomLicenceAuditEvent",
+    "CustomLicenceFederationOutbox",
     "normalize_alias",
 ]

@@ -5,6 +5,7 @@ import os
 import socket
 import subprocess
 import time
+import base64
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from fastapi.testclient import TestClient
 from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.db.session import Database
+from src.license_facade_service.db.models.federation import FederationSigningKey
 from src.license_facade_service.federation.canonical_json import canonicalize_to_bytes
 from src.license_facade_service.federation.keys import SigningKeyService
 from src.license_facade_service.federation.outbound import (
@@ -322,6 +324,53 @@ def test_get_is_read_only_and_event_signatures_stable(fed_env):
         )
     after = _count(fed_env["dsn"], "federation_change_events")
     assert before == after
+
+
+def test_verify_bytes_fallback_rejects_unknown_non_active_kid(fed_env):
+    verifier = SigningKeyService(fed_env["db"], fed_env["settings"])
+    payload = canonicalize_to_bytes({"licenseId": "UNKNOWN-KID"})
+    signature = verifier.sign_bytes(payload)
+    with fed_env["db"].transaction() as session:
+        session.query(FederationSigningKey).delete()
+    assert verifier.verify_bytes(payload, signature_b64url=signature.value, kid="k2") is False
+
+
+def test_verify_bytes_does_not_bypass_persisted_inactive_key_row(fed_env):
+    verifier = SigningKeyService(fed_env["db"], fed_env["settings"])
+    payload = canonicalize_to_bytes({"licenseId": "INACTIVE-ROW"})
+    signature = verifier.sign_bytes(payload)
+    replacement_key = Ed25519PrivateKey.generate().public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    replacement_x = base64.urlsafe_b64encode(replacement_key).decode("ascii").rstrip("=")
+    with fed_env["db"].transaction() as session:
+        row = session.query(FederationSigningKey).filter(FederationSigningKey.kid == fed_env["settings"].active_kid).one()
+        row.status = "inactive"
+        row.is_active = False
+        row.x = replacement_x
+    assert verifier.verify_bytes(payload, signature_b64url=signature.value, kid=signature.kid) is False
+
+
+def test_verify_bytes_fallback_rejects_wrong_signature_for_active_kid(fed_env):
+    verifier = SigningKeyService(fed_env["db"], fed_env["settings"])
+    payload = canonicalize_to_bytes({"licenseId": "WRONG-SIGNATURE"})
+    other_key = Ed25519PrivateKey.generate()
+    bad_signature = base64.urlsafe_b64encode(other_key.sign(payload)).decode("ascii").rstrip("=")
+    with fed_env["db"].transaction() as session:
+        session.query(FederationSigningKey).delete()
+    assert verifier.verify_bytes(payload, signature_b64url=bad_signature, kid=fed_env["settings"].active_kid or "") is False
+
+
+def test_verify_bytes_fallback_returns_boolean_only_and_no_key_material(fed_env):
+    verifier = SigningKeyService(fed_env["db"], fed_env["settings"])
+    payload = canonicalize_to_bytes({"licenseId": "BOOL-ONLY"})
+    signature = verifier.sign_bytes(payload)
+    with fed_env["db"].transaction() as session:
+        session.query(FederationSigningKey).delete()
+    result = verifier.verify_bytes(payload, signature_b64url=signature.value, kid=fed_env["settings"].active_kid or "")
+    assert isinstance(result, bool)
+    assert result is True
 
 
 def test_append_only_events_reject_update_delete(fed_env):

@@ -173,14 +173,68 @@ BAD_CREATE_CODE="$(echo "$BAD_CREATE_RESPONSE" | tail -n1)"
 [[ "${BAD_CREATE_CODE}" != "200" ]]
 echo "Unapproved private target rejected: yes"
 
-PUB_PAYLOAD='{"localId":"Demo-License","version":"1","payload":{"licenseId":"Demo-License","name":"Demo License"}}'
-PUBLISHED="$(curl -fsS -X POST http://localhost:12114/api/v1/admin/federation/publish \
+CUSTOM_REQUESTED_ID="DANS-Federated-Demo-1.0"
+REGISTER_PAYLOAD="$(uv run python - <<'PY' "${CUSTOM_REQUESTED_ID}"
+import json, sys
+print(json.dumps({
+  "requestedLicenseId": sys.argv[1],
+  "version": "1.0",
+  "name": "DANS Federated License 1.0",
+  "summary": "A custom licence published by Node A.",
+  "description": "Custom terms managed by Node A.",
+  "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+  "scope": "federated",
+  "aliases": ["DANS Federated License"],
+}))
+PY
+)"
+REGISTERED="$(curl -fsS -X POST http://localhost:12114/api/v1/licenses \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" \
-  -d "${PUB_PAYLOAD}")"
-CANONICAL_ID="$(json_get "${PUBLISHED}" "canonicalId")"
-echo "Published on A: ${CANONICAL_ID}"
-CHANGES_A="$(curl -fsS http://localhost:12114/api/v1/federation/changes?limit=1)"
-POSITION_A="$(json_get "${CHANGES_A}" "events.0.payload.eventPosition")"
+  -d "${REGISTER_PAYLOAD}")"
+CUSTOM_ID="$(json_get "${REGISTERED}" "id")"
+[[ "$(json_get "${REGISTERED}" "scope")" == "federated" ]]
+[[ "$(json_get "${REGISTERED}" "federationStatus")" == "pending" ]]
+echo "Registered federated custom licence on A: ${CUSTOM_ID}"
+
+for _ in $(seq 1 60); do
+  STATUS_A="$(curl -fsS "http://localhost:12114/api/v1/admin/licenses/${CUSTOM_ID}/federation" \
+    -H "Authorization: Bearer ${ADMIN_TOKEN}")"
+  if [[ "$(json_get "${STATUS_A}" "federationStatus")" == "published" ]]; then
+    break
+  fi
+  sleep 1
+done
+[[ "$(json_get "${STATUS_A}" "federationStatus")" == "published" ]]
+echo "Node A custom licence federation status: published"
+
+CHANGES_A="$(curl -fsS http://localhost:12114/api/v1/federation/changes?limit=20)"
+CANONICAL_ID="$(uv run python - <<'PY' "${CHANGES_A}"
+import json, sys
+data = json.loads(sys.argv[1])
+for item in data.get("events", []):
+    payload = item.get("payload", {})
+    record = payload.get("record", {})
+    business = record.get("payload", {})
+    if business.get("schema") == "lfs.custom-licence.federation.v1":
+        print(record["canonicalId"])
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+)"
+POSITION_A="$(uv run python - <<'PY' "${CHANGES_A}" "${CANONICAL_ID}"
+import json, sys
+data = json.loads(sys.argv[1])
+target = sys.argv[2]
+for item in data.get("events", []):
+    payload = item.get("payload", {})
+    record = payload.get("record", {})
+    if record.get("canonicalId") == target:
+        print(payload["eventPosition"])
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+)"
+echo "Published federated canonical ID on A: ${CANONICAL_ID}"
 echo "A event position: ${POSITION_A}"
 
 SYNC1="$(sync_request "${PEER_ID}")"

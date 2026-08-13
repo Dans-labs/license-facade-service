@@ -179,10 +179,10 @@ class CursorCodec:
 
 
 class FederationPublicationService:
-    def __init__(self, db: Database, settings: FederationSettings):
+    def __init__(self, db: Database, settings: FederationSettings, *, signing: SigningKeyService | None = None):
         self.db = db
         self.settings = settings
-        self.signing = SigningKeyService(db, settings)
+        self.signing = signing or SigningKeyService(db, settings)
         self.rdf_outbox = RdfOutboxService(db, settings)
 
     def publish_new_version(
@@ -195,55 +195,78 @@ class FederationPublicationService:
         payload: dict[str, Any],
         published_at: datetime | None = None,
     ) -> uuid.UUID:
+        with self.db.transaction() as session:
+            record_id, _event_id = self.publish_new_version_in_session(
+                session=session,
+                canonical_id=canonical_id,
+                authority_node_id=authority_node_id,
+                local_id=local_id,
+                version=version,
+                payload=payload,
+                published_at=published_at,
+            )
+            return record_id
+
+    def publish_new_version_in_session(
+        self,
+        *,
+        session: Session,
+        canonical_id: str,
+        authority_node_id: str,
+        local_id: str,
+        version: str,
+        payload: dict[str, Any],
+        published_at: datetime | None = None,
+        enqueue_rdf: bool = True,
+    ) -> tuple[uuid.UUID, uuid.UUID]:
         if published_at is None:
             published_at = datetime.now(timezone.utc)
         self._validate_publication_input(canonical_id=canonical_id, authority_node_id=authority_node_id, local_id=local_id, version=version)
         payload_digest = canonical_json_sha256_hex(payload)
         record_uuid = uuid.uuid4()
         now = datetime.now(timezone.utc)
+        self._ensure_local_identity(session)
+        if authority_node_id != self.settings.node_id:
+            raise FederationError("authority-mismatch", "authority_node_id must match local node identity.")
+        existing = session.execute(select(FederationRecord).where(FederationRecord.canonical_id == canonical_id)).scalar_one_or_none()
+        if existing is not None:
+            raise FederationError("record-exists", "Published canonical identifier already exists.")
 
-        with self.db.transaction() as session:
-            self._ensure_local_identity(session)
-            if authority_node_id != self.settings.node_id:
-                raise FederationError("authority-mismatch", "authority_node_id must match local node identity.")
-            existing = session.execute(select(FederationRecord).where(FederationRecord.canonical_id == canonical_id)).scalar_one_or_none()
-            if existing is not None:
-                raise FederationError("record-exists", "Published canonical identifier already exists.")
+        identity = build_canonical_license_identity(
+            authority_node_id=authority_node_id,
+            local_id=local_id,
+            version=version,
+        )
+        if identity.canonicalId != canonical_id:
+            raise FederationError("invalid-canonical-id", "Canonical identifier does not match authority/localId/version.")
 
-            identity = build_canonical_license_identity(
-                authority_node_id=authority_node_id,
-                local_id=local_id,
-                version=version,
-            )
-            if identity.canonicalId != canonical_id:
-                raise FederationError("invalid-canonical-id", "Canonical identifier does not match authority/localId/version.")
-
-            record = FederationRecord(
-                id=record_uuid,
-                authority_node_id=authority_node_id,
-                local_id=local_id,
-                version=version,
-                canonical_id=canonical_id,
-                resolving_uuid=uuid.UUID(identity.resolvingUuid),
-                is_authoritative=True,
-                payload=payload,
-                payload_digest_sha256=payload_digest,
-                published_at=published_at,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(record)
-            session.flush()
-            self._sync_resolution_aliases(session=session, record=record)
-            self._insert_event(
-                session=session,
-                record=record,
-                operation="upsert",
-                generated_at=published_at,
-                provenance_type="publication",
-                backfill_created_at=None,
-            )
-        return record_uuid
+        record = FederationRecord(
+            id=record_uuid,
+            authority_node_id=authority_node_id,
+            local_id=local_id,
+            version=version,
+            canonical_id=canonical_id,
+            resolving_uuid=uuid.UUID(identity.resolvingUuid),
+            is_authoritative=True,
+            payload=payload,
+            payload_digest_sha256=payload_digest,
+            published_at=published_at,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(record)
+        session.flush()
+        self._sync_resolution_aliases(session=session, record=record)
+        event_id, _sequence = self._insert_event(
+            session=session,
+            record=record,
+            operation="upsert",
+            generated_at=published_at,
+            provenance_type="publication",
+            backfill_created_at=None,
+            enqueue_rdf=enqueue_rdf,
+        )
+        return record_uuid, event_id
 
     def append_state_event(self, *, canonical_id: str, operation: str) -> None:
         if operation not in {"deprecate", "tombstone"}:
@@ -303,7 +326,8 @@ class FederationPublicationService:
         generated_at: datetime,
         provenance_type: str,
         backfill_created_at: datetime | None,
-    ) -> int:
+        enqueue_rdf: bool = True,
+    ) -> tuple[uuid.UUID, int]:
         self._validate_record_identity(record)
         state = _state_from_operation(operation)
         signed_record_payload = SignedFederationRecordPayload(
@@ -316,7 +340,8 @@ class FederationPublicationService:
             payload=record.payload,
             payloadDigestSha256=record.payload_digest_sha256,
         )
-        event_id = str(uuid.uuid4())
+        event_uuid = uuid.uuid4()
+        event_id = str(event_uuid)
         next_sequence = int(session.execute(text("SELECT nextval('federation_change_event_sequence')")).scalar_one())
         payload = {
             "nodeId": self.settings.node_id,
@@ -333,7 +358,7 @@ class FederationPublicationService:
         digest = sha256_hex(payload_bytes)
         session.add(
             FederationChangeEvent(
-                id=uuid.UUID(event_id),
+                id=event_uuid,
                 event_sequence=int(next_sequence),
                 event_type="record.changed",
                 authority_node_id=record.authority_node_id,
@@ -355,8 +380,14 @@ class FederationPublicationService:
             )
         )
         record.materialized_generation = int(next_sequence)
-        self.rdf_outbox.enqueue_record_jobs(session, record, operation=operation)
-        return int(next_sequence)
+        if enqueue_rdf:
+            self.rdf_outbox.enqueue_record_jobs(session, record, operation=operation)
+        # Flush the event row so that FK references from other tables (e.g.
+        # custom_licence_federation_outbox) within the same session-transaction
+        # can reference its id without ordering ambiguity.  The session uses
+        # autoflush=False so we flush explicitly here.
+        session.flush()
+        return event_uuid, int(next_sequence)
 
     def _validate_publication_input(self, *, canonical_id: str, authority_node_id: str, local_id: str, version: str) -> None:
         if not CANONICAL_ID_PATTERN.match(canonical_id):

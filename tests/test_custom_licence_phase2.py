@@ -342,7 +342,7 @@ def test_missing_invalid_and_unauthorized_authentication(registration_client):
     assert client.post("/api/v1/licenses", json=payload, headers={"Authorization": "Bearer viewer"}).status_code == 403
 
 
-def test_federated_scope_rejected_without_persistence(registration_client):
+def test_federated_scope_requires_federation_configuration(registration_client):
     client, raw_dsn = registration_client
     requested = f"DANS-Deferred-{uuid.uuid4().hex[:8]}"
     response = client.post(
@@ -350,7 +350,8 @@ def test_federated_scope_rejected_without_persistence(registration_client):
         json=_payload(scope="federated", requested=requested),
         headers={"Authorization": "Bearer curator-token"},
     )
-    assert response.status_code == 422
+    assert response.status_code == 503
+    assert response.json()["type"].endswith("/custom-licence-federation-unavailable")
     assert _count_registration_rows(raw_dsn, requested) == (0, 0, 0)
 
 

@@ -85,8 +85,6 @@ async def lifespan(app: FastAPI):
         openrel_settings: OpenRelSettings = getattr(app.state, "openrel_settings")
         openrel_client = OpenRelClient(openrel_settings)
         app.state.openrel_client = openrel_client
-        registration_service = CustomLicenceRegistrationService(settings=app.state.custom_licence_registration_settings)
-        app.state.custom_licence_registration_service = registration_service
 
         service = licenses.get_license_service()
         try:
@@ -98,6 +96,12 @@ async def lifespan(app: FastAPI):
         runtime: FederationRuntime | None = getattr(app.state, "federation_runtime", None)
         if runtime is not None:
             app.state.federation_state = runtime.initialize()
+        registration_service = CustomLicenceRegistrationService(
+            settings=app.state.custom_licence_registration_settings,
+            federation_settings=app.state.federation_runtime.settings if runtime is not None else FederationSettings.from_env(),
+            federation_ready=bool(getattr(app.state.federation_state, "ready", False)),
+        )
+        app.state.custom_licence_registration_service = registration_service
 
         yield
     finally:

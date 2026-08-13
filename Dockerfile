@@ -35,6 +35,7 @@ ENV PATH="/home/akmi/lfs/.venv/bin:$PATH"
 COPY src ./src
 #Temporary, will be removed later
 COPY conf ./conf
+COPY vendor ./vendor
 COPY pyproject.toml .
 COPY README.md .
 COPY uv.lock .
