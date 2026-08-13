@@ -9,7 +9,7 @@ import pytest
 from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService, Principal
-from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense
+from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense, ResolvedLicenseSource
 
 
 def _openapi_operations(client):
@@ -524,6 +524,7 @@ def test_html_escaping_and_safe_redirects(tmp_path: Path):
             "crossRef": [],
         },
         uri="https://example.test/api/v1/licenses/xss",
+        source=ResolvedLicenseSource.SPDX_LISTED,
     )
     html = service._render_html(service.build_metadata(resolved))
     assert "<script>" not in html
@@ -660,6 +661,7 @@ def test_string_crossref_booleans_do_not_crash(tmp_path: Path):
             "crossRef": [{"url": "https://example.org/x", "match": "N/A", "isValid": "maybe"}],
         },
         uri="https://example.test/api/v1/licenses/x",
+        source=ResolvedLicenseSource.SPDX_LISTED,
     )
     metadata = service.build_metadata(resolved)
     assert "match" not in metadata["crossRef"][0]

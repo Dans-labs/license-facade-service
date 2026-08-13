@@ -21,6 +21,9 @@ from src.license_facade_service.federation.runtime import FederationRuntime, Fed
 from src.license_facade_service.openrel.client import OpenRelClient
 from src.license_facade_service.services.custom_licence_registration import CustomLicenceRegistrationService
 from src.license_facade_service.services.problem import problem_response
+from src.license_facade_service.services.spdx_custom_license import validate_http_iri
+from src.license_facade_service.services.spdx3_documents import Spdx3DocumentService
+from src.license_facade_service.services.spdx_validation import SpdxStructuralValidationError
 from src.license_facade_service.utils.commons import get_project_details
 
 APP_NAME = os.environ.get("APP_NAME", "License Facade Service")
@@ -153,6 +156,13 @@ def create_app() -> FastAPI:
     app.state.custom_licence_registration_settings = CustomLicenceRegistrationSettings.from_env()
     app.state.custom_licence_registration_service = None
     app.state.openrel_client = None
+    app.state.spdx3_document_service = None
+    try:
+        base = os.getenv("URL_BASE", "https://license.example.org/api/v1/licenses").rstrip("/")
+        complete_namespace = validate_http_iri(f"{base}/spdx3/documents", "complete_namespace")
+        app.state.spdx3_document_service = Spdx3DocumentService(complete_namespace=complete_namespace)
+    except (ValueError, SpdxStructuralValidationError):
+        app.state.spdx3_document_service = None
 
     origins = _cors_origins()
     allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
@@ -189,6 +199,24 @@ def create_app() -> FastAPI:
                 detail="The registration request payload is invalid.",
                 instance=str(request.url),
                 type_uri="https://eosc-eden.eu/problems/custom-licence-request-invalid",
+                extra={"validationErrors": safe_errors},
+            )
+        if request.url.path.startswith("/api/v1/licenses/spdx3/") and request.method.upper() == "POST":
+            safe_errors: list[dict[str, object]] = []
+            for item in exc.errors():
+                safe_errors.append(
+                    {
+                        "loc": list(item.get("loc", [])),
+                        "msg": str(item.get("msg", "invalid value")),
+                        "type": str(item.get("type", "value_error")),
+                    }
+                )
+            return problem_response(
+                status=422,
+                title="Invalid SPDX 3 Request",
+                detail="The SPDX document generation request payload is invalid.",
+                instance=str(request.url),
+                type_uri="https://eosc-eden.eu/problems/spdx3-request-invalid",
                 extra={"validationErrors": safe_errors},
             )
         return await request_validation_exception_handler(request, exc)

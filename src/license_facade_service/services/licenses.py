@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from enum import Enum
 from urllib.parse import unquote, urlparse
 from uuid import UUID, NAMESPACE_DNS, uuid5
 
@@ -95,6 +96,13 @@ class ResolvedLicense:
     record: dict[str, Any]
     details: dict[str, Any]
     uri: str
+    source: "ResolvedLicenseSource"
+
+
+class ResolvedLicenseSource(str, Enum):
+    SPDX_LISTED = "spdx-listed"
+    LOCAL_CUSTOM = "local-custom"
+    FEDERATED_CUSTOM = "federated-custom"
 
 
 class LicenseSnapshotStatus(BaseModel):
@@ -380,6 +388,7 @@ class LicenseService:
             record=record,
             details=details,
             uri=uri,
+            source=ResolvedLicenseSource.SPDX_LISTED,
         )
 
     def _resolve_record(self, identifier: str, licenses: list[dict[str, Any]]) -> dict[str, Any] | None:

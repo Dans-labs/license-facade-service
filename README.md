@@ -38,6 +38,15 @@ Convenience routes:
 - `/api/v1/licenses/{id}/encoding`
 - `/api/v1/licenses/provenance?identifier=...`
 
+## SPDX 3 document helpers
+
+Protected helper endpoints:
+
+- `POST /api/v1/licenses/spdx3/minimal`
+- `POST /api/v1/licenses/spdx3/complete/{license_id}`
+
+Both endpoints generate SPDX 3.0.1 JSON-LD and run **offline structural validation** against the vendored official schema at `vendor/spdx/3.0.1/spdx-json-schema.json` before returning success. They do not fetch schemas or contexts at runtime. Validation is structural only (JSON Schema); OWL/SHACL semantic validation is not performed, and generation does not submit or register anything with SPDX.
+
 ## Representation rules
 
 - `/original` uses curated original-source metadata only; SPDX `reference` is not treated as original.

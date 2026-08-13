@@ -74,6 +74,22 @@ The implementation validates RELs syntactically and by registered vocabulary/pro
 
 This is **syntax/vocabulary validation only**, not legal or semantic validation.
 
+## SPDX 3 helper endpoint validation
+
+The helper endpoints:
+
+- `POST /api/v1/licenses/spdx3/minimal`
+- `POST /api/v1/licenses/spdx3/complete/{license_id}`
+
+generate SPDX 3.0.1 JSON-LD and validate each generated document offline using the vendored official JSON Schema at `vendor/spdx/3.0.1/spdx-json-schema.json` before returning `200`.
+
+Constraints:
+
+- no runtime schema/context network fetch is performed;
+- validation is structural JSON Schema validation only;
+- OWL/SHACL semantic validation is not performed;
+- generation does not imply SPDX License List submission or acceptance.
+
 ## Federation Phase 1 foundation
 
 Implemented in this phase:
