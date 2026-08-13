@@ -14,7 +14,7 @@ _HOSTNAME_RE = re.compile(
 )
 
 
-def _require_valid_http_iri(value: str, field_name: str) -> str:
+def validate_http_iri(value: str, field_name: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be a string.")
     candidate = value.strip()
@@ -58,7 +58,7 @@ def _require_valid_http_iri(value: str, field_name: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/") or "", "", ""))
 
 
-def _validate_license_id(value: str) -> str:
+def validate_custom_license_identifier(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("custom_license_id must be a string.")
     candidate = value.strip()
@@ -101,7 +101,7 @@ class SpdxCustomLicenseBuilder:
         self.validator = validator or Spdx301StructuralValidator()
 
     def build(self, input_data: SpdxCustomLicenseBuilderInput) -> dict[str, object]:
-        authority_base = _require_valid_http_iri(input_data.authority_base_iri, "authority_base_iri")
+        authority_base = validate_http_iri(input_data.authority_base_iri, "authority_base_iri")
         creator_name = input_data.creator_organization_name.strip()
         if not creator_name:
             raise ValueError("creator_organization_name must be non-empty after trimming.")
@@ -123,11 +123,11 @@ class SpdxCustomLicenseBuilder:
 
         creator_iri = input_data.creator_organization_iri
         if creator_iri is not None:
-            creator_iri = _require_valid_http_iri(creator_iri, "creator_organization_iri")
+            creator_iri = validate_http_iri(creator_iri, "creator_organization_iri")
         else:
             creator_iri = authority_base.rstrip("/") + "/spdx/agents/lfs-operator"
 
-        custom_id = _validate_license_id(input_data.custom_license_id)
+        custom_id = validate_custom_license_identifier(input_data.custom_license_id)
         encoded_id = quote(custom_id, safe="")
         base_path = urlsplit(authority_base).path.rstrip("/")
         spdx_id = urlunsplit(
@@ -187,4 +187,6 @@ class SpdxCustomLicenseBuilder:
 __all__ = [
     "SpdxCustomLicenseBuilder",
     "SpdxCustomLicenseBuilderInput",
+    "validate_custom_license_identifier",
+    "validate_http_iri",
 ]

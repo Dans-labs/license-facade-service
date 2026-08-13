@@ -355,9 +355,7 @@ def test_phase1_models_are_present_without_phase2_and_phase4_tables() -> None:
     assert CustomLicenceAuditEvent.__tablename__ == "custom_licence_audit_events"
 
     app = create_app()
-    post_routes = [route for route in app.routes if getattr(route, "path", None) == "/api/v1/licenses" and "POST" in getattr(route, "methods", set())]
     admin_routes = [route for route in app.routes if getattr(route, "path", None) == "/api/v1/admin/licenses/{record_id}"]
-    assert not post_routes
     assert not admin_routes
 
 

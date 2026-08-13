@@ -64,6 +64,7 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
     assert "HTTPBearer" in openapi["components"]["securitySchemes"]
 
     protected = {
+        ("post", "/api/v1/licenses"),
         ("post", "/api/v1/licenses/cache/update"),
         ("post", "/api/v1/licenses/cache/refresh"),
         ("post", "/api/v1/licenses/spdx3/minimal"),
@@ -100,6 +101,7 @@ def test_openapi_problem_media_types_and_public_response_types(app_client):
     openapi, _ = _openapi_operations(client)
 
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["406"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/licenses"]["post"]["responses"]["409"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/resolution"]["get"]["responses"]["404"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/provenance"]["get"]["responses"]["409"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/admin/federation/peers"]["post"]["responses"]["401"]["content"]
@@ -117,6 +119,22 @@ def test_openapi_problem_media_types_and_public_response_types(app_client):
     ready_schema_ref = openapi["paths"]["/api/v1/ready"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
     ready_schema_name = ready_schema_ref.rsplit("/", 1)[-1]
     assert "openrel" in openapi["components"]["schemas"][ready_schema_name]["properties"]
+
+
+def test_openapi_custom_licence_registration_contract(app_client):
+    client, *_ = app_client
+    openapi, _ = _openapi_operations(client)
+    operation = openapi["paths"]["/api/v1/licenses"]["post"]
+
+    assert operation["operationId"] == "register_custom_licence"
+    assert operation["tags"] == ["Licences"]
+    assert operation["security"] == [{"HTTPBearer": []}]
+    assert "application/problem+json" in operation["responses"]["422"]["content"]
+    assert "application/problem+json" in operation["responses"]["503"]["content"]
+    examples = openapi["components"]["schemas"]["RegisterCustomLicenceRequest"]["examples"]
+    scopes = {example["scope"] for example in examples}
+    assert "local" in scopes
+    assert "spdx-submission" in scopes
 
 
 def test_openapi_openrel_contract_guardrails(app_client):

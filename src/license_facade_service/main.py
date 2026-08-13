@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from starlette.middleware.cors import CORSMiddleware
 
 from src.license_facade_service.api import openrel as openrel_api
@@ -12,10 +14,13 @@ from src.license_facade_service.api.federation import admin as federation_admin
 from src.license_facade_service.api.federation import jwks as federation_jwks
 from src.license_facade_service.api.federation import outbound as federation_outbound
 from src.license_facade_service.api.v1 import licenses, metrics
+from src.license_facade_service.config.custom_licence import CustomLicenceRegistrationSettings
 from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.config.openrel import OpenRelSettings
 from src.license_facade_service.federation.runtime import FederationRuntime, FederationRuntimeState
 from src.license_facade_service.openrel.client import OpenRelClient
+from src.license_facade_service.services.custom_licence_registration import CustomLicenceRegistrationService
+from src.license_facade_service.services.problem import problem_response
 from src.license_facade_service.utils.commons import get_project_details
 
 APP_NAME = os.environ.get("APP_NAME", "License Facade Service")
@@ -75,10 +80,13 @@ def _cors_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     openrel_client: OpenRelClient | None = None
+    registration_service: CustomLicenceRegistrationService | None = None
     try:
         openrel_settings: OpenRelSettings = getattr(app.state, "openrel_settings")
         openrel_client = OpenRelClient(openrel_settings)
         app.state.openrel_client = openrel_client
+        registration_service = CustomLicenceRegistrationService(settings=app.state.custom_licence_registration_settings)
+        app.state.custom_licence_registration_service = registration_service
 
         service = licenses.get_license_service()
         try:
@@ -93,11 +101,25 @@ async def lifespan(app: FastAPI):
 
         yield
     finally:
+        cleanup_errors: list[Exception] = []
         try:
             if openrel_client is not None:
                 await openrel_client.aclose()
+        except Exception as exc:  # pragma: no cover - validated via lifecycle tests
+            cleanup_errors.append(exc)
         finally:
             app.state.openrel_client = None
+        try:
+            if registration_service is not None:
+                registration_service.close()
+        except Exception as exc:  # pragma: no cover - validated via lifecycle tests
+            cleanup_errors.append(exc)
+        finally:
+            app.state.custom_licence_registration_service = None
+        if cleanup_errors:
+            if len(cleanup_errors) == 1:
+                raise cleanup_errors[0]
+            raise ExceptionGroup("service shutdown cleanup failed", cleanup_errors)
 
 
 def create_app() -> FastAPI:
@@ -124,6 +146,8 @@ def create_app() -> FastAPI:
             node_id=settings.node_id,
         )
     app.state.openrel_settings = OpenRelSettings.from_env()
+    app.state.custom_licence_registration_settings = CustomLicenceRegistrationSettings.from_env()
+    app.state.custom_licence_registration_service = None
     app.state.openrel_client = None
 
     origins = _cors_origins()
@@ -142,6 +166,29 @@ def create_app() -> FastAPI:
     app.include_router(federation_outbound.router)
     app.include_router(federation_jwks.router)
     app.include_router(federation_admin.router)
+
+    @app.exception_handler(RequestValidationError)
+    async def _request_validation_handler(request, exc: RequestValidationError):
+        if request.url.path == "/api/v1/licenses" and request.method.upper() == "POST":
+            safe_errors: list[dict[str, object]] = []
+            for item in exc.errors():
+                safe_errors.append(
+                    {
+                        "loc": list(item.get("loc", [])),
+                        "msg": str(item.get("msg", "invalid value")),
+                        "type": str(item.get("type", "value_error")),
+                    }
+                )
+            return problem_response(
+                status=422,
+                title="Invalid Registration Request",
+                detail="The registration request payload is invalid.",
+                instance=str(request.url),
+                type_uri="https://eosc-eden.eu/problems/custom-licence-request-invalid",
+                extra={"validationErrors": safe_errors},
+            )
+        return await request_validation_exception_handler(request, exc)
+
     return app
 
 

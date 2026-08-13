@@ -9,8 +9,15 @@ from typing import Any
 from fastapi import APIRouter, Depends, Path as ApiPath, Query, Request, Security
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.license_facade_service.custom_licences.models import PublicLicenseScope
+from src.license_facade_service.services.custom_licence_registration import (
+    CustomLicenceRegistrationError,
+    CustomLicenceRegistrationService,
+    RegisterCustomLicenceInput,
+    RegisterCustomLicenceResult,
+)
 from src.license_facade_service.services.auth import (
     AuthService,
     AuthenticationError,
@@ -35,6 +42,7 @@ from src.license_facade_service.services.contract import LicenseDetail, LicenseI
 from src.license_facade_service.services.contract import LicenseInventoryResponse
 from src.license_facade_service.services.problem import ProblemDetails
 from src.license_facade_service.services.problem import problem_response
+from src.license_facade_service.services.spdx_custom_license import validate_custom_license_identifier
 from src.license_facade_service.federation.resolution import FederationResolutionService, ResolutionError
 from src.license_facade_service.federation.resolution_models import LicenseProvenanceResponse, LicenseResolutionResponse
 
@@ -105,6 +113,141 @@ class MinimalSpdx3Request(BaseModel):
     )
 
 
+class RegisterCustomLicenceRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "requestedLicenseId": "DANS-Custom-1.0",
+                    "version": "1.0",
+                    "name": "DANS Custom License 1.0",
+                    "summary": "A custom licence maintained by DANS.",
+                    "description": "Local DANS terms.",
+                    "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                    "scope": "local",
+                    "aliases": ["DANS Custom License"],
+                },
+                {
+                    "requestedLicenseId": "DANS-Proposed-1.0",
+                    "version": "1.0",
+                    "name": "DANS Proposed License 1.0",
+                    "summary": "A proposed licence for later SPDX review.",
+                    "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                    "scope": "spdx-submission",
+                },
+            ]
+        },
+    )
+
+    requested_license_id: str = Field(alias="requestedLicenseId", min_length=1, max_length=256)
+    version: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=512)
+    summary: str | None = Field(default=None, max_length=4096)
+    description: str | None = Field(default=None, max_length=20000)
+    license_text: str = Field(alias="licenseText", min_length=1)
+    scope: PublicLicenseScope = Field(
+        description=(
+            "Registration scope. "
+            "`local` and `spdx-submission` are supported in Phase 2. "
+            "`federated` is recognized but rejected until Phase 3."
+        )
+    )
+    aliases: list[str] = Field(default_factory=list, max_length=64)
+
+    @field_validator("requested_license_id")
+    @classmethod
+    def _validate_requested_license_id(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("requestedLicenseId must be non-blank.")
+        validate_custom_license_identifier(candidate)
+        if len(candidate) > 256:
+            raise ValueError("requestedLicenseId must be <= 256 characters.")
+        return candidate
+
+    @field_validator("version")
+    @classmethod
+    def _validate_version(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("version must be non-blank.")
+        validate_custom_license_identifier(candidate)
+        return candidate
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("name must be non-blank.")
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in candidate):
+            raise ValueError("name must not contain control characters.")
+        return candidate
+
+    @field_validator("summary")
+    @classmethod
+    def _normalize_summary(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("description")
+    @classmethod
+    def _normalize_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("license_text")
+    @classmethod
+    def _validate_license_text(cls, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("licenseText must be non-blank.")
+        return value
+
+    @field_validator("aliases")
+    @classmethod
+    def _validate_aliases(cls, value: list[str]) -> list[str]:
+        if len(value) > 64:
+            raise ValueError("aliases must contain at most 64 items.")
+        validated: list[str] = []
+        for alias in value:
+            candidate = alias.strip()
+            if not candidate:
+                raise ValueError("aliases must not contain blank values.")
+            if len(candidate) > 512:
+                raise ValueError("alias values must be <= 512 characters.")
+            if any(ord(ch) < 32 or ord(ch) == 127 for ch in candidate):
+                raise ValueError("alias values must not contain control characters.")
+            validated.append(candidate)
+        return validated
+
+
+class RegisterCustomLicenceResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    requested_license_id: str = Field(alias="requestedLicenseId")
+    version: str
+    canonical_id: str = Field(alias="canonicalId")
+    resolving_uuid: str = Field(alias="resolvingUuid")
+    resolving_uri: str = Field(alias="resolvingUri")
+    name: str
+    summary: str | None = None
+    description: str | None = None
+    scope: PublicLicenseScope
+    federation_status: str = Field(alias="federationStatus")
+    spdx_submission_status: str = Field(alias="spdxSubmissionStatus")
+    lifecycle_status: str = Field(alias="lifecycleStatus")
+    normalized_text_digest: str = Field(alias="normalizedTextDigest")
+    spdx_jsonld: dict[str, Any] = Field(alias="spdxJsonld")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
 def _problem_response_doc(description: str, example: dict[str, Any]) -> dict[str, Any]:
     return {
         "description": description,
@@ -130,6 +273,13 @@ def get_auth_service() -> AuthService:
     if _auth_service is None:
         _auth_service = AuthService()
     return _auth_service
+
+
+def get_custom_licence_registration_service(request: Request) -> CustomLicenceRegistrationService:
+    service = getattr(request.app.state, "custom_licence_registration_service", None)
+    if service is None:
+        raise RuntimeError("custom licence registration service is not initialized")
+    return service
 
 
 def _problem_404(identifier: str, request: Request) -> JSONResponse:
@@ -383,6 +533,195 @@ async def refresh_cache(
 ):
     """Force refresh the SPDX snapshot after bearer-token authorization."""
     return await update_cache(request=request, service=service, auth=auth)
+
+
+@router.post(
+    "/licenses",
+    response_model=RegisterCustomLicenceResponse,
+    tags=["Licences"],
+    summary="Register an authoritative custom licence",
+    description=(
+        "Registers one authoritative custom licence in the local LFS PostgreSQL store.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Supported registration scopes are `local` and `spdx-submission`. "
+        "The `spdx-submission` scope only marks a record as ready for later review; "
+        "it does not create a pull request, does not contact SPDX, and does not imply acceptance. "
+        "The `federated` scope is recognized but rejected in Phase 2; federation publication is deferred to Phase 3.\n\n"
+        "Phase 2 does not emit a `Location` header because custom-licence resolver routing is deferred.\n\n"
+        "The endpoint performs offline SPDX 3.0.1 structural validation using the vendored schema only "
+        "(no OWL/SHACL semantic validation)."
+    ),
+    operation_id="register_custom_licence",
+    response_description="Registered custom licence metadata and immutable SPDX 3.0.1 snapshot.",
+    responses={
+        201: {
+            "description": "Custom licence registered successfully.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "e9d6f8cb-4a2a-45ef-ae31-5596dbf31f3f",
+                        "requestedLicenseId": "DANS-Custom-1.0",
+                        "version": "1.0",
+                        "canonicalId": "lfs-custom:lfs-local-authority:DANS-Custom-1.0:1.0",
+                        "resolvingUuid": "f7c402f8-c406-5153-b6af-1b652f7930df",
+                        "resolvingUri": "https://lfs.example/custom-licences/lfs-local-authority/DANS-Custom-1.0/1.0",
+                        "name": "DANS Custom License 1.0",
+                        "summary": "A custom licence maintained by DANS.",
+                        "description": "Local DANS terms.",
+                        "scope": "local",
+                        "federationStatus": "not_published",
+                        "spdxSubmissionStatus": "not_requested",
+                        "lifecycleStatus": "registered",
+                        "normalizedTextDigest": "7f322671e3304f875411cbf36f6332aacc2f067a1c6fd9d0f1d8f8d542668ce8",
+                        "spdxJsonld": {
+                            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                            "@graph": [
+                                {
+                                    "type": "Organization",
+                                    "spdxId": "https://lfs.example/spdx/agents/lfs-operator",
+                                    "name": "LFS Operator",
+                                    "creationInfo": "_:creation-info",
+                                },
+                                {
+                                    "@id": "_:creation-info",
+                                    "type": "CreationInfo",
+                                    "specVersion": "3.0.1",
+                                    "created": "2026-08-13T10:00:00Z",
+                                    "createdBy": ["https://lfs.example/spdx/agents/lfs-operator"],
+                                },
+                                {
+                                    "type": "expandedlicensing_CustomLicense",
+                                    "spdxId": "https://lfs.example/licenses/CustomLicense-f7c402f8-c406-5153-b6af-1b652f7930df",
+                                    "creationInfo": "_:creation-info",
+                                    "name": "DANS Custom License 1.0",
+                                    "simplelicensing_licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                                },
+                            ],
+                        },
+                        "createdAt": "2026-08-13T10:00:00Z",
+                        "updatedAt": "2026-08-13T10:00:00Z",
+                    }
+                }
+            },
+        },
+        401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
+        403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        409: _problem_response_doc(
+            "The requested custom licence identity or alias conflicts with an existing record.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-already-exists",
+                "title": "Custom Licence Already Registered",
+                "status": 409,
+                "detail": "A custom licence with the same authority, requested ID, and version already exists.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+        422: _problem_response_doc(
+            "Request validation failed or the requested scope is unavailable in Phase 2.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-federated-scope-unavailable",
+                "title": "Federated Scope Not Available",
+                "status": 422,
+                "detail": "The federated registration scope is not available in Phase 2; it is deferred to Phase 3.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+        500: _problem_response_doc(
+            "Registration failed due to an internal persistence or generation error.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-persistence-failed",
+                "title": "Custom Licence Persistence Failed",
+                "status": 500,
+                "detail": "Could not persist the custom licence registration.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+        503: _problem_response_doc(
+            "Custom licence registration configuration is unavailable or invalid.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-registration-config-invalid",
+                "title": "Custom Licence Registration Unavailable",
+                "status": 503,
+                "detail": "Custom licence registration configuration is invalid.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+    },
+)
+@router.post("/licences", include_in_schema=False)
+def register_custom_licence(
+    payload: RegisterCustomLicenceRequest,
+    request: Request,
+    auth: AuthService = Depends(get_auth_service),
+    service: CustomLicenceRegistrationService = Depends(get_custom_licence_registration_service),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    """Register a local or SPDX-submission custom licence in one DB transaction."""
+    try:
+        principal = _require_mutation_auth(request, auth)
+    except PermissionError as exc:
+        if str(exc) == "authn":
+            return problem_response(
+                status=401,
+                title="Unauthorized",
+                detail="Missing or invalid bearer token.",
+                instance=str(request.url),
+                type_uri="https://eosc-eden.eu/problems/unauthorized",
+            )
+        return problem_response(
+            status=403,
+            title="Forbidden",
+            detail="Authenticated principal lacks required curator/admin role.",
+            instance=str(request.url),
+            type_uri="https://eosc-eden.eu/problems/forbidden",
+        )
+
+    try:
+        result = service.register(
+            RegisterCustomLicenceInput(
+                requested_license_id=payload.requested_license_id,
+                version=payload.version,
+                name=payload.name,
+                summary=payload.summary,
+                description=payload.description,
+                license_text=payload.license_text,
+                scope=payload.scope,
+                aliases=tuple(payload.aliases),
+                creator_role=principal.role,
+            )
+        )
+    except CustomLicenceRegistrationError as exc:
+        return problem_response(
+            status=exc.status,
+            title=exc.title,
+            detail=exc.detail,
+            instance=str(request.url),
+            type_uri=f"https://eosc-eden.eu/problems/{exc.type_slug}",
+            extra=exc.extra,
+        )
+
+    return JSONResponse(
+        status_code=201,
+        content=RegisterCustomLicenceResponse(
+            id=str(result.id),
+            requested_license_id=result.requested_license_id,
+            version=result.version,
+            canonical_id=result.canonical_id,
+            resolving_uuid=str(result.resolving_uuid),
+            resolving_uri=result.resolving_uri,
+            name=result.name,
+            summary=result.summary,
+            description=result.description,
+            scope=result.scope,
+            federation_status=result.federation_status.value,
+            spdx_submission_status=result.spdx_submission_status.value,
+            lifecycle_status=result.lifecycle_status.value,
+            normalized_text_digest=result.normalized_text_digest,
+            spdx_jsonld=result.spdx_jsonld,
+            created_at=result.created_at,
+            updated_at=result.updated_at,
+        ).model_dump(by_alias=True, mode="json"),
+    )
 
 
 @router.post(
