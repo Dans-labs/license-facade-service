@@ -19,6 +19,7 @@ from src.license_facade_service.services.licenses import ResolvedLicense
 from src.license_facade_service.services.licenses import ResolvedLicenseSource
 from src.license_facade_service.services.spdx3_documents import Spdx3DocumentGenerationError, Spdx3DocumentService
 from src.license_facade_service.services.spdx_validation import Spdx301StructuralValidator, SpdxStructuralValidationError
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -78,19 +79,6 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
 def _count_rows(raw_dsn: str, table: str) -> int:
     with psycopg.connect(raw_dsn) as conn:
         with conn.cursor() as cur:
@@ -130,7 +118,8 @@ def postgres_urls():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres container did not become ready in time")
-        _run_alembic(dsn, "upgrade", "head")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn, raw_dsn
     finally:
         subprocess.run(["docker", "stop", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)

@@ -144,6 +144,7 @@ services:
       POSTGRES_PASSWORD: ${LFS_POSTGRES_PASSWORD:-lfs-change-me}
     volumes:
       - lfs-production-postgres:/var/lib/postgresql/data
+      - ./docker/postgres-init/001-lfs-schema.sql:/docker-entrypoint-initdb.d/001-lfs-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -173,19 +174,6 @@ services:
         test -s "$$key"
     volumes:
       - lfs-production-keys:/run/lfs-keys
-    restart: "no"
-    networks:
-      - lfs-production
-
-  lfs-db-init:
-    profiles: ["production"]
-    <<: *lfs-production-image
-    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
-    environment:
-      ALEMBIC_DATABASE_URL: ${LFS_DATABASE_URL:-postgresql+psycopg://lfs:lfs-change-me@lfs-postgres:5432/lfs}
-    depends_on:
-      lfs-postgres:
-        condition: service_healthy
     restart: "no"
     networks:
       - lfs-production
@@ -240,8 +228,6 @@ services:
       - lfs-production-resources:/home/akmi/lfs/resources
       - lfs-production-logs:/home/akmi/lfs/logs
     depends_on:
-      lfs-db-init:
-        condition: service_completed_successfully
       lfs-key-init:
         condition: service_completed_successfully
       lfs-storage-init:
@@ -271,8 +257,6 @@ services:
     volumes:
       - lfs-production-keys:/run/lfs-keys:ro
     depends_on:
-      lfs-db-init:
-        condition: service_completed_successfully
       lfs-key-init:
         condition: service_completed_successfully
       lfs-production-api:
@@ -290,8 +274,6 @@ services:
     volumes:
       - lfs-production-keys:/run/lfs-keys:ro
     depends_on:
-      lfs-db-init:
-        condition: service_completed_successfully
       lfs-key-init:
         condition: service_completed_successfully
       lfs-production-api:
@@ -309,8 +291,6 @@ services:
     volumes:
       - lfs-production-keys:/run/lfs-keys:ro
     depends_on:
-      lfs-db-init:
-        condition: service_completed_successfully
       lfs-key-init:
         condition: service_completed_successfully
       lfs-production-api:
@@ -331,6 +311,7 @@ services:
       POSTGRES_DB: lfs_a
     volumes:
       - federation-demo-node-a-db:/var/lib/postgresql/data
+      - ./docker/postgres-init/001-lfs-schema.sql:/docker-entrypoint-initdb.d/001-lfs-schema.sql:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lfs_a"]
       interval: 5s
@@ -348,6 +329,7 @@ services:
       POSTGRES_DB: lfs_b
     volumes:
       - federation-demo-node-b-db:/var/lib/postgresql/data
+      - ./docker/postgres-init/001-lfs-schema.sql:/docker-entrypoint-initdb.d/001-lfs-schema.sql:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lfs_b"]
       interval: 5s
@@ -362,7 +344,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["sh", "-c", "ALEMBIC_DATABASE_URL=$$FEDERATION_DATABASE_URL uv run alembic -c alembic.ini upgrade head && python -m src.license_facade_service.main"]
+    command: ["python", "-m", "src.license_facade_service.main"]
     environment:
       APP_NAME: License Facade Service Node A
       EXPOSE_PORT: 12104
@@ -430,7 +412,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["sh", "-c", "ALEMBIC_DATABASE_URL=$$FEDERATION_DATABASE_URL uv run alembic -c alembic.ini upgrade head && python -m src.license_facade_service.main"]
+    command: ["python", "-m", "src.license_facade_service.main"]
     environment:
       APP_NAME: License Facade Service Node B
       EXPOSE_PORT: 12104

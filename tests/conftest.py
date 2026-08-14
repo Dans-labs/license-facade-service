@@ -14,6 +14,9 @@ from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient, generate_license_uri
+from tests.schema_init import apply_schema_init_sql
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeSpdxClient(SPDXClient):

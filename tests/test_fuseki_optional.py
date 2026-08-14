@@ -36,6 +36,7 @@ from src.license_facade_service.federation.rdf_outbox import RdfOutboxService
 from src.license_facade_service.federation.resolution import FederationResolutionService
 from src.license_facade_service.federation.resolution_models import ConflictDecisionRequest
 from src.license_facade_service.infra.fuseki_client import FusekiClient
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FUSEKI_IMAGE = "secoresearch/fuseki:4.10.0"
@@ -61,19 +62,6 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
-
-
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def _start_postgres(db_name: str) -> tuple[str, str]:
@@ -160,7 +148,8 @@ def rdf_env():
     postgres_dsn, pg_container = _start_postgres("lfs_fuseki")
     fuseki_url, fuseki_container = _start_fuseki()
     try:
-        _run_alembic(postgres_dsn, "upgrade", "head")
+        apply_schema_init_sql(postgres_dsn)
+        reset_public_schema(postgres_dsn)
         db = Database.from_url(postgres_dsn)
         settings = FederationSettings.from_env()
         fuseki = FusekiClient(fuseki_url=fuseki_url, dataset="licenses", username="admin", password="admin", timeout=10.0)

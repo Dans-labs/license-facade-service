@@ -35,6 +35,7 @@ from src.license_facade_service.services.spdx_validation import (
     Spdx301StructuralValidator,
     SpdxStructuralValidationError,
 )
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = REPO_ROOT / "vendor" / "spdx" / "3.0.1" / "spdx-json-schema.json"
@@ -122,22 +123,11 @@ def postgres_url():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres container did not become ready in time")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn
     finally:
         subprocess.run(["docker", "kill", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-
-
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def test_vendor_schema_is_official_and_self_contained() -> None:
@@ -359,9 +349,7 @@ def test_phase1_models_are_present_without_phase2_and_phase4_tables() -> None:
     assert not admin_routes
 
 
-def test_phase1_migration_upgrade_and_downgrade_on_postgres(postgres_url: str):
-    _run_alembic(postgres_url, "upgrade", "head")
-
+def test_schema_init_creates_custom_licence_tables(postgres_url: str):
     raw_dsn = postgres_url.replace("+psycopg", "")
     with psycopg.connect(raw_dsn) as conn:
         with conn.cursor() as cur:
@@ -565,11 +553,3 @@ def test_phase1_migration_upgrade_and_downgrade_on_postgres(postgres_url: str):
                 assert "not-null" in str(exc)
                 conn.rollback()
             cur.execute("SELECT 1")
-
-    _run_alembic(postgres_url, "downgrade", "20260804_05_phase4_rdf_leases")
-    with psycopg.connect(raw_dsn) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT to_regclass('public.custom_licences')")
-            assert cur.fetchone()[0] is None
-
-    _run_alembic(postgres_url, "upgrade", "head")

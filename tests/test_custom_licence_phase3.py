@@ -47,6 +47,7 @@ from src.license_facade_service.services.custom_licence_federation_publication i
     build_federation_local_id,
     databases_match,
 )
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -68,19 +69,6 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
-
-
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def _count_rows(raw_dsn: str, table: str) -> int:
@@ -146,7 +134,8 @@ def postgres_urls():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres container did not become ready in time")
-        _run_alembic(dsn, "upgrade", "head")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn, raw_dsn
     finally:
         subprocess.run(["docker", "stop", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -168,6 +157,7 @@ def federation_key_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def phase3_client(postgres_urls: tuple[str, str], federation_key_file: Path, monkeypatch: pytest.MonkeyPatch):
     dsn, raw_dsn = postgres_urls
+    reset_public_schema(dsn)
     monkeypatch.setenv("FEDERATION_ENABLED", "true")
     monkeypatch.setenv("FEDERATION_INBOUND_ENABLED", "false")
     monkeypatch.setenv("FEDERATION_DATABASE_URL", dsn)

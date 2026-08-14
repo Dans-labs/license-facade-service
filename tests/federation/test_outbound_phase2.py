@@ -32,6 +32,7 @@ from src.license_facade_service.federation.runtime import FederationRuntime
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_ID = "de305d54-75b4-431b-adb2-eb6b9e546014"
@@ -74,19 +75,6 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
 @pytest.fixture(scope="module")
 def postgres_url():
     if not _docker_available():
@@ -127,6 +115,8 @@ def postgres_url():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres not ready")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn
     finally:
         subprocess.run(["docker", "kill", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -134,8 +124,7 @@ def postgres_url():
 
 @pytest.fixture
 def fed_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
-    _run_alembic(postgres_url, "downgrade", "base")
-    _run_alembic(postgres_url, "upgrade", "head")
+    reset_public_schema(postgres_url)
     _seed_snapshot(tmp_path)
 
     key = Ed25519PrivateKey.generate()
@@ -326,10 +315,11 @@ def test_get_is_read_only_and_event_signatures_stable(fed_env):
     assert before == after
 
 
-def test_verify_bytes_fallback_rejects_unknown_non_active_kid(fed_env):
+def test_verify_bytes_fallback_rejects_unknown_non_active_kid(fed_env, monkeypatch: pytest.MonkeyPatch):
     verifier = SigningKeyService(fed_env["db"], fed_env["settings"])
     payload = canonicalize_to_bytes({"licenseId": "UNKNOWN-KID"})
     signature = verifier.sign_bytes(payload)
+    monkeypatch.setattr(verifier, "_load_private_key", lambda: pytest.fail("private key should not be loaded for unknown kid"))
     with fed_env["db"].transaction() as session:
         session.query(FederationSigningKey).delete()
     assert verifier.verify_bytes(payload, signature_b64url=signature.value, kid="k2") is False
@@ -460,31 +450,20 @@ def test_backfill_scans_all_batches_and_idempotent(fed_env):
     assert second["inserted"] == 0
 
 
-def test_migration_upgrade_downgrade_upgrade_repeatable(postgres_url: str):
-    _run_alembic(postgres_url, "downgrade", "base")
-    _run_alembic(postgres_url, "upgrade", "20260804_02")
+def test_schema_init_creates_phase2_change_event_triggers(postgres_url: str):
+    reset_public_schema(postgres_url)
     with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT nextval('federation_change_event_sequence')")
             assert cur.fetchone()[0] == 1
             cur.execute("SELECT to_regprocedure('lfs_reject_federation_change_events_mutation()') IS NOT NULL")
             assert cur.fetchone()[0] is True
+            cur.execute("SELECT to_regprocedure('lfs_reject_change_events_mutation()') IS NOT NULL")
+            assert cur.fetchone()[0] is False
             cur.execute(
                 "SELECT COUNT(*) FROM pg_trigger WHERE tgname IN ('trg_federation_change_events_no_update','trg_federation_change_events_no_delete')"
             )
             assert cur.fetchone()[0] == 2
-    _run_alembic(postgres_url, "downgrade", "20260804_01")
-    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT to_regprocedure('lfs_reject_federation_change_events_mutation()') IS NULL")
-            assert cur.fetchone()[0] is True
-            cur.execute("SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'trg_federation_change_events_no_update'")
-            assert "lfs_reject_change_events_mutation" in cur.fetchone()[0]
-    _run_alembic(postgres_url, "upgrade", "20260804_02")
-    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT to_regprocedure('lfs_reject_federation_change_events_mutation()') IS NOT NULL")
-            assert cur.fetchone()[0] is True
 
 
 def test_etag_and_if_none_match_semantics(fed_env):

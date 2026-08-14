@@ -56,6 +56,7 @@ from src.license_facade_service.federation.security import FederationUrlPolicy, 
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_B_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
@@ -119,19 +120,6 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
-
-
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def _b64url(data: bytes) -> str:
@@ -217,6 +205,8 @@ def postgres_url():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres not ready")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn
     finally:
         subprocess.run(["docker", "kill", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -224,8 +214,7 @@ def postgres_url():
 
 @pytest.fixture
 def fed_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
-    _run_alembic(postgres_url, "downgrade", "base")
-    _run_alembic(postgres_url, "upgrade", "head")
+    reset_public_schema(postgres_url)
     _seed_snapshot(tmp_path)
 
     key_b = Ed25519PrivateKey.generate()
@@ -379,7 +368,8 @@ def test_custom_licence_payload_sync_uses_real_outbound_and_preserves_imported_c
         conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute(f'CREATE DATABASE "{source_db_name}"')
-    _run_alembic(source_dsn, "upgrade", "head")
+    apply_schema_init_sql(source_dsn)
+    reset_public_schema(source_dsn)
 
     key_a = Ed25519PrivateKey.generate()
     key_path = tmp_path / "node-a-signing-key.pem"
@@ -1361,37 +1351,13 @@ def test_tombstone_keeps_imported_history_and_provenance(fed_env):
         assert prov_count >= 1
 
 
-def test_phase3_migration_repeatability(postgres_url: str):
-    _run_alembic(postgres_url, "downgrade", "base")
-    _run_alembic(postgres_url, "upgrade", "20260804_02")
-    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO federation_records (
-                  id, authority_node_id, local_id, version, canonical_id, resolving_uuid, is_authoritative,
-                  payload, payload_digest_sha256, published_at, imported_from_peer_id, created_at, updated_at
-                ) VALUES (%s,%s,%s,%s,%s,%s,true,'{}'::jsonb,'x',now(),NULL,now(),now())
-                """,
-                (
-                    str(uuid4()),
-                    NODE_B_ID,
-                    "MIG",
-                    "1",
-                    f"lfs:{NODE_B_ID}:MIG:1",
-                    str(uuid4()),
-                ),
-            )
-            conn.commit()
-    _run_alembic(postgres_url, "upgrade", "20260804_03")
+def test_phase3_schema_init_creates_inbound_tables(postgres_url: str):
     with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('public.federation_inbound_events') IS NOT NULL")
             assert cur.fetchone()[0] is True
             cur.execute("SELECT to_regclass('public.federation_peer_signing_keys') IS NOT NULL")
             assert cur.fetchone()[0] is True
-            cur.execute("SELECT COUNT(*) FROM federation_records WHERE canonical_id = %s", (f"lfs:{NODE_B_ID}:MIG:1",))
-            assert cur.fetchone()[0] == 1
             cur.execute(
                 """
                 SELECT COUNT(*) FROM information_schema.columns
@@ -1400,13 +1366,3 @@ def test_phase3_migration_repeatability(postgres_url: str):
                 """
             )
             assert cur.fetchone()[0] == 0
-    _run_alembic(postgres_url, "downgrade", "20260804_02")
-    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT to_regclass('public.federation_inbound_events') IS NULL")
-            assert cur.fetchone()[0] is True
-            cur.execute("SELECT to_regclass('public.federation_peer_signing_keys') IS NULL")
-            assert cur.fetchone()[0] is True
-            cur.execute("SELECT COUNT(*) FROM federation_records WHERE canonical_id = %s", (f"lfs:{NODE_B_ID}:MIG:1",))
-            assert cur.fetchone()[0] == 1
-    _run_alembic(postgres_url, "upgrade", "20260804_03")

@@ -94,7 +94,7 @@ Constraints:
 
 Implemented in this phase:
 
-- PostgreSQL schema + Alembic migrations for federation state tables.
+- Canonical PostgreSQL initialization schema for federation state tables.
 - Feature flag: `FEDERATION_ENABLED`.
 - Validated node identity from configuration (no request-header derivation).
 - Persisted node identity fingerprint/state for configuration drift detection.

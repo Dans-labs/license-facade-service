@@ -40,6 +40,7 @@ from src.license_facade_service.federation.runtime import FederationRuntime
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -99,19 +100,6 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
 @pytest.fixture(scope="module")
 def postgres_url():
     if not _docker_available():
@@ -151,6 +139,8 @@ def postgres_url():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres not ready")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn
     finally:
         subprocess.run(["docker", "kill", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -354,7 +344,7 @@ def _imported_record(session, *, peer: FederationTrustedPeer, canonical_id: str,
 
 @pytest.fixture
 def phase4_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
-    _run_alembic(postgres_url, "upgrade", "head")
+    reset_public_schema(postgres_url)
     _seed_snapshot(tmp_path)
     key = Ed25519PrivateKey.generate()
     pem = key.private_bytes(
@@ -731,11 +721,7 @@ def test_rdf_outbox_transaction_rollback_is_atomic(phase4_env):
         assert len(jobs) == before_count
 
 
-def test_migration_repeatability_phase4(postgres_url: str):
-    _run_alembic(postgres_url, "downgrade", "base")
-    _run_alembic(postgres_url, "upgrade", "head")
-    _run_alembic(postgres_url, "downgrade", "base")
-    _run_alembic(postgres_url, "upgrade", "head")
+def test_phase4_schema_init_creates_resolution_tables(postgres_url: str):
     with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('public.federation_resolution_conflicts')")
