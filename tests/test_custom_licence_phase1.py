@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import socket
@@ -34,6 +33,7 @@ from src.license_facade_service.services.spdx_validation import (
     EXPECTED_SCHEMA_SHA256,
     Spdx301StructuralValidator,
     SpdxStructuralValidationError,
+    _normalized_schema_sha256,
 )
 from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
@@ -132,7 +132,7 @@ def postgres_url():
 
 def test_vendor_schema_is_official_and_self_contained() -> None:
     assert SCHEMA_PATH.is_file()
-    actual_sha = hashlib.sha256(SCHEMA_PATH.read_bytes()).hexdigest()
+    actual_sha = _normalized_schema_sha256(SCHEMA_PATH.read_bytes())
     assert actual_sha == EXPECTED_SCHEMA_SHA256
 
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))

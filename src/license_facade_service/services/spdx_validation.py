@@ -9,7 +9,12 @@ from typing import Any, Mapping
 import jsonschema
 
 SCHEMA_PATH = Path(__file__).resolve().parents[3] / "vendor" / "spdx" / "3.0.1" / "spdx-json-schema.json"
-EXPECTED_SCHEMA_SHA256 = "582c64e809d5b3ef9bd0c4de13a32391b47b0284a3e8d199569fb96f649234b1"
+EXPECTED_SCHEMA_SHA256 = "571dd17d52ad567cb5b44c2fdf0c57f013d08584f00e4f30b4f744dcca0fbb4c"
+
+
+def _normalized_schema_sha256(schema_bytes: bytes) -> str:
+    # Keep digest stable across Git checkout line-ending policies.
+    return hashlib.sha256(schema_bytes.replace(b"\r\n", b"\n")).hexdigest()
 
 
 class SpdxStructuralValidationError(ValueError):
@@ -28,12 +33,13 @@ class Spdx301StructuralValidator:
     def _load_schema(self) -> None:
         if not self.schema_path.is_file():
             raise SpdxStructuralValidationError(f"SPDX schema not found at {self.schema_path}")
-        digest = hashlib.sha256(self.schema_path.read_bytes()).hexdigest()
+        schema_bytes = self.schema_path.read_bytes()
+        digest = _normalized_schema_sha256(schema_bytes)
         if digest != EXPECTED_SCHEMA_SHA256:
             raise SpdxStructuralValidationError(
                 f"SPDX schema digest mismatch: expected {EXPECTED_SCHEMA_SHA256}, got {digest}."
             )
-        schema = json.loads(self.schema_path.read_text(encoding="utf-8"))
+        schema = json.loads(schema_bytes.decode("utf-8"))
         if schema.get("$schema") != "https://json-schema.org/draft/2020-12/schema":
             raise SpdxStructuralValidationError("Vendored SPDX schema is not a Draft 2020-12 schema.")
         refs: list[str] = []
@@ -83,4 +89,10 @@ class Spdx301StructuralValidator:
             raise SpdxStructuralValidationError("SPDX document failed structural validation.", errors=sanitized)
 
 
-__all__ = ["EXPECTED_SCHEMA_SHA256", "SCHEMA_PATH", "Spdx301StructuralValidator", "SpdxStructuralValidationError"]
+__all__ = [
+    "EXPECTED_SCHEMA_SHA256",
+    "SCHEMA_PATH",
+    "Spdx301StructuralValidator",
+    "SpdxStructuralValidationError",
+    "_normalized_schema_sha256",
+]

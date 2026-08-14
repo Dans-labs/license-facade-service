@@ -3,7 +3,7 @@
 - SPDX version: 3.0.1
 - Official source URL: https://spdx.org/schema/3.0.1/spdx-json-schema.json
 - Retrieval date: 2026-08-12
-- SHA-256: 582c64e809d5b3ef9bd0c4de13a32391b47b0284a3e8d199569fb96f649234b1
+- SHA-256: 571dd17d52ad567cb5b44c2fdf0c57f013d08584f00e4f30b4f744dcca0fbb4c
 - JSON Schema dialect: Draft 2020-12 (`https://json-schema.org/draft/2020-12/schema`)
 - Upstream release reference: official `spdx.org` release endpoint for the SPDX 3.0.1 schema; the GitHub `develop` content differs and is intentionally not used for the pinned artifact.
 - SPDX upstream licensing / redistribution note: the SPDX project content is distributed under the SPDX project licensing and attribution rules. This vendored artifact is kept for offline, local structural validation in LFS and is not redistributed as a separate, unrelated schema package.
