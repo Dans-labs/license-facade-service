@@ -157,6 +157,7 @@ def create_app() -> FastAPI:
     app.state.custom_licence_registration_service = None
     app.state.openrel_client = None
     app.state.spdx3_document_service = None
+    app.state.project_details = details
     try:
         base = os.getenv("URL_BASE", "https://license.example.org/api/v1/licenses").rstrip("/")
         complete_namespace = validate_http_iri(f"{base}/spdx3/documents", "complete_namespace")
@@ -180,6 +181,20 @@ def create_app() -> FastAPI:
     app.include_router(federation_outbound.router)
     app.include_router(federation_jwks.router)
     app.include_router(federation_admin.router)
+
+    @app.get(
+        "/",
+        tags=["Service status"],
+        summary="Show service version",
+        description=(
+            "Returns the service title and the version declared in pyproject.toml.\n\n"
+            "Use this root endpoint to confirm the running application build version."
+        ),
+        operation_id="getServiceRoot",
+        response_description="Service title and pyproject version.",
+    )
+    async def root():
+        return {"title": details["title"], "version": details["version"]}
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(request, exc: RequestValidationError):

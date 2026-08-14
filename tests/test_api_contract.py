@@ -10,6 +10,7 @@ from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService, Principal
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense, ResolvedLicenseSource
+from src.license_facade_service.utils.commons import get_project_details
 
 
 def _openapi_operations(client):
@@ -37,6 +38,16 @@ def test_openapi_has_no_duplicate_operations(app_client):
             key = (route.path, method)
             assert key not in seen
             seen.add(key)
+
+
+def test_root_endpoint_reports_pyproject_version(app_client):
+    client, *_ = app_client
+    response = client.get("/")
+    assert response.status_code == 200
+    body = response.json()
+    expected = get_project_details(Path(__file__).resolve().parents[1], ["title", "version"])
+    assert body["title"] == expected["title"]
+    assert body["version"] == expected["version"]
 
 
 def test_openapi_operations_have_summary_description_tags_and_unique_operation_ids(app_client):
