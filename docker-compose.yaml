@@ -1,16 +1,67 @@
+x-lfs-production-image: &lfs-production-image
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      BUILD_DATE: ${BUILD_DATE:-}
+  image: ${LFS_IMAGE:-license-facade-service:0.1.8}
+
+x-lfs-production-environment: &lfs-production-environment
+  APP_NAME: ${APP_NAME:-License Facade Service}
+  BASE_DIR: /home/akmi/lfs
+  EXPOSE_PORT: "12104"
+  URL_BASE: ${URL_BASE:-https://lfs.example.org/api/v1/licenses}
+  LFS_ADMIN_TOKEN: ${LFS_ADMIN_TOKEN:-}
+  LFS_CURATOR_TOKEN: ${LFS_CURATOR_TOKEN:-}
+  FEDERATION_ENABLED: ${FEDERATION_ENABLED:-true}
+  FEDERATION_INBOUND_ENABLED: ${FEDERATION_INBOUND_ENABLED:-true}
+  FEDERATION_DATABASE_URL: ${LFS_DATABASE_URL:-postgresql+psycopg://lfs:lfs-change-me@lfs-postgres:5432/lfs}
+  FEDERATION_NODE_ID: ${FEDERATION_NODE_ID:-00000000-0000-4000-8000-000000000001}
+  FEDERATION_PUBLIC_BASE_URL: ${FEDERATION_PUBLIC_BASE_URL:-https://lfs.example.org}
+  FEDERATION_NODE_NAME: ${FEDERATION_NODE_NAME:-Production LFS Node}
+  FEDERATION_OPERATOR: ${FEDERATION_OPERATOR:-LFS Operator}
+  FEDERATION_ACTIVE_KID: ${FEDERATION_ACTIVE_KID:-lfs-production-k1}
+  FEDERATION_SIGNING_KEY_PATH: /run/lfs-keys/federation-signing-key.pem
+  FEDERATION_JWKS_ENABLED: ${FEDERATION_JWKS_ENABLED:-true}
+  FEDERATION_ALLOW_HTTP_FOR_DEMO: "false"
+  FEDERATION_DEMO_TOFU_UNSAFE: "false"
+  FEDERATION_SYNC_ALLOWED_PORTS: ${FEDERATION_SYNC_ALLOWED_PORTS:-443}
+  FEDERATION_SYNC_ALLOWED_HOSTNAMES: ${FEDERATION_SYNC_ALLOWED_HOSTNAMES:-}
+  FEDERATION_SYNC_ALLOWED_CIDRS: ${FEDERATION_SYNC_ALLOWED_CIDRS:-}
+  FEDERATION_ALLOW_PRIVATE_NETWORK: ${FEDERATION_ALLOW_PRIVATE_NETWORK:-false}
+  FEDERATION_WORKER_INTERVAL_SECONDS: ${FEDERATION_WORKER_INTERVAL_SECONDS:-60}
+  FEDERATION_WORKER_MAX_SYNC_SECONDS: ${FEDERATION_WORKER_MAX_SYNC_SECONDS:-120}
+  CUSTOM_LICENCE_REGISTRATION_DATABASE_URL: ${LFS_DATABASE_URL:-postgresql+psycopg://lfs:lfs-change-me@lfs-postgres:5432/lfs}
+  CUSTOM_LICENCE_AUTHORITY_ID: ${CUSTOM_LICENCE_AUTHORITY_ID:-lfs-production-authority}
+  CUSTOM_LICENCE_AUTHORITY_BASE_IRI: ${CUSTOM_LICENCE_AUTHORITY_BASE_IRI:-https://lfs.example.org}
+  CUSTOM_LICENCE_CREATOR_ORGANIZATION_NAME: ${CUSTOM_LICENCE_CREATOR_ORGANIZATION_NAME:-LFS Operator}
+  CUSTOM_LICENCE_CREATOR_ORGANIZATION_IRI: ${CUSTOM_LICENCE_CREATOR_ORGANIZATION_IRI:-https://lfs.example.org/spdx/agents/lfs-operator}
+  CUSTOM_LICENCE_FEDERATION_WORKER_INTERVAL_SECONDS: ${CUSTOM_LICENCE_FEDERATION_WORKER_INTERVAL_SECONDS:-5}
+  CUSTOM_LICENCE_FEDERATION_BATCH_SIZE: ${CUSTOM_LICENCE_FEDERATION_BATCH_SIZE:-25}
+  CUSTOM_LICENCE_FEDERATION_LEASE_SECONDS: ${CUSTOM_LICENCE_FEDERATION_LEASE_SECONDS:-60}
+  FUSEKI_ENABLE: ${FUSEKI_ENABLE:-true}
+  FUSEKI_URL: http://fuseki:3030
+  FUSEKI_USER: ${FUSEKI_USER:-admin}
+  FUSEKI_PASSWORD: ${FUSEKI_ADMIN_PASSWORD:-}
+  FUSEKI_CLEAR_ON_STARTUP: "false"
+  OPENREL_ENABLED: ${OPENREL_ENABLED:-false}
+  OPENREL_BASE_URL: ${OPENREL_BASE_URL:-}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-false}
+  RELOAD_ENABLE: "false"
+
 services:
   fuseki:
-    profiles: ["app"]
+    profiles: ["app", "production"]
     image: secoresearch/fuseki:4.10.0
-    container_name: lfs-fuseki
     environment:
-      ADMIN_PASSWORD: ${FUSEKI_ADMIN_PASSWORD}
+      ADMIN_PASSWORD: ${FUSEKI_ADMIN_PASSWORD:-}
       JVM_ARGS: ${FUSEKI_JVM_ARGS:--Xmx2g -Xms1g}
     volumes:
       - fuseki-data:/fuseki
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3030/$/ping"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3030/$/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -84,6 +135,193 @@ services:
     networks:
       - lfs-internal
 
+  lfs-postgres:
+    profiles: ["production"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${LFS_POSTGRES_DB:-lfs}
+      POSTGRES_USER: ${LFS_POSTGRES_USER:-lfs}
+      POSTGRES_PASSWORD: ${LFS_POSTGRES_PASSWORD:-lfs-change-me}
+    volumes:
+      - lfs-production-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - lfs-production
+
+  lfs-key-init:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    user: root
+    command:
+      - sh
+      - -ec
+      - |
+        install -d -m 0700 -o akmi -g akmi /run/lfs-keys
+        key=/run/lfs-keys/federation-signing-key.pem
+        if [ ! -s "$$key" ]; then
+          umask 077
+          openssl genpkey -algorithm ED25519 -out "$$key"
+        fi
+        chown akmi:akmi "$$key"
+        chmod 0600 "$$key"
+        test -s "$$key"
+    volumes:
+      - lfs-production-keys:/run/lfs-keys
+    restart: "no"
+    networks:
+      - lfs-production
+
+  lfs-db-init:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    environment:
+      ALEMBIC_DATABASE_URL: ${LFS_DATABASE_URL:-postgresql+psycopg://lfs:lfs-change-me@lfs-postgres:5432/lfs}
+    depends_on:
+      lfs-postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - lfs-production
+
+  lfs-storage-init:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    user: root
+    command:
+      - sh
+      - -ec
+      - |
+        install -d -m 0750 -o akmi -g akmi /home/akmi/lfs/resources
+        install -d -m 0750 -o akmi -g akmi /home/akmi/lfs/resources/data
+        install -d -m 0750 -o akmi -g akmi /home/akmi/lfs/logs
+    volumes:
+      - lfs-production-resources:/home/akmi/lfs/resources
+      - lfs-production-logs:/home/akmi/lfs/logs
+    restart: "no"
+    networks:
+      - lfs-production
+
+  lfs-fuseki-init:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    command:
+      - python
+      - -c
+      - |
+        import asyncio
+        from src.license_facade_service.infra.fuseki_client import FusekiClient
+        client = FusekiClient()
+        raise SystemExit(0 if asyncio.run(client.create_dataset()) else 1)
+    environment:
+      FUSEKI_URL: http://fuseki:3030
+      FUSEKI_USER: ${FUSEKI_USER:-admin}
+      FUSEKI_PASSWORD: ${FUSEKI_ADMIN_PASSWORD:-}
+    depends_on:
+      fuseki:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - lfs-internal
+
+  lfs-production-api:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    environment:
+      <<: *lfs-production-environment
+    volumes:
+      - lfs-production-keys:/run/lfs-keys:ro
+      - lfs-production-resources:/home/akmi/lfs/resources
+      - lfs-production-logs:/home/akmi/lfs/logs
+    depends_on:
+      lfs-db-init:
+        condition: service_completed_successfully
+      lfs-key-init:
+        condition: service_completed_successfully
+      lfs-storage-init:
+        condition: service_completed_successfully
+      lfs-fuseki-init:
+        condition: service_completed_successfully
+    ports:
+      - "${LFS_HOST_PORT:-12104}:12104"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:12104/api/v1/ready"]
+      interval: 10s
+      timeout: 5s
+      # A brand-new resource volume downloads the SPDX snapshot before first readiness.
+      retries: 120
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - lfs-production
+      - lfs-internal
+
+  lfs-sync-worker:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    command: ["python", "-m", "src.license_facade_service.worker"]
+    environment:
+      <<: *lfs-production-environment
+    volumes:
+      - lfs-production-keys:/run/lfs-keys:ro
+    depends_on:
+      lfs-db-init:
+        condition: service_completed_successfully
+      lfs-key-init:
+        condition: service_completed_successfully
+      lfs-production-api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lfs-production
+
+  lfs-custom-licence-worker:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    command: ["python", "-m", "src.license_facade_service.custom_licence_federation_worker"]
+    environment:
+      <<: *lfs-production-environment
+    volumes:
+      - lfs-production-keys:/run/lfs-keys:ro
+    depends_on:
+      lfs-db-init:
+        condition: service_completed_successfully
+      lfs-key-init:
+        condition: service_completed_successfully
+      lfs-production-api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lfs-production
+
+  lfs-rdf-worker:
+    profiles: ["production"]
+    <<: *lfs-production-image
+    command: ["python", "-m", "src.license_facade_service.rdf_worker"]
+    environment:
+      <<: *lfs-production-environment
+    volumes:
+      - lfs-production-keys:/run/lfs-keys:ro
+    depends_on:
+      lfs-db-init:
+        condition: service_completed_successfully
+      lfs-key-init:
+        condition: service_completed_successfully
+      lfs-production-api:
+        condition: service_healthy
+      lfs-fuseki-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - lfs-production
+      - lfs-internal
+
   node-a-db:
     image: postgres:16-alpine
     profiles: ["federation-demo"]
@@ -134,7 +372,7 @@ services:
       CORS_ORIGINS: ""
       CORS_ALLOW_CREDENTIALS: "false"
       RELOAD_ENABLE: "false"
-      LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN}
+      LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN:-}
       FEDERATION_ENABLED: "true"
       FEDERATION_INBOUND_ENABLED: "false"
       FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-a-db:5432/lfs_a
@@ -202,7 +440,7 @@ services:
       CORS_ORIGINS: ""
       CORS_ALLOW_CREDENTIALS: "false"
       RELOAD_ENABLE: "false"
-      LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN}
+      LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN:-}
       FEDERATION_ENABLED: "true"
       FEDERATION_INBOUND_ENABLED: "true"
       FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-b-db:5432/lfs_b
@@ -341,9 +579,19 @@ volumes:
     driver: local
   federation-demo-node-b-db:
     driver: local
+  lfs-production-postgres:
+    driver: local
+  lfs-production-keys:
+    driver: local
+  lfs-production-resources:
+    driver: local
+  lfs-production-logs:
+    driver: local
 
 networks:
   lfs-internal:
     driver: bridge
   federation-demo:
+    driver: bridge
+  lfs-production:
     driver: bridge

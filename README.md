@@ -9,6 +9,16 @@ uv sync
 uv run python -m src.license_facade_service.main
 ```
 
+For a complete Docker production node, copy `.env.production.example` and use the `production` Compose profile. It automatically initializes PostgreSQL schema, the persistent signing key, storage ownership, and the Fuseki `licenses` dataset before starting the API and workers:
+
+```bash
+cp .env.production.example .env.production
+# Replace every CHANGE_ME value, then:
+docker compose --env-file .env.production --profile production up -d --build
+```
+
+See [Production Docker Deployment](docs/production-docker-deployment.md) for the full deployment and upgrade procedure, and [Registering a Custom Licence](docs/custom-licence-registration-guide.md) for complete `curl`, Swagger, and Postman examples.
+
 ## API contract
 
 - Canonical lookup: `GET /api/v1/licenses/{id}`
