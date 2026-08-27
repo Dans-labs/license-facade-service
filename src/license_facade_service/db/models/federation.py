@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.schema import FetchedValue
 
 from src.license_facade_service.db.base import Base
 
@@ -38,6 +39,9 @@ class FederationSigningKey(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Phase 5 rotation tracking
+    rotation_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rotated_to_kid: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -73,6 +77,19 @@ class FederationTrustedPeer(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Phase 5 — circuit breaker columns
+    circuit_state: Mapped[str] = mapped_column(String(16), nullable=False, server_default="closed")
+    circuit_requires_admin_reset: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    circuit_failure_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    circuit_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    circuit_next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    circuit_half_open_probe_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    circuit_last_failure_reason: Mapped[str | None] = mapped_column(String(64))
+    # Phase 5 — administrative suspension columns (distinct from circuit breaker)
+    suspended_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    suspension_reason: Mapped[str | None] = mapped_column(String(1024))
+    # Phase 5 — peer key management
+    last_key_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class FederationRecord(Base):
@@ -488,3 +505,150 @@ Index("ix_federation_provenance_record_id", FederationRecordProvenance.record_id
 Index("ix_federation_change_events_occurred_at", FederationChangeEvent.occurred_at)
 Index("ix_federation_sync_attempts_peer_started", FederationSyncAttempt.peer_id, FederationSyncAttempt.started_at)
 Index("ix_federation_inbound_events_peer_position", FederationInboundEvent.source_peer_id, FederationInboundEvent.remote_event_position)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — Increment 1: operational schema models
+# ---------------------------------------------------------------------------
+
+
+class FederationOperationalAudit(Base):
+    """Append-only operational audit log.
+
+    target_id stores stable UUIDs or key identifiers (max 256 chars).
+    Canonical licence identifiers that exceed 256 chars must be stored
+    truncated with their full form placed in redacted_details by
+    AuditDetailBuilder. This is Option A per the approved design.
+
+    peer_id uses ON DELETE RESTRICT: peers must be archived, not deleted.
+    DB-level triggers reject UPDATE and DELETE on this table.
+    """
+
+    __tablename__ = "federation_operational_audit"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=FetchedValue())
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+    request_id: Mapped[str | None] = mapped_column(String(128))
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(256))
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    peer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("federation_trusted_peers.id", ondelete="RESTRICT", name="fk_foa_peer_id"),
+    )
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    redacted_details: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class FederationSyncLease(Base):
+    """Persisted per-peer synchronization lease with monotonic fencing token.
+
+    UNIQUE(peer_id): at most one active lease per peer.
+    fencing_token: from global sequence federation_sync_lease_fencing_seq,
+    never resets, strictly increasing across all claim/release cycles.
+    Atomic claim via INSERT ... ON CONFLICT DO UPDATE WHERE expires_at < now().
+    """
+
+    __tablename__ = "federation_sync_leases"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=FetchedValue())
+    peer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("federation_trusted_peers.id", ondelete="RESTRICT", name="fk_fsl_peer_id"),
+        nullable=False,
+        unique=True,
+    )
+    owner_instance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    fencing_token: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=FetchedValue())
+    acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "trigger_type IN ('scheduled','manual','probe','cursor_recovery')",
+            name="ck_fsl_trigger_type",
+        ),
+        CheckConstraint("expires_at > acquired_at", name="ck_fsl_expiry_after_acquired"),
+    )
+
+
+class FederationWorkerHeartbeat(Base):
+    """Cross-container worker freshness signal via PostgreSQL.
+
+    The API reads MAX(last_heartbeat_at) per worker_type to determine
+    worker freshness for readiness reporting. No raw exception text is
+    stored; last_error_class holds only a bounded error class string.
+    """
+
+    __tablename__ = "federation_worker_heartbeats"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=FetchedValue())
+    worker_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    instance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    hostname: Mapped[str | None] = mapped_column(String(256))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+    last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="running")
+    last_error_class: Mapped[str | None] = mapped_column(String(64))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+
+    __table_args__ = (
+        UniqueConstraint("worker_type", "instance_id", name="uq_fwh_worker_instance"),
+        CheckConstraint("worker_type IN ('sync','rdf','probe')", name="ck_fwh_worker_type"),
+        CheckConstraint("status IN ('running','idle','error','stopped')", name="ck_fwh_status"),
+        CheckConstraint("hostname IS NULL OR char_length(hostname) <= 256", name="ck_fwh_hostname_len"),
+        CheckConstraint("last_error_class IS NULL OR char_length(last_error_class) <= 64", name="ck_fwh_error_class_len"),
+    )
+
+
+class FederationPeerHealthSnapshot(Base):
+    """Per-probe peer health snapshot.
+
+    peer_id is nullable (ON DELETE SET NULL): snapshots are retained as
+    historical evidence even after a peer is archived and its row is
+    eventually cleared. peer_node_id provides immutable historical identity.
+    No raw exception messages or remote response bodies are stored;
+    error_detail is bounded to 1024 chars.
+    """
+
+    __tablename__ = "federation_peer_health_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=FetchedValue())
+    peer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("federation_trusted_peers.id", ondelete="SET NULL", name="fk_fphs_peer_id"),
+    )
+    peer_node_id: Mapped[str] = mapped_column(Text, nullable=False)
+    sampled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+    discovery_reachable: Mapped[bool | None] = mapped_column(Boolean)
+    jwks_reachable: Mapped[bool | None] = mapped_column(Boolean)
+    feed_reachable: Mapped[bool | None] = mapped_column(Boolean)
+    last_event_position: Mapped[int | None] = mapped_column(BigInteger)
+    round_trip_ms: Mapped[int | None] = mapped_column(Integer)
+    health_status: Mapped[str | None] = mapped_column(String(32))
+    compatibility_status: Mapped[str | None] = mapped_column(String(32))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=FetchedValue())
+
+    __table_args__ = (
+        CheckConstraint(
+            "health_status IS NULL OR health_status IN ('healthy','degraded','unreachable','unknown')",
+            name="ck_fphs_health_status",
+        ),
+        CheckConstraint(
+            "compatibility_status IS NULL OR compatibility_status IN ('compatible','incompatible','unknown','unchecked')",
+            name="ck_fphs_compat_status",
+        ),
+        CheckConstraint("round_trip_ms IS NULL OR round_trip_ms >= 0", name="ck_fphs_round_trip_nonneg"),
+        CheckConstraint("error_code IS NULL OR char_length(error_code) <= 64", name="ck_fphs_error_code_len"),
+        CheckConstraint("error_detail IS NULL OR char_length(error_detail) <= 1024", name="ck_fphs_error_detail_len"),
+        CheckConstraint("char_length(peer_node_id) <= 256", name="ck_fphs_peer_node_id_len"),
+    )
