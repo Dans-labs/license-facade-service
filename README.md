@@ -177,7 +177,7 @@ Implemented:
 - Fuseki outages do not block PostgreSQL resolution; failed RDF jobs retry with leases/backoff and can be dead-lettered;
 - rebuild/reconcile operate only on graphs owned by this service.
 
-## Federation Phase 5 Increment 3 (lease-fenced sync coordination)
+## Federation Phase 5 Increment 3-4 (lease-fenced sync + peer-key trust workflow)
 
 Implemented:
 
@@ -192,12 +192,25 @@ Implemented:
   - `POST /api/v1/admin/federation/peers/{peer-id}/circuit/reset`
   - `POST /api/v1/admin/federation/peers/{peer-id}/probe`
 - health snapshots are appended after actual sync attempts and explicit probes;
-- operational audit events are written for sync circuit transitions, probe, suspension/resume, and circuit reset.
+- operational audit events are written for sync circuit transitions, probe, suspension/resume, circuit reset, and peer-key operations;
+- admin-only peer-key trust workflow:
+  - `GET /api/v1/admin/federation/peers/{peer-id}/keys`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/keys/inspect`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/keys/approve`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/keys/{kid}/retire`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/keys/{kid}/revoke`
+- no blind TOFU or automatic key trust/replacement for existing peers; operators inspect, verify fingerprint out-of-band, then approve;
+- inspect diff categories are deterministic and mutually exclusive with precedence `invalid -> changed -> expired -> known/new/removed`;
+- same-kid/different-material approval is rejected and opens a permanent circuit requiring admin reset;
+- inbound authorization for new events requires `active` peer keys and DB-time validity windows (`valid_from <= now < valid_until`, where bounds may be null);
+- Key eligibility is checked again using PostgreSQL time in the fenced page-commit transaction.
+- new inbound validity failures use bounded codes (`signing-key-not-yet-valid`, `signing-key-expired`) and map to permanent identity-trust circuit handling;
+- historical verification is cryptographic evidence-only (including retired/expired/revoked material) and never authorizes imports or state mutation;
+- enrollment `expectedKeyKid`/`expectedKeyFingerprint` remain enrollment evidence and are not silently overwritten by key approval.
 
-Increment 3 intentionally does **not** include:
+Increment 4 intentionally does **not** include:
 
-- peer-key inspection/approval workflows;
-- local signing-key rotation workflows;
+- local signing-key rotation workflows (deferred to Increment 5);
 - cursor replay/checkpoint tooling;
 - RDF recovery enhancements beyond existing Phase 4 behavior;
 - rate limiting / metrics / logging expansions;

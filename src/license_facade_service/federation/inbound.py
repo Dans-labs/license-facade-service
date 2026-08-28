@@ -8,6 +8,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Callable
 from urllib.parse import urlencode
 
@@ -39,6 +40,10 @@ from src.license_facade_service.federation.inbound_models import (
     AdminStatusResponse,
     ImportedRecordListResponse,
     ImportedRecordResponse,
+    PeerKeyDiffItem,
+    PeerKeyInspectResponse,
+    PeerKeyInventoryItem,
+    PeerKeyInventoryResponse,
     PeerCreateRequest,
     PeerPatchRequest,
     PeerResponse,
@@ -77,6 +82,10 @@ _HEALTH_ERROR_SUMMARIES: dict[str, str] = {
     "peer-base-url-mismatch": "Remote peer base URL did not match pinned identity.",
     "peer-key-missing": "Pinned peer signing key is no longer advertised.",
     "unknown-signing-key": "Remote event used an unapproved signing key.",
+    "retired-signing-key": "Remote event used a retired signing key.",
+    "revoked-signing-key": "Remote event used a revoked signing key.",
+    "signing-key-not-yet-valid": "Remote event used a key that is not yet valid.",
+    "signing-key-expired": "Remote event used an expired signing key.",
     "invalid-signature-alg": "Remote signature validation failed.",
     "invalid-signature": "Remote signature validation failed.",
     "digest-mismatch": "Remote signature validation failed.",
@@ -105,6 +114,20 @@ def _b64url_decode(value: str) -> bytes:
     import base64
 
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+class PeerKeyVerificationPurpose(str, Enum):
+    NEW_INBOUND_EVENT = "NEW_INBOUND_EVENT"
+    HISTORICAL_EVIDENCE = "HISTORICAL_EVIDENCE"
+
+
+@dataclass(frozen=True)
+class PeerKeyVerificationResult:
+    signature_valid: bool
+    key_found: bool
+    trust_status: str
+    eligible_for_application: bool
+    rejection_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -259,6 +282,39 @@ class FederationPeerService:
             return ()
         return tuple(item.strip() for item in raw.split(",") if item.strip())
 
+    @staticmethod
+    def _fingerprint_with_prefix(raw_hex: str) -> str:
+        return f"sha256:{raw_hex.lower()}"
+
+    @staticmethod
+    def _normalize_expected_fingerprint(value: str) -> str:
+        text = (value or "").strip().lower()
+        if len(text) != 71 or not text.startswith("sha256:"):
+            raise FederationError("peer-key-fingerprint-invalid", "expectedFingerprint must use sha256:<lowercase-hex> format.")
+        digest = text[7:]
+        if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            raise FederationError("peer-key-fingerprint-invalid", "expectedFingerprint must use sha256:<lowercase-hex> format.")
+        return text
+
+    @staticmethod
+    def _remote_key_from_mapping(item: dict[str, Any]) -> tuple[str, str] | tuple[None, str]:
+        kid = item.get("kid")
+        if not isinstance(kid, str) or not kid.strip():
+            return None, "missing-kid"
+        alg = item.get("alg")
+        if alg != "EdDSA":
+            return None, "unsupported-algorithm"
+        kty = item.get("kty")
+        if kty != "OKP":
+            return None, "unsupported-kty"
+        crv = item.get("crv")
+        if crv != "Ed25519":
+            return None, "unsupported-curve"
+        x = item.get("x")
+        if not isinstance(x, str) or not x.strip():
+            return None, "missing-public-key"
+        return kid.strip(), x
+
     def _fetch_and_validate_peer_snapshot(
         self,
         *,
@@ -381,6 +437,659 @@ class FederationPeerService:
             for row in records
         ]
         return ImportedRecordListResponse(items=items, total=len(items))
+
+    def _to_peer_key_inventory_item(self, *, peer: FederationTrustedPeer, key: FederationPeerSigningKey) -> PeerKeyInventoryItem:
+        return PeerKeyInventoryItem(
+            peerId=peer.id,
+            peerNodeId=peer.peer_node_id,
+            kid=key.kid,
+            algorithm=key.alg,
+            keyType=key.kty,
+            curve=key.crv,
+            publicFingerprint=self._fingerprint_with_prefix(key.key_fingerprint),
+            status=key.key_status,
+            validFrom=key.valid_from,
+            validUntil=key.valid_until,
+            firstSeenAt=key.first_seen_at,
+            lastSeenAt=key.last_seen_at,
+            createdAt=key.created_at,
+            updatedAt=key.updated_at,
+        )
+
+    def list_peer_keys(self, *, peer_id: uuid.UUID) -> PeerKeyInventoryResponse:
+        with self.db.transaction() as session:
+            peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+            if peer is None:
+                raise FederationError("peer-not-found", "Trusted peer was not found.")
+            keys = (
+                session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(FederationPeerSigningKey.peer_id == peer_id)
+                    .order_by(FederationPeerSigningKey.kid, FederationPeerSigningKey.created_at)
+                )
+                .scalars()
+                .all()
+            )
+        return PeerKeyInventoryResponse(
+            peerId=peer.id,
+            peerNodeId=peer.peer_node_id,
+            items=[self._to_peer_key_inventory_item(peer=peer, key=row) for row in keys],
+        )
+
+    def inspect_peer_keys(self, *, peer_id: uuid.UUID, reason: str | None, actor: str) -> PeerKeyInspectResponse:
+        lease = self._claim_lease(peer_id=peer_id, trigger_type="probe")
+        if lease is None:
+            raise FederationError("already-running", "Synchronization already running for this peer.")
+        try:
+            with self.db.transaction() as session:
+                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                if peer.archived_at is not None:
+                    raise FederationError("peer-archived", "Peer is archived.")
+                if peer.trust_status != "trusted":
+                    raise FederationError("peer-disabled", "Peer is disabled or not trusted.")
+                base_url = peer.base_url
+                expected_node_id = peer.peer_node_id
+                allow_private_network = peer.allow_private_network
+                allowed_hostnames, allowed_cidrs = self._combined_allowlists(
+                    peer_allowed_hostnames=peer.allowed_hostnames,
+                    peer_allowed_cidrs=peer.allowed_cidrs,
+                )
+
+            discovery = self._fetch_discovery(
+                base_url,
+                allow_private_network=allow_private_network,
+                allowed_hostnames=allowed_hostnames,
+                allowed_cidrs=allowed_cidrs,
+            )
+            if discovery.nodeId != expected_node_id:
+                raise FederationError("peer-node-mismatch", "Discovery nodeId does not match requested peerNodeId.")
+            if discovery.publicBaseUrl.rstrip("/") != base_url.rstrip("/"):
+                raise FederationError("peer-base-url-mismatch", "Discovery publicBaseUrl does not match expected base URL.")
+
+            raw_jwks = self.remote_client.get_json(
+                discovery.jwksUrl,
+                limits=_HttpLimits(self.settings.sync_max_jwks_bytes, "application/jwk-set+json"),
+                allowed_hostnames=allowed_hostnames,
+                allowed_cidrs=allowed_cidrs,
+            )
+            if not isinstance(raw_jwks, dict) or not isinstance(raw_jwks.get("keys"), list):
+                raise FederationError("remote-schema-invalid", "Remote JWKS response failed validation.")
+            raw_keys = raw_jwks.get("keys", [])
+            if len(raw_keys) > self.settings.sync_max_jwks_keys:
+                raise FederationError("peer-jwks-too-many-keys", "Peer JWKS key count exceeds configured maximum.")
+
+            invalid_by_kid: dict[str, str] = {}
+            invalid_without_kid: list[str] = []
+            candidates: list[tuple[str, str]] = []
+            for raw_item in raw_keys:
+                if not isinstance(raw_item, dict):
+                    invalid_without_kid.append("malformed-key")
+                    continue
+                kid, result = self._remote_key_from_mapping(raw_item)
+                if kid is None:
+                    invalid_without_kid.append(result)
+                    continue
+                candidates.append((kid, result))
+
+            kid_counts: dict[str, int] = {}
+            for kid, _x in candidates:
+                kid_counts[kid] = kid_counts.get(kid, 0) + 1
+            valid_remote: dict[str, str] = {}
+            for kid, x in candidates:
+                if kid_counts[kid] > 1:
+                    invalid_by_kid[kid] = "duplicate-kid"
+                    continue
+                try:
+                    fingerprint = ed25519_key_fingerprint_hex(x)
+                except FederationError:
+                    invalid_by_kid[kid] = "invalid-public-key"
+                    continue
+                valid_remote[kid] = fingerprint
+
+            with self.db.transaction() as session:
+                db_now = session.execute(select(func.now())).scalar_one()
+                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one()
+                stored = (
+                    session.execute(select(FederationPeerSigningKey).where(FederationPeerSigningKey.peer_id == peer_id))
+                    .scalars()
+                    .all()
+                )
+                stored_by_kid = {row.kid: row for row in stored}
+                remote_seen_kids = set(valid_remote.keys()) | set(invalid_by_kid.keys())
+
+                known: list[PeerKeyDiffItem] = []
+                new: list[PeerKeyDiffItem] = []
+                changed: list[PeerKeyDiffItem] = []
+                removed: list[PeerKeyDiffItem] = []
+                invalid: list[PeerKeyDiffItem] = []
+                expired: list[PeerKeyDiffItem] = []
+
+                for reason_code in invalid_without_kid:
+                    invalid.append(
+                        PeerKeyDiffItem(
+                            kid=None,
+                            publicFingerprint=None,
+                            storedStatus=None,
+                            reasonCode=reason_code,
+                        )
+                    )
+
+                # Deterministic primary category precedence:
+                # invalid -> changed -> expired -> known/new/removed.
+                for row in sorted(stored, key=lambda item: (item.kid, item.created_at)):
+                    if row.kid in invalid_by_kid:
+                        invalid.append(
+                            PeerKeyDiffItem(
+                                kid=row.kid,
+                                publicFingerprint=self._fingerprint_with_prefix(row.key_fingerprint),
+                                storedStatus=row.key_status,
+                                reasonCode=invalid_by_kid[row.kid],
+                            )
+                        )
+                        continue
+                    if row.kid in valid_remote and row.key_fingerprint != valid_remote[row.kid]:
+                        changed.append(
+                            PeerKeyDiffItem(
+                                kid=row.kid,
+                                publicFingerprint=self._fingerprint_with_prefix(valid_remote[row.kid]),
+                                storedStatus=row.key_status,
+                                reasonCode="same-kid-different-material",
+                            )
+                        )
+                        continue
+                    if row.valid_until is not None and row.valid_until <= db_now:
+                        expired.append(
+                            PeerKeyDiffItem(
+                                kid=row.kid,
+                                publicFingerprint=self._fingerprint_with_prefix(row.key_fingerprint),
+                                storedStatus=row.key_status,
+                                reasonCode="stored-validity-expired",
+                            )
+                        )
+                        continue
+                    if row.kid in valid_remote and row.key_fingerprint == valid_remote[row.kid]:
+                        known.append(
+                            PeerKeyDiffItem(
+                                kid=row.kid,
+                                publicFingerprint=self._fingerprint_with_prefix(row.key_fingerprint),
+                                storedStatus=row.key_status,
+                                reasonCode="known-key",
+                            )
+                        )
+                        continue
+                    if row.key_status in {"active", "retired"} and row.kid not in remote_seen_kids:
+                        removed.append(
+                            PeerKeyDiffItem(
+                                kid=row.kid,
+                                publicFingerprint=self._fingerprint_with_prefix(row.key_fingerprint),
+                                storedStatus=row.key_status,
+                                reasonCode="missing-from-remote",
+                            )
+                        )
+
+                for kid, reason_code in invalid_by_kid.items():
+                    if kid in stored_by_kid:
+                        continue
+                    invalid.append(
+                        PeerKeyDiffItem(
+                            kid=kid,
+                            publicFingerprint=None,
+                            storedStatus=None,
+                            reasonCode=reason_code,
+                        )
+                    )
+
+                for kid, remote_fingerprint in sorted(valid_remote.items()):
+                    if kid in stored_by_kid:
+                        continue
+                    new.append(
+                        PeerKeyDiffItem(
+                            kid=kid,
+                            publicFingerprint=self._fingerprint_with_prefix(remote_fingerprint),
+                            storedStatus=None,
+                            reasonCode="new-key",
+                        )
+                    )
+
+                key_fn = lambda item: ((item.kid or ""), (item.publicFingerprint or ""), item.reasonCode)
+                known.sort(key=key_fn)
+                new.sort(key=key_fn)
+                removed.sort(key=key_fn)
+                changed.sort(key=key_fn)
+                invalid.sort(key=key_fn)
+                expired.sort(key=key_fn)
+
+                self._write_operational_audit(
+                    action=AuditAction.PEER_KEY_INSPECT,
+                    peer_id=peer_id,
+                    target_type=AuditTargetType.PEER_KEY,
+                    target_id=str(peer_id),
+                    outcome=AuditOutcome.SUCCESS,
+                    actor_id=actor,
+                    reason=reason[:1024] if reason else None,
+                    details={
+                        "known": len(known),
+                        "new": len(new),
+                        "removed": len(removed),
+                        "changed": len(changed),
+                        "invalid": len(invalid),
+                        "expired": len(expired),
+                    },
+                    session=session,
+                )
+            return PeerKeyInspectResponse(
+                peerId=peer_id,
+                peerNodeId=expected_node_id,
+                known=known,
+                new=new,
+                removed=removed,
+                changed=changed,
+                invalid=invalid,
+                expired=expired,
+            )
+        except FederationError as exc:
+            if exc.code != "peer-not-found":
+                with self.db.transaction() as session:
+                    peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                    if peer is not None:
+                        self._write_operational_audit(
+                            action=AuditAction.PEER_KEY_INSPECT,
+                            peer_id=peer_id,
+                            target_type=AuditTargetType.PEER_KEY,
+                            target_id=str(peer_id),
+                            outcome=AuditOutcome.FAILED,
+                            actor_id=actor,
+                            reason=exc.code,
+                            details={"errorCode": exc.code},
+                            session=session,
+                        )
+            raise
+        finally:
+            try:
+                self._release_lease(lease)
+            except Exception:
+                logger.exception("Failed to release inspect lease for peer %s", peer_id)
+
+    def approve_peer_key(self, *, peer_id: uuid.UUID, kid: str, expected_fingerprint: str, reason: str, actor: str) -> PeerKeyInventoryItem:
+        normalized_fingerprint = self._normalize_expected_fingerprint(expected_fingerprint)
+        lease = self._claim_lease(peer_id=peer_id, trigger_type="manual")
+        if lease is None:
+            raise FederationError("already-running", "Synchronization already running for this peer.")
+        try:
+            with self.db.transaction() as session:
+                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                if peer.archived_at is not None:
+                    raise FederationError("peer-archived", "Peer is archived.")
+                if peer.trust_status != "trusted":
+                    raise FederationError("peer-disabled", "Peer is disabled or not trusted.")
+                base_url = peer.base_url
+                expected_node_id = peer.peer_node_id
+                allow_private_network = peer.allow_private_network
+                allowed_hostnames, allowed_cidrs = self._combined_allowlists(
+                    peer_allowed_hostnames=peer.allowed_hostnames,
+                    peer_allowed_cidrs=peer.allowed_cidrs,
+                )
+
+            discovery, jwks = self._fetch_and_validate_peer_snapshot(
+                base_url=base_url,
+                allow_private_network=allow_private_network,
+                expected_node_id=expected_node_id,
+                allowed_hostnames=allowed_hostnames,
+                allowed_cidrs=allowed_cidrs,
+            )
+            matches = [item for item in jwks.keys if item.kid == kid]
+            if not matches:
+                raise FederationError("peer-key-not-found", "Requested key kid was not found in peer JWKS.")
+            if len(matches) > 1:
+                raise FederationError("peer-key-invalid-remote", "Remote JWKS contains duplicate key identifiers.")
+            remote_key = matches[0]
+            actual_fingerprint = self._fingerprint_with_prefix(ed25519_key_fingerprint_hex(remote_key.x))
+            if not hmac.compare_digest(actual_fingerprint, normalized_fingerprint):
+                raise FederationError("peer-key-fingerprint-mismatch", "Expected fingerprint does not match remote key material.")
+
+            now = datetime.now(timezone.utc)
+            collision_error: FederationError | None = None
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                if peer.archived_at is not None:
+                    raise FederationError("peer-archived", "Peer is archived.")
+                if peer.trust_status != "trusted":
+                    raise FederationError("peer-disabled", "Peer is disabled or not trusted.")
+                if peer.peer_node_id != expected_node_id or peer.base_url.rstrip("/") != base_url.rstrip("/") or peer.jwks_url != discovery.jwksUrl:
+                    raise FederationError("peer-state-stale", "Peer identity changed during key approval.")
+                existing = session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.kid == kid,
+                    )
+                    .with_for_update()
+                ).scalar_one_or_none()
+                if existing is None:
+                    existing = FederationPeerSigningKey(
+                        id=uuid.uuid4(),
+                        peer_id=peer_id,
+                        kid=kid,
+                        alg=remote_key.alg,
+                        kty=remote_key.kty,
+                        crv=remote_key.crv,
+                        x=remote_key.x,
+                        key_fingerprint=actual_fingerprint[7:],
+                        key_status="active",
+                        first_seen_at=now,
+                        last_seen_at=now,
+                        valid_from=now,
+                        valid_until=None,
+                        approved_by=actor[:128],
+                        approved_at=now,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(existing)
+                    status_detail = "approved"
+                elif existing.key_fingerprint == actual_fingerprint[7:]:
+                    if existing.key_status == "active":
+                        existing.last_seen_at = now
+                        existing.approved_by = actor[:128]
+                        existing.approved_at = now
+                        existing.updated_at = now
+                        status_detail = "idempotent-active"
+                    else:
+                        raise FederationError("peer-key-status-conflict", "Retired or revoked key cannot be reactivated by approval.")
+                else:
+                    previous_state = peer.circuit_state
+                    self.circuit.mark_failure(
+                        peer,
+                        classification=self.circuit.classify_failure(FederationError("key-collision", "same kid different material"), phase="jwks"),
+                    )
+                    self._write_operational_audit(
+                        action=AuditAction.PEER_KEY_COLLISION_REJECTED,
+                        peer_id=peer_id,
+                        target_type=AuditTargetType.PEER_KEY,
+                        target_id=kid,
+                        outcome=AuditOutcome.REJECTED,
+                        actor_id=actor,
+                        reason="key-collision",
+                        details={"kid": kid, "storedStatus": existing.key_status},
+                        session=session,
+                    )
+                    if previous_state != CircuitState.OPEN.value and peer.circuit_state == CircuitState.OPEN.value:
+                        self._write_operational_audit(
+                            action=AuditAction.SYNC_CIRCUIT_OPENED,
+                            peer_id=peer_id,
+                            target_id=str(peer_id),
+                            outcome=AuditOutcome.SUCCESS,
+                            actor_id=actor,
+                            reason="key_collision",
+                            session=session,
+                        )
+                    collision_error = FederationError("key-collision", "Key collision detected for existing kid.")
+                    status_detail = "collision-rejected"
+
+                peer.last_key_refresh_at = now
+                peer.updated_at = now
+                if collision_error is None:
+                    self._write_operational_audit(
+                        action=AuditAction.PEER_KEY_APPROVE,
+                        peer_id=peer_id,
+                        target_type=AuditTargetType.PEER_KEY,
+                        target_id=kid,
+                        outcome=AuditOutcome.SUCCESS,
+                        actor_id=actor,
+                        reason=reason[:1024],
+                        details={"result": status_detail, "fingerprint": actual_fingerprint},
+                        session=session,
+                    )
+            if collision_error is not None:
+                raise collision_error
+            with self.db.transaction() as session:
+                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one()
+                approved = session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.kid == kid,
+                    )
+                ).scalar_one()
+                return self._to_peer_key_inventory_item(peer=peer, key=approved)
+        except FederationError as exc:
+            if exc.code not in {"peer-not-found", "key-collision"}:
+                with self.db.transaction() as session:
+                    peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                    if peer is not None:
+                        self._write_operational_audit(
+                            action=AuditAction.PEER_KEY_APPROVE,
+                            peer_id=peer_id,
+                            target_type=AuditTargetType.PEER_KEY,
+                            target_id=kid[:128],
+                            outcome=AuditOutcome.REJECTED,
+                            actor_id=actor,
+                            reason=exc.code,
+                            details={"errorCode": exc.code},
+                            session=session,
+                        )
+            raise
+        finally:
+            try:
+                self._release_lease(lease)
+            except Exception:
+                logger.exception("Failed to release approve lease for peer %s", peer_id)
+
+    def retire_peer_key(
+        self,
+        *,
+        peer_id: uuid.UUID,
+        kid: str,
+        reason: str,
+        expected_status: str | None,
+        actor: str,
+    ) -> PeerKeyInventoryItem:
+        lease = self._claim_lease(peer_id=peer_id, trigger_type="manual")
+        if lease is None:
+            raise FederationError("already-running", "Synchronization already running for this peer.")
+        try:
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                key = session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.kid == kid,
+                    )
+                    .with_for_update()
+                ).scalar_one_or_none()
+                if key is None:
+                    raise FederationError("peer-key-not-found", "Requested key kid was not found.")
+                if expected_status is not None and key.key_status != expected_status:
+                    raise FederationError("peer-key-status-stale", "Expected key status does not match current value.")
+                if key.key_status == "revoked":
+                    raise FederationError("peer-key-status-conflict", "Revoked key cannot be retired.")
+                active_keys = session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.key_status == "active",
+                    )
+                    .with_for_update()
+                ).scalars().all()
+                if (
+                    key.key_status == "active"
+                    and peer.trust_status == "trusted"
+                    and peer.sync_enabled
+                    and len(active_keys) <= 1
+                ):
+                    raise FederationError("peer-key-last-active", "Cannot retire the last active key while synchronization remains enabled.")
+
+                if key.key_status == "retired":
+                    outcome = "idempotent-retired"
+                else:
+                    db_now = session.execute(select(func.now())).scalar_one()
+                    key.key_status = "retired"
+                    key.valid_until = db_now
+                    key.updated_at = db_now
+                    key.approved_by = actor[:128]
+                    key.approved_at = db_now
+                    outcome = "retired"
+                self._write_operational_audit(
+                    action=AuditAction.PEER_KEY_RETIRE,
+                    peer_id=peer_id,
+                    target_type=AuditTargetType.PEER_KEY,
+                    target_id=kid,
+                    outcome=AuditOutcome.SUCCESS,
+                    actor_id=actor,
+                    reason=reason[:1024],
+                    details={"oldStatus": key.key_status if outcome == "idempotent-retired" else "active", "newStatus": "retired", "result": outcome},
+                    session=session,
+                )
+                item = self._to_peer_key_inventory_item(peer=peer, key=key)
+            return item
+        except FederationError as exc:
+            if exc.code != "peer-not-found":
+                with self.db.transaction() as session:
+                    peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                    if peer is not None:
+                        self._write_operational_audit(
+                            action=AuditAction.PEER_KEY_RETIRE,
+                            peer_id=peer_id,
+                            target_type=AuditTargetType.PEER_KEY,
+                            target_id=kid[:128],
+                            outcome=AuditOutcome.REJECTED,
+                            actor_id=actor,
+                            reason=exc.code,
+                            details={"errorCode": exc.code},
+                            session=session,
+                        )
+            raise
+        finally:
+            try:
+                self._release_lease(lease)
+            except Exception:
+                logger.exception("Failed to release retire lease for peer %s", peer_id)
+
+    def revoke_peer_key(
+        self,
+        *,
+        peer_id: uuid.UUID,
+        kid: str,
+        reason: str,
+        expected_status: str | None,
+        actor: str,
+    ) -> PeerKeyInventoryItem:
+        lease = self._claim_lease(peer_id=peer_id, trigger_type="manual")
+        if lease is None:
+            raise FederationError("already-running", "Synchronization already running for this peer.")
+        try:
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                key = session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.kid == kid,
+                    )
+                    .with_for_update()
+                ).scalar_one_or_none()
+                if key is None:
+                    raise FederationError("peer-key-not-found", "Requested key kid was not found.")
+                if expected_status is not None and key.key_status != expected_status:
+                    raise FederationError("peer-key-status-stale", "Expected key status does not match current value.")
+                active_keys = session.execute(
+                    select(FederationPeerSigningKey)
+                    .where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.key_status == "active",
+                    )
+                    .with_for_update()
+                ).scalars().all()
+                if (
+                    key.key_status == "active"
+                    and peer.trust_status == "trusted"
+                    and peer.sync_enabled
+                    and len(active_keys) <= 1
+                ):
+                    raise FederationError("peer-key-last-active", "Cannot revoke the last active key while synchronization remains enabled.")
+
+                previous_status = key.key_status
+                if key.key_status != "revoked":
+                    db_now = session.execute(select(func.now())).scalar_one()
+                    key.key_status = "revoked"
+                    key.valid_until = db_now
+                    key.updated_at = db_now
+                    key.approved_by = actor[:128]
+                    key.approved_at = db_now
+                    if previous_status == "active":
+                        previous_circuit_state = peer.circuit_state
+                        self.circuit.mark_failure(
+                            peer,
+                            classification=self.circuit.classify_failure(
+                                FederationError("revoked-signing-key", "Peer key was revoked by administrator."),
+                                phase="jwks",
+                            ),
+                        )
+                        if previous_circuit_state != CircuitState.OPEN.value and peer.circuit_state == CircuitState.OPEN.value:
+                            self._write_operational_audit(
+                                action=AuditAction.SYNC_CIRCUIT_OPENED,
+                                peer_id=peer_id,
+                                target_id=str(peer_id),
+                                outcome=AuditOutcome.SUCCESS,
+                                actor_id=actor,
+                                reason="revoked_key_detected",
+                                session=session,
+                            )
+                    outcome = "revoked"
+                else:
+                    outcome = "idempotent-revoked"
+                self._write_operational_audit(
+                    action=AuditAction.PEER_KEY_REVOKE,
+                    peer_id=peer_id,
+                    target_type=AuditTargetType.PEER_KEY,
+                    target_id=kid,
+                    outcome=AuditOutcome.SUCCESS,
+                    actor_id=actor,
+                    reason=reason[:1024],
+                    details={"oldStatus": previous_status, "newStatus": "revoked", "result": outcome},
+                    session=session,
+                )
+                item = self._to_peer_key_inventory_item(peer=peer, key=key)
+            return item
+        except FederationError as exc:
+            if exc.code != "peer-not-found":
+                with self.db.transaction() as session:
+                    peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                    if peer is not None:
+                        self._write_operational_audit(
+                            action=AuditAction.PEER_KEY_REVOKE,
+                            peer_id=peer_id,
+                            target_type=AuditTargetType.PEER_KEY,
+                            target_id=kid[:128],
+                            outcome=AuditOutcome.REJECTED,
+                            actor_id=actor,
+                            reason=exc.code,
+                            details={"errorCode": exc.code},
+                            session=session,
+                        )
+            raise
+        finally:
+            try:
+                self._release_lease(lease)
+            except Exception:
+                logger.exception("Failed to release revoke lease for peer %s", peer_id)
 
     def create_peer(self, *, payload: PeerCreateRequest, actor: str) -> PeerResponse:
         now = datetime.now(timezone.utc)
@@ -521,16 +1230,26 @@ class FederationPeerService:
                 match = next((k for k in jwks.keys if k.kid == payload.verificationKey.kid), None)
                 if match is None:
                     raise FederationError("peer-key-not-found", "Requested key kid was not found in peer JWKS.")
-                self._upsert_peer_key(
-                    session=session,
-                    peer=peer,
-                    kid=match.kid,
-                    x=match.x,
-                    key_status="active",
-                    actor=actor,
-                )
-                peer.expected_key_kid = payload.verificationKey.kid
-                peer.expected_key_fingerprint = fingerprint
+                existing_key = session.execute(
+                    select(FederationPeerSigningKey).where(
+                        FederationPeerSigningKey.peer_id == peer.id,
+                        FederationPeerSigningKey.kid == match.kid,
+                    )
+                ).scalar_one_or_none()
+                if existing_key is None:
+                    raise FederationError(
+                        "peer-key-approval-required",
+                        "Peer key is not yet approved. Run inspect and explicit approval before updating peer settings.",
+                    )
+                if existing_key.key_fingerprint != (fingerprint or ""):
+                    raise FederationError(
+                        "key-collision",
+                        "Stored peer key fingerprint differs for the same kid; approval workflow is required.",
+                    )
+                if existing_key.key_status != "active":
+                    raise FederationError("peer-key-status-conflict", "Only active approved keys may authorize peer updates.")
+                existing_key.last_seen_at = datetime.now(timezone.utc)
+                existing_key.updated_at = datetime.now(timezone.utc)
             peer.updated_at = datetime.now(timezone.utc)
             self._audit(session, peer.id, "peer.updated", actor, payload.model_dump(exclude_none=True))
         return self.get_peer(peer_id)
@@ -569,6 +1288,7 @@ class FederationPeerService:
         *,
         action: AuditAction,
         peer_id: uuid.UUID,
+        target_type: AuditTargetType = AuditTargetType.PEER,
         target_id: str,
         outcome: AuditOutcome,
         actor_id: str | None,
@@ -581,7 +1301,7 @@ class FederationPeerService:
                 target_session,
                 actor_type=AuditActorType.HUMAN_OPERATOR if actor_id else AuditActorType.WORKER,
                 action=action,
-                target_type=AuditTargetType.PEER,
+                target_type=target_type,
                 target_id=target_id,
                 peer_id=peer_id,
                 outcome=outcome,
@@ -1392,6 +2112,7 @@ class FederationInboundSyncService:
         *,
         action: AuditAction,
         peer_id: uuid.UUID,
+        target_type: AuditTargetType = AuditTargetType.PEER,
         target_id: str,
         outcome: AuditOutcome,
         actor_id: str | None,
@@ -1404,7 +2125,7 @@ class FederationInboundSyncService:
                 target_session,
                 actor_type=AuditActorType.HUMAN_OPERATOR if actor_id else AuditActorType.WORKER,
                 action=action,
-                target_type=AuditTargetType.PEER,
+                target_type=target_type,
                 target_id=target_id,
                 peer_id=peer_id,
                 outcome=outcome,
@@ -1823,11 +2544,11 @@ class FederationInboundSyncService:
             with self.db.transaction() as session:
                 peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one()
                 cursor_row = session.execute(select(FederationPeerCursor).where(FederationPeerCursor.peer_id == peer_id)).scalar_one()
+                verification_now = session.execute(select(func.now())).scalar_one()
                 trusted_keys = (
                     session.execute(
                         select(FederationPeerSigningKey).where(
                             FederationPeerSigningKey.peer_id == peer_id,
-                            FederationPeerSigningKey.key_status.in_(["active", "retired"]),
                         )
                     )
                     .scalars()
@@ -1835,10 +2556,10 @@ class FederationInboundSyncService:
                 )
                 expected_last = cursor_row.last_remote_position or 0
             key_map = {item.kid: item for item in trusted_keys}
-            verified_events: list[tuple[Any, Any, RemoteRecordResponse | None]] = []
+            verified_events: list[tuple[Any, Any, RemoteRecordResponse | None, frozenset[str]]] = []
             for item in page.events:
                 current_item = item
-                self._validate_event(item=item, peer=peer, key_map=key_map)
+                self._validate_event(item=item, peer=peer, key_map=key_map, verification_now=verification_now)
                 payload = item.payload
                 if payload.generatedAt > datetime.now(timezone.utc) + timedelta(seconds=self.settings.sync_max_future_seconds):
                     raise FederationError("event-future-time", "Event generatedAt is too far in the future.")
@@ -1855,6 +2576,7 @@ class FederationInboundSyncService:
                     raise FederationError("event-replay-mismatch", "Existing event replay does not match previously accepted content.")
                 expected_last = position
                 remote_record: RemoteRecordResponse | None = None
+                referenced_kids: set[str] = {item.signed.signature.kid}
                 if payload.operation == "upsert":
                     remote_record = self._fetch_record(
                         peer=peer,
@@ -1862,8 +2584,15 @@ class FederationInboundSyncService:
                         allowed_hostnames=allowed_hostnames,
                         allowed_cidrs=allowed_cidrs,
                     )
-                    self._validate_record_response(remote_record=remote_record, key_map=key_map, peer=peer, payload=payload)
-                verified_events.append((item.payload, item.signed, remote_record))
+                    self._validate_record_response(
+                        remote_record=remote_record,
+                        key_map=key_map,
+                        peer=peer,
+                        payload=payload,
+                        verification_now=verification_now,
+                    )
+                    referenced_kids.add(remote_record.signed.signature.kid)
+                verified_events.append((item.payload, item.signed, remote_record, frozenset(referenced_kids)))
 
             with self.db.transaction() as session:
                 still_owned = self.lease_repo.verify_still_owned_sync(
@@ -1877,7 +2606,21 @@ class FederationInboundSyncService:
 
                 peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one()
                 cursor_row = session.execute(select(FederationPeerCursor).where(FederationPeerCursor.peer_id == peer_id)).scalar_one()
-                for payload, signed, remote_record in verified_events:
+                commit_verification_now = session.execute(select(func.now())).scalar_one()
+                commit_referenced_kids = {kid for _payload, _signed, _remote_record, kids in verified_events for kid in kids}
+                commit_key_map = self._load_referenced_signing_keys_for_commit(
+                    session,
+                    peer_id=peer_id,
+                    referenced_kids=commit_referenced_kids,
+                )
+                for kid in sorted(commit_referenced_kids):
+                    self._assert_commit_key_eligible(
+                        kid=kid,
+                        key_row=commit_key_map.get(kid),
+                        commit_verification_now=commit_verification_now,
+                    )
+
+                for payload, signed, remote_record, _kids in verified_events:
                     event_id = uuid.UUID(payload.eventId)
                     existing = session.execute(
                         select(FederationInboundEvent).where(
@@ -1935,23 +2678,190 @@ class FederationInboundSyncService:
                 self._persist_rejection(peer_id=peer_id, item=current_item, error=exc)
             raise
 
-    def _validate_event(self, *, item: Any, peer: FederationTrustedPeer, key_map: dict[str, FederationPeerSigningKey]) -> None:
-        if item.signed.signature.alg != "EdDSA":
-            raise FederationError("invalid-signature-alg", "Event signature algorithm must be EdDSA.")
-        trusted = key_map.get(item.signed.signature.kid)
-        if trusted is None:
-            raise FederationError("unknown-signing-key", "Event signing key is not trusted.")
-        if trusted.key_status == "revoked":
-            raise FederationError("revoked-signing-key", "Event signing key is revoked.")
-        payload_bytes = canonicalize_to_bytes(item.payload.model_dump(mode="json"))
+    @staticmethod
+    def _assert_commit_key_eligible(
+        *,
+        kid: str,
+        key_row: FederationPeerSigningKey | None,
+        commit_verification_now: datetime,
+    ) -> None:
+        if key_row is None:
+            raise FederationError("unknown-signing-key", "Signing key is not trusted.")
+        if key_row.key_status == "retired":
+            raise FederationError("retired-signing-key", "Signing key is retired and not eligible for new inbound synchronization.")
+        if key_row.key_status == "revoked":
+            raise FederationError("revoked-signing-key", "Signing key is revoked.")
+        if key_row.key_status != "active":
+            raise FederationError("unknown-signing-key", "Signing key is not trusted.")
+        if key_row.valid_from is not None and key_row.valid_from > commit_verification_now:
+            raise FederationError("signing-key-not-yet-valid", "Signing key is not yet valid for new inbound synchronization.")
+        if key_row.valid_until is not None and commit_verification_now >= key_row.valid_until:
+            raise FederationError("signing-key-expired", "Signing key has expired for new inbound synchronization.")
+
+    @staticmethod
+    def _load_referenced_signing_keys_for_commit(
+        session: Session,
+        *,
+        peer_id: uuid.UUID,
+        referenced_kids: set[str],
+    ) -> dict[str, FederationPeerSigningKey]:
+        if not referenced_kids:
+            return {}
+        rows = (
+            session.execute(
+                select(FederationPeerSigningKey)
+                .where(
+                    FederationPeerSigningKey.peer_id == peer_id,
+                    FederationPeerSigningKey.kid.in_(sorted(referenced_kids)),
+                )
+                .with_for_update()
+            )
+            .scalars()
+            .all()
+        )
+        return {row.kid: row for row in rows}
+
+    def _verify_peer_key_signature(
+        self,
+        *,
+        payload: Any,
+        signed: Any,
+        key_map: dict[str, FederationPeerSigningKey],
+        purpose: PeerKeyVerificationPurpose,
+        verification_now: datetime | None = None,
+    ) -> PeerKeyVerificationResult:
+        if signed.signature.alg != "EdDSA":
+            return PeerKeyVerificationResult(
+                signature_valid=False,
+                key_found=False,
+                trust_status="unknown",
+                eligible_for_application=False,
+                rejection_reason="invalid-signature-alg",
+            )
+
+        trusted_key = key_map.get(signed.signature.kid)
+        if trusted_key is None:
+            return PeerKeyVerificationResult(
+                signature_valid=False,
+                key_found=False,
+                trust_status="unknown",
+                eligible_for_application=False,
+                rejection_reason="unknown-signing-key",
+            )
+
+        trust_status = trusted_key.key_status
+        payload_bytes = canonicalize_to_bytes(payload.model_dump(mode="json"))
         digest = sha256_hex(payload_bytes)
-        if not hmac.compare_digest(digest, item.signed.digestSha256):
-            raise FederationError("digest-mismatch", "Event digest does not match payload.")
-        key = Ed25519PublicKey.from_public_bytes(_b64url_decode(trusted.x))
+        if not hmac.compare_digest(digest, signed.digestSha256):
+            return PeerKeyVerificationResult(
+                signature_valid=False,
+                key_found=True,
+                trust_status=trust_status,
+                eligible_for_application=False,
+                rejection_reason="digest-mismatch",
+            )
         try:
-            key.verify(_b64url_decode(item.signed.signature.value), payload_bytes)
-        except Exception as exc:
-            raise FederationError("invalid-signature", "Event signature verification failed.") from exc
+            key = Ed25519PublicKey.from_public_bytes(_b64url_decode(trusted_key.x))
+            key.verify(_b64url_decode(signed.signature.value), payload_bytes)
+        except Exception:
+            return PeerKeyVerificationResult(
+                signature_valid=False,
+                key_found=True,
+                trust_status=trust_status,
+                eligible_for_application=False,
+                rejection_reason="invalid-signature",
+            )
+
+        if purpose == PeerKeyVerificationPurpose.NEW_INBOUND_EVENT:
+            if trust_status == "retired":
+                return PeerKeyVerificationResult(
+                    signature_valid=True,
+                    key_found=True,
+                    trust_status=trust_status,
+                    eligible_for_application=False,
+                    rejection_reason="retired-signing-key",
+                )
+            if trust_status == "revoked":
+                return PeerKeyVerificationResult(
+                    signature_valid=True,
+                    key_found=True,
+                    trust_status=trust_status,
+                    eligible_for_application=False,
+                    rejection_reason="revoked-signing-key",
+                )
+            if trust_status != "active":
+                return PeerKeyVerificationResult(
+                    signature_valid=True,
+                    key_found=True,
+                    trust_status=trust_status,
+                    eligible_for_application=False,
+                    rejection_reason="unknown-signing-key",
+                )
+            if verification_now is None:
+                raise FederationError("sync-internal-error", "Missing database verification time for key validity checks.")
+            if trusted_key.valid_from is not None and trusted_key.valid_from > verification_now:
+                return PeerKeyVerificationResult(
+                    signature_valid=True,
+                    key_found=True,
+                    trust_status=trust_status,
+                    eligible_for_application=False,
+                    rejection_reason="signing-key-not-yet-valid",
+                )
+            if trusted_key.valid_until is not None and verification_now >= trusted_key.valid_until:
+                return PeerKeyVerificationResult(
+                    signature_valid=True,
+                    key_found=True,
+                    trust_status=trust_status,
+                    eligible_for_application=False,
+                    rejection_reason="signing-key-expired",
+                )
+            return PeerKeyVerificationResult(
+                signature_valid=True,
+                key_found=True,
+                trust_status=trust_status,
+                eligible_for_application=True,
+                rejection_reason=None,
+            )
+
+        # HISTORICAL_EVIDENCE performs cryptographic verification only. It never
+        # authorizes imports or state mutation and does not apply temporal key
+        # validity windows.
+        return PeerKeyVerificationResult(
+            signature_valid=True,
+            key_found=True,
+            trust_status=trust_status,
+            eligible_for_application=False,
+            rejection_reason=None,
+        )
+
+    def _validate_event(
+        self,
+        *,
+        item: Any,
+        peer: FederationTrustedPeer,
+        key_map: dict[str, FederationPeerSigningKey],
+        verification_now: datetime,
+    ) -> None:
+        verification = self._verify_peer_key_signature(
+            payload=item.payload,
+            signed=item.signed,
+            key_map=key_map,
+            purpose=PeerKeyVerificationPurpose.NEW_INBOUND_EVENT,
+            verification_now=verification_now,
+        )
+        if not verification.signature_valid or not verification.eligible_for_application:
+            reason = verification.rejection_reason or "invalid-signature"
+            details = {
+                "invalid-signature-alg": "Event signature algorithm must be EdDSA.",
+                "unknown-signing-key": "Event signing key is not trusted.",
+                "retired-signing-key": "Event signing key is retired and not eligible for new inbound synchronization.",
+                "revoked-signing-key": "Event signing key is revoked.",
+                "signing-key-not-yet-valid": "Event signing key is not yet valid for new inbound synchronization.",
+                "signing-key-expired": "Event signing key has expired for new inbound synchronization.",
+                "digest-mismatch": "Event digest does not match payload.",
+                "invalid-signature": "Event signature verification failed.",
+            }
+            raise FederationError(reason, details.get(reason, "Event signature verification failed."))
         if item.payload.nodeId != peer.peer_node_id:
             raise FederationError("peer-node-mismatch", "Event nodeId does not match pinned peer node ID.")
         if item.payload.record.authorityNodeId != peer.peer_node_id:
@@ -1977,23 +2887,28 @@ class FederationInboundSyncService:
         key_map: dict[str, FederationPeerSigningKey],
         peer: FederationTrustedPeer,
         payload: Any,
+        verification_now: datetime,
     ) -> None:
-        key = key_map.get(remote_record.signed.signature.kid)
-        if key is None or key.key_status == "revoked":
-            raise FederationError("unknown-signing-key", "Record signing key is not trusted.")
-        if remote_record.signed.signature.alg != "EdDSA":
-            raise FederationError("invalid-signature-alg", "Record signature algorithm must be EdDSA.")
-        bytes_payload = canonicalize_to_bytes(remote_record.record.model_dump(mode="json"))
-        digest = sha256_hex(bytes_payload)
-        if not hmac.compare_digest(digest, remote_record.signed.digestSha256):
-            raise FederationError("digest-mismatch", "Record digest mismatch.")
-        try:
-            Ed25519PublicKey.from_public_bytes(_b64url_decode(key.x)).verify(
-                _b64url_decode(remote_record.signed.signature.value),
-                bytes_payload,
-            )
-        except Exception as exc:
-            raise FederationError("invalid-signature", "Record signature verification failed.") from exc
+        verification = self._verify_peer_key_signature(
+            payload=remote_record.record,
+            signed=remote_record.signed,
+            key_map=key_map,
+            purpose=PeerKeyVerificationPurpose.NEW_INBOUND_EVENT,
+            verification_now=verification_now,
+        )
+        if not verification.signature_valid or not verification.eligible_for_application:
+            reason = verification.rejection_reason or "invalid-signature"
+            details = {
+                "invalid-signature-alg": "Record signature algorithm must be EdDSA.",
+                "unknown-signing-key": "Record signing key is not trusted.",
+                "retired-signing-key": "Record signing key is retired and not eligible for new inbound synchronization.",
+                "revoked-signing-key": "Record signing key is revoked.",
+                "signing-key-not-yet-valid": "Record signing key is not yet valid for new inbound synchronization.",
+                "signing-key-expired": "Record signing key has expired for new inbound synchronization.",
+                "digest-mismatch": "Record digest mismatch.",
+                "invalid-signature": "Record signature verification failed.",
+            }
+            raise FederationError(reason, details.get(reason, "Record signature verification failed."))
         if remote_record.record.nodeId != peer.peer_node_id:
             raise FederationError("peer-node-mismatch", "Record nodeId does not match pinned peer node ID.")
         if remote_record.record.authorityNodeId != peer.peer_node_id:

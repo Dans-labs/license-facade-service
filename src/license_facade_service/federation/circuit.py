@@ -80,6 +80,8 @@ class PeerCircuitService:
             "event-replay-mismatch",
         }:
             return FailureClassification(kind="permanent", reason=CircuitFailureReason.SIGNATURE_INVALID)
+        if code == "key-collision":
+            return FailureClassification(kind="permanent", reason=CircuitFailureReason.KEY_COLLISION)
         if code in {
             "peer-node-mismatch",
             "authority-mismatch",
@@ -87,6 +89,9 @@ class PeerCircuitService:
             "peer-key-mismatch",
             "peer-key-missing",
             "unknown-signing-key",
+            "retired-signing-key",
+            "signing-key-not-yet-valid",
+            "signing-key-expired",
         }:
             return FailureClassification(kind="permanent", reason=CircuitFailureReason.IDENTITY_MISMATCH)
         if code in {"revoked-signing-key"}:

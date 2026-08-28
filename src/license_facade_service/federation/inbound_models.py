@@ -274,3 +274,67 @@ class PeerProbeResponse(StrictModel):
     errorCode: str | None = Field(default=None, description="Bounded machine-readable error code, if probe failed.")
     circuitState: Literal["closed", "open", "half_open"] = Field(description="Circuit state after probe transition.")
     sampledAt: datetime = Field(description="Probe sample timestamp.")
+
+
+class PeerKeyInventoryItem(StrictModel):
+    peerId: UUID = Field(description="Local trusted peer UUID.")
+    peerNodeId: str = Field(description="Pinned immutable peer node UUID.")
+    kid: str = Field(description="Peer public verification key identifier.")
+    algorithm: str = Field(description="Verification algorithm.")
+    keyType: str = Field(description="JWK key type.")
+    curve: str = Field(description="JWK curve.")
+    publicFingerprint: str = Field(description="Canonical public-key fingerprint (sha256:<hex>).")
+    status: Literal["active", "retired", "revoked"] = Field(description="Current key lifecycle status.")
+    validFrom: datetime | None = Field(default=None, description="Server-assigned key validity start timestamp.")
+    validUntil: datetime | None = Field(default=None, description="Server-assigned key validity end timestamp.")
+    firstSeenAt: datetime = Field(description="Server timestamp when key was first observed/approved.")
+    lastSeenAt: datetime = Field(description="Server timestamp when key was last observed.")
+    createdAt: datetime = Field(description="Row creation timestamp.")
+    updatedAt: datetime = Field(description="Last row update timestamp.")
+
+
+class PeerKeyInventoryResponse(StrictModel):
+    peerId: UUID = Field(description="Local trusted peer UUID.")
+    peerNodeId: str = Field(description="Pinned immutable peer node UUID.")
+    items: list[PeerKeyInventoryItem] = Field(default_factory=list, description="Stored verification keys for this peer.")
+
+
+class PeerKeyInspectRequest(StrictModel):
+    reason: str | None = Field(default=None, max_length=1024, description="Optional bounded operator reason.")
+
+
+class PeerKeyDiffItem(StrictModel):
+    kid: str | None = Field(default=None, description="Public key identifier when available.")
+    publicFingerprint: str | None = Field(default=None, description="Public-key fingerprint (sha256:<hex>) when available.")
+    storedStatus: Literal["active", "retired", "revoked"] | None = Field(default=None, description="Stored status when entry exists locally.")
+    reasonCode: str = Field(description="Bounded machine-readable category reason.")
+
+
+class PeerKeyInspectResponse(StrictModel):
+    peerId: UUID = Field(description="Local trusted peer UUID.")
+    peerNodeId: str = Field(description="Pinned immutable peer node UUID.")
+    known: list[PeerKeyDiffItem] = Field(default_factory=list, description="Keys where kid+fingerprint already match stored values.")
+    new: list[PeerKeyDiffItem] = Field(default_factory=list, description="Newly observed keys absent from local trusted key set.")
+    removed: list[PeerKeyDiffItem] = Field(default_factory=list, description="Locally stored keys absent from remote JWKS.")
+    changed: list[PeerKeyDiffItem] = Field(default_factory=list, description="Same kid observed with different fingerprint/public material.")
+    invalid: list[PeerKeyDiffItem] = Field(default_factory=list, description="Malformed/unsupported/duplicate/unusable remote keys.")
+    expired: list[PeerKeyDiffItem] = Field(default_factory=list, description="Stored keys whose validity boundary has elapsed.")
+
+
+class PeerKeyApproveRequest(StrictModel):
+    kid: str = Field(min_length=1, max_length=128, description="Remote key identifier to approve.")
+    expectedFingerprint: str = Field(
+        min_length=71,
+        max_length=71,
+        description="Expected fingerprint in sha256:<lowercase-hex> format.",
+        examples=["sha256:c76e746a0f2b78e0bf2ca8f1478b1f087834b23499f9f8e640b8d89cd5233d7a"],
+    )
+    reason: str = Field(min_length=1, max_length=1024, description="Required bounded operator reason.")
+
+
+class PeerKeyStatusMutationRequest(StrictModel):
+    reason: str = Field(min_length=1, max_length=1024, description="Required bounded operator reason.")
+    expectedStatus: Literal["active", "retired", "revoked"] | None = Field(
+        default=None,
+        description="Optional expected current key status for optimistic concurrency.",
+    )

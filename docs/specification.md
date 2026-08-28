@@ -197,7 +197,7 @@ Implemented Phase 4 boundaries:
   - `rebuild`
   - `reconcile`
 
-## Federation Phase 5 Increment 3 synchronization hardening
+## Federation Phase 5 Increment 3-4 synchronization and peer-key trust hardening
 
 Implemented boundaries:
 
@@ -207,12 +207,20 @@ Implemented boundaries:
 - cursor advancement is atomic with per-page import commit and lease renewal;
 - transient/permanent peer circuit states (`closed`, `open`, `half_open`) govern synchronization/probe eligibility;
 - admin controls exist for suspend/resume, circuit reset, and read-only probe;
-- health snapshots and operational audit events are persisted for explicit probe and actual synchronization attempts.
+- health snapshots and operational audit events are persisted for explicit probe and actual synchronization attempts;
+- peer-key trust is operator-controlled with explicit endpoints for inventory, remote inspection, approval, retirement, and revocation;
+- remote key inspection is read-only and deterministic with mutually exclusive category precedence `invalid -> changed -> expired -> known/new/removed`; inspection does not mutate trusted keys, cursor, or import state;
+- explicit approval requires exact `sha256:<hex>` fingerprint confirmation and rejects same-kid/different-material collisions;
+- collision rejection opens a permanent circuit (`key_collision`) requiring admin reset;
+- inbound event authorization for new imports requires `active` peer keys and DB-time validity windows (`valid_from` is null or `<= now`; `valid_until` is null or `now < valid_until`), using a single PostgreSQL timestamp per page verification path;
+- Key eligibility is checked again using PostgreSQL time in the fenced page-commit transaction.
+- `signing-key-not-yet-valid` and `signing-key-expired` are treated as permanent trust/integrity failures and map to permanent identity-mismatch circuit classification;
+- historical-evidence verification remains cryptographic-only and never authorizes imports, cursor movement, or state mutation;
+- enrollment `expected_key_kid` / `expected_key_fingerprint` remain enrollment evidence and are not silently overwritten by approval.
 
-Deferred from Increment 3:
+Deferred from Increment 4:
 
-- peer-key inspection/approval operations;
-- local signing-key rotation operations;
+- local signing-key rotation operations (Increment 5);
 - cursor replay/checkpoint/recovery tooling;
 - RDF recovery additions beyond existing outbox behavior;
 - rate limiting, metrics, and expanded production logging;

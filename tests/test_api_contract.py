@@ -92,6 +92,11 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
         ("post", "/api/v1/admin/federation/peers/{peer_id}/resume"),
         ("post", "/api/v1/admin/federation/peers/{peer_id}/circuit/reset"),
         ("post", "/api/v1/admin/federation/peers/{peer_id}/probe"),
+        ("get", "/api/v1/admin/federation/peers/{peer_id}/keys"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/keys/inspect"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/keys/approve"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/keys/{kid}/retire"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/keys/{kid}/revoke"),
     }
 
     seen_protected = set()

@@ -17,6 +17,12 @@ from src.license_facade_service.federation.inbound_models import (
     AdminPublishRequest,
     AdminStatusResponse,
     ImportedRecordListResponse,
+    PeerKeyApproveRequest,
+    PeerKeyInspectRequest,
+    PeerKeyInspectResponse,
+    PeerKeyInventoryItem,
+    PeerKeyInventoryResponse,
+    PeerKeyStatusMutationRequest,
     PeerProbeResponse,
     PeerCreateRequest,
     PeerListResponse,
@@ -123,6 +129,7 @@ def _problem_from_error(request: Request, error: FederationError):
         "peer-key-mismatch": (400, "Peer Key Mismatch"),
         "peer-key-required": (400, "Peer Key Required"),
         "remote-unreachable": (503, "Remote Peer Unavailable"),
+        "remote-server-error": (503, "Remote Peer Unavailable"),
         "remote-tls-error": (503, "Remote Peer Unavailable"),
         "remote-http-error": (502, "Remote Peer Error"),
         "remote-content-type": (502, "Remote Peer Error"),
@@ -133,6 +140,15 @@ def _problem_from_error(request: Request, error: FederationError):
         "unknown-signing-key": (400, "Unknown Signing Key"),
         "revoked-signing-key": (400, "Revoked Signing Key"),
         "peer-key-missing": (409, "Peer Key Missing"),
+        "peer-key-fingerprint-invalid": (400, "Invalid Peer Key Fingerprint"),
+        "peer-key-fingerprint-mismatch": (422, "Peer Key Fingerprint Mismatch"),
+        "peer-key-invalid-remote": (422, "Invalid Remote Peer Key"),
+        "peer-key-status-conflict": (409, "Peer Key Status Conflict"),
+        "peer-key-status-stale": (409, "Peer Key Status Conflict"),
+        "peer-key-last-active": (409, "Last Active Key Protection"),
+        "peer-key-approval-required": (409, "Peer Key Approval Required"),
+        "peer-state-stale": (409, "Peer State Conflict"),
+        "key-collision": (409, "Peer Key Collision"),
         "authority-mismatch": (400, "Authority Mismatch"),
         "digest-mismatch": (400, "Digest Mismatch"),
         "already-running": (409, "Synchronization Already Running"),
@@ -518,6 +534,158 @@ async def probe_peer(
         peer_service, _, _ = _services(request)
         result = await asyncio.to_thread(peer_service.probe_peer, peer_id=peer_id, actor="admin")
         return PeerProbeResponse(**result)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.get(
+    "/api/v1/admin/federation/peers/{peer_id}/keys",
+    response_model=PeerKeyInventoryResponse,
+    tags=["Federation administration"],
+    summary="List trusted verification keys for one peer",
+    description=(
+        "Returns stored trusted public verification-key metadata for one peer.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="listFederationPeerKeys",
+)
+async def list_peer_keys(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(peer_service.list_peer_keys, peer_id=peer_id)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/keys/inspect",
+    response_model=PeerKeyInspectResponse,
+    tags=["Federation administration"],
+    summary="Inspect remote peer verification-key changes",
+    description=(
+        "Performs a read-only remote discovery/JWKS inspection and returns deterministic key-diff categories.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="inspectFederationPeerKeys",
+)
+async def inspect_peer_keys(
+    request: Request,
+    payload: PeerKeyInspectRequest = Body(default=PeerKeyInspectRequest(), description="Optional inspection reason."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.inspect_peer_keys,
+            peer_id=peer_id,
+            reason=payload.reason,
+            actor="admin",
+        )
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/keys/approve",
+    response_model=PeerKeyInventoryItem,
+    tags=["Federation administration"],
+    summary="Approve one remote verification key for a peer",
+    description=(
+        "Approves one remote peer verification key after exact fingerprint confirmation.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="approveFederationPeerKey",
+)
+async def approve_peer_key(
+    request: Request,
+    payload: PeerKeyApproveRequest = Body(description="Explicit peer-key approval request."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.approve_peer_key,
+            peer_id=peer_id,
+            kid=payload.kid,
+            expected_fingerprint=payload.expectedFingerprint,
+            reason=payload.reason,
+            actor="admin",
+        )
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/keys/{kid}/retire",
+    response_model=PeerKeyInventoryItem,
+    tags=["Federation administration"],
+    summary="Retire one trusted peer verification key",
+    description=(
+        "Transitions one peer verification key from active to retired while preserving history.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="retireFederationPeerKey",
+)
+async def retire_peer_key(
+    request: Request,
+    payload: PeerKeyStatusMutationRequest = Body(description="Peer-key retirement request."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    kid: str = Path(..., description="Peer verification key identifier."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.retire_peer_key,
+            peer_id=peer_id,
+            kid=kid,
+            reason=payload.reason,
+            expected_status=payload.expectedStatus,
+            actor="admin",
+        )
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/keys/{kid}/revoke",
+    response_model=PeerKeyInventoryItem,
+    tags=["Federation administration"],
+    summary="Revoke one trusted peer verification key",
+    description=(
+        "Transitions one peer verification key to revoked state while preserving evidence and trust history.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="revokeFederationPeerKey",
+)
+async def revoke_peer_key(
+    request: Request,
+    payload: PeerKeyStatusMutationRequest = Body(description="Peer-key revocation request."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    kid: str = Path(..., description="Peer verification key identifier."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.revoke_peer_key,
+            peer_id=peer_id,
+            kid=kid,
+            reason=payload.reason,
+            expected_status=payload.expectedStatus,
+            actor="admin",
+        )
     except FederationError as error:
         return _problem_from_error(request, error)
 
