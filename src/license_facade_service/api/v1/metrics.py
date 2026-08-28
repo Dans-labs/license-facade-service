@@ -5,9 +5,9 @@ import os
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from src.license_facade_service.api.v1.licenses import get_license_service
 from src.license_facade_service.infra.fuseki_client import FusekiClient
 from src.license_facade_service.services.licenses import LicenseService
-from src.license_facade_service.api.v1.licenses import get_license_service
 
 router = APIRouter()
 
@@ -35,11 +35,28 @@ class ReadinessFederationComponent(BaseModel):
     nodeId: str | None = Field(default=None, description="Configured federation node identifier, when federation is enabled.")
 
 
+class ReadinessOpenRelComponent(BaseModel):
+    enabled: bool = Field(description="Whether OpenREL facade support is enabled.")
+    ready: bool | None = Field(
+        description=(
+            "Configuration-readiness state for OpenREL. `true` means enabled and configuration-valid; "
+            "`null` means OpenREL is disabled."
+        )
+    )
+    errors: list[str] = Field(
+        default_factory=list,
+        description="Sanitized OpenREL configuration errors. Provider reachability is not checked here.",
+    )
+
+
 class ReadinessResponse(BaseModel):
     status: str = Field(description="Overall readiness state for serving requests.", examples=["ready", "not_ready"])
     licenses: ReadinessComponent = Field(description="Readiness of licence resolution against the active snapshot.")
     fuseki: ReadinessFusekiComponent = Field(description="Readiness of optional Fuseki integration.")
     federation: ReadinessFederationComponent = Field(description="Readiness of optional federation runtime.")
+    openrel: ReadinessOpenRelComponent = Field(
+        description="Optional OpenREL configuration readiness (does not probe provider network reachability)."
+    )
 
 
 @router.get(
@@ -84,7 +101,9 @@ async def ping():
     description=(
         "Reports whether the service is ready to resolve licences from the current snapshot.\n\n"
         "Readiness combines licence snapshot availability, optional Fuseki availability when enabled, "
-        "and optional federation runtime readiness. PostgreSQL remains the federation source of truth; "
+        "optional federation runtime readiness, and optional OpenREL configuration readiness. OpenREL "
+        "readiness indicates only whether OpenREL is enabled and configuration-valid; it does not probe "
+        "provider DNS or HTTP reachability. PostgreSQL remains the federation source of truth; "
         "Fuseki failures affect RDF indexing but must not invalidate already committed PostgreSQL records."
     ),
     operation_id="getServiceReadiness",
@@ -116,10 +135,22 @@ async def readiness(request: Request, service: LicenseService = Depends(get_lice
         }
         federation_ready = federation_state.ready or not federation_state.enabled
 
+    openrel_settings = getattr(request.app.state, "openrel_settings", None)
+    openrel_payload = {"enabled": False, "ready": None, "errors": []}
+    if openrel_settings is not None and openrel_settings.enabled:
+        openrel_payload = {"enabled": True, "ready": True, "errors": []}
+        if openrel_settings.validation_errors:
+            openrel_payload = {
+                "enabled": True,
+                "ready": False,
+                "errors": ["OpenREL configuration is invalid."],
+            }
+
     ready = licenses_ready and (fuseki_ready is True or fuseki_ready is None) and federation_ready
     return {
         "status": "ready" if ready else "not_ready",
         "licenses": {"ready": licenses_ready},
         "fuseki": {"enabled": fuseki_enabled, "ready": fuseki_ready},
         "federation": federation_payload,
+        "openrel": openrel_payload,
     }

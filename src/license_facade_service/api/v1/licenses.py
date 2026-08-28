@@ -9,8 +9,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, Path as ApiPath, Query, Request, Security
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.license_facade_service.custom_licences.models import PublicLicenseScope
+from src.license_facade_service.services.custom_licence_registration import (
+    CustomLicenceRegistrationError,
+    CustomLicenceRegistrationService,
+    RegisterCustomLicenceInput,
+)
 from src.license_facade_service.services.auth import (
     AuthService,
     AuthenticationError,
@@ -35,6 +41,10 @@ from src.license_facade_service.services.contract import LicenseDetail, LicenseI
 from src.license_facade_service.services.contract import LicenseInventoryResponse
 from src.license_facade_service.services.problem import ProblemDetails
 from src.license_facade_service.services.problem import problem_response
+from src.license_facade_service.services.spdx_custom_license import validate_custom_license_identifier
+from src.license_facade_service.services.spdx_custom_license import validate_http_iri
+from src.license_facade_service.services.spdx_validation import SpdxStructuralValidationError
+from src.license_facade_service.services.spdx3_documents import Spdx3DocumentGenerationError, Spdx3DocumentService
 from src.license_facade_service.federation.resolution import FederationResolutionService, ResolutionError
 from src.license_facade_service.federation.resolution_models import LicenseProvenanceResponse, LicenseResolutionResponse
 
@@ -93,16 +103,179 @@ class CacheMutationResponse(BaseModel):
 
 
 class MinimalSpdx3Request(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(
         default="Minimal SPDX 3.0 Document",
         description="Human-readable document name for the generated SPDX 3.0 JSON-LD example.",
         examples=["Minimal SPDX 3.0 Document"],
+        min_length=1,
+        max_length=200,
     )
     namespace: str = Field(
         default="https://example.org/spdx3/minimal-doc-1",
         description="Base namespace used when generating example identifiers in the SPDX 3.0 document.",
         examples=["https://example.example/spdx3/minimal-doc-1"],
     )
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("name must be non-blank.")
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in candidate):
+            raise ValueError("name must not contain control characters.")
+        return candidate
+
+    @field_validator("namespace")
+    @classmethod
+    def _validate_namespace(cls, value: str) -> str:
+        return validate_http_iri(value, "namespace")
+
+
+class RegisterCustomLicenceRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "requestedLicenseId": "DANS-Custom-1.0",
+                    "version": "1.0",
+                    "name": "DANS Custom License 1.0",
+                    "summary": "A custom licence maintained by DANS.",
+                    "description": "Local DANS terms.",
+                    "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                    "scope": "local",
+                    "aliases": ["DANS Custom License"],
+                },
+                {
+                    "requestedLicenseId": "DANS-Proposed-1.0",
+                    "version": "1.0",
+                    "name": "DANS Proposed License 1.0",
+                    "summary": "A proposed licence for later SPDX review.",
+                    "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                    "scope": "spdx-submission",
+                },
+                {
+                    "requestedLicenseId": "DANS-Federated-1.0",
+                    "version": "1.0",
+                    "name": "DANS Federated License 1.0",
+                    "summary": "A custom licence queued for federated publication.",
+                    "licenseText": "Copyright 2026 DANS.\n\nPermission is granted...",
+                    "scope": "federated",
+                    "aliases": ["DANS Federated License"],
+                },
+            ]
+        },
+    )
+
+    requested_license_id: str = Field(alias="requestedLicenseId", min_length=1, max_length=256)
+    version: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=512)
+    summary: str | None = Field(default=None, max_length=4096)
+    description: str | None = Field(default=None, max_length=20000)
+    license_text: str = Field(alias="licenseText", min_length=1)
+    scope: PublicLicenseScope = Field(
+        description=(
+            "Registration scope. "
+            "`local` and `spdx-submission` register without federation publication. "
+            "`federated` registers locally and queues asynchronous federation publication."
+        )
+    )
+    aliases: list[str] = Field(default_factory=list, max_length=64)
+
+    @field_validator("requested_license_id")
+    @classmethod
+    def _validate_requested_license_id(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("requestedLicenseId must be non-blank.")
+        validate_custom_license_identifier(candidate)
+        if len(candidate) > 256:
+            raise ValueError("requestedLicenseId must be <= 256 characters.")
+        return candidate
+
+    @field_validator("version")
+    @classmethod
+    def _validate_version(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("version must be non-blank.")
+        validate_custom_license_identifier(candidate)
+        return candidate
+
+    @field_validator("name")
+    @classmethod
+    def _validate_registration_name(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("name must be non-blank.")
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in candidate):
+            raise ValueError("name must not contain control characters.")
+        return candidate
+
+    @field_validator("summary")
+    @classmethod
+    def _normalize_summary(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("description")
+    @classmethod
+    def _normalize_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("license_text")
+    @classmethod
+    def _validate_license_text(cls, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("licenseText must be non-blank.")
+        return value
+
+    @field_validator("aliases")
+    @classmethod
+    def _validate_aliases(cls, value: list[str]) -> list[str]:
+        if len(value) > 64:
+            raise ValueError("aliases must contain at most 64 items.")
+        validated: list[str] = []
+        for alias in value:
+            candidate = alias.strip()
+            if not candidate:
+                raise ValueError("aliases must not contain blank values.")
+            if len(candidate) > 512:
+                raise ValueError("alias values must be <= 512 characters.")
+            if any(ord(ch) < 32 or ord(ch) == 127 for ch in candidate):
+                raise ValueError("alias values must not contain control characters.")
+            validated.append(candidate)
+        return validated
+
+
+class RegisterCustomLicenceResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    requested_license_id: str = Field(alias="requestedLicenseId")
+    version: str
+    canonical_id: str = Field(alias="canonicalId")
+    resolving_uuid: str = Field(alias="resolvingUuid")
+    resolving_uri: str = Field(alias="resolvingUri")
+    name: str
+    summary: str | None = None
+    description: str | None = None
+    scope: PublicLicenseScope
+    federation_status: str = Field(alias="federationStatus")
+    spdx_submission_status: str = Field(alias="spdxSubmissionStatus")
+    lifecycle_status: str = Field(alias="lifecycleStatus")
+    normalized_text_digest: str = Field(alias="normalizedTextDigest")
+    spdx_jsonld: dict[str, Any] = Field(alias="spdxJsonld")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
 
 
 def _problem_response_doc(description: str, example: dict[str, Any]) -> dict[str, Any]:
@@ -132,12 +305,44 @@ def get_auth_service() -> AuthService:
     return _auth_service
 
 
+def get_spdx3_document_service(request: Request) -> Spdx3DocumentService | None:
+    service = getattr(request.app.state, "spdx3_document_service", None)
+    return service
+
+
+def get_custom_licence_registration_service(request: Request) -> CustomLicenceRegistrationService:
+    service = getattr(request.app.state, "custom_licence_registration_service", None)
+    if service is None:
+        raise RuntimeError("custom licence registration service is not initialized")
+    return service
+
+
 def _problem_404(identifier: str, request: Request) -> JSONResponse:
     return problem_response(
         status=404,
         title="License Not Found",
         detail=f"No license record found for identifier '{identifier}'.",
         instance=str(request.url),
+    )
+
+
+def _problem_spdx3_generation_failed(request: Request) -> JSONResponse:
+    return problem_response(
+        status=500,
+        title="SPDX 3 Document Generation Failed",
+        detail="Generated SPDX 3.0.1 document failed structural validation.",
+        instance=str(request.url),
+        type_uri="https://eosc-eden.eu/problems/spdx3-document-generation-invalid",
+    )
+
+
+def _problem_spdx3_generation_unavailable(request: Request) -> JSONResponse:
+    return problem_response(
+        status=500,
+        title="SPDX 3 Document Generation Failed",
+        detail="SPDX 3 document generation is temporarily unavailable.",
+        instance=str(request.url),
+        type_uri="https://eosc-eden.eu/problems/spdx3-document-generation-invalid",
     )
 
 
@@ -386,19 +591,217 @@ async def refresh_cache(
 
 
 @router.post(
+    "/licenses",
+    response_model=RegisterCustomLicenceResponse,
+    tags=["Licences"],
+    summary="Register an authoritative custom licence",
+    description=(
+        "Registers one authoritative custom licence in the local LFS PostgreSQL store.\n\n"
+        "Bearer authentication is required. Curator or admin role is sufficient. "
+        "Supported registration scopes are `local`, `spdx-submission`, and `federated`. "
+        "For `federated`, registration creates a durable publication job and returns "
+        "`federationStatus=pending`; publication is asynchronous. "
+        "The `spdx-submission` scope only marks a record as ready for later review; "
+        "it does not create a pull request, does not contact SPDX, and does not imply acceptance. "
+        "Registration does not publish directly to peers; remote peers pull from the existing "
+        "signed changes feed using synchronization workers.\n\n"
+        "This endpoint does not emit a `Location` header because custom-licence resolver routing is deferred.\n\n"
+        "The endpoint performs offline SPDX 3.0.1 structural validation using the vendored schema only "
+        "(no OWL/SHACL semantic validation)."
+    ),
+    operation_id="register_custom_licence",
+    response_description="Registered custom licence metadata and immutable SPDX 3.0.1 snapshot.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
+        403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        409: _problem_response_doc(
+            "The requested custom licence identity or alias conflicts with an existing record.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-already-exists",
+                "title": "Custom Licence Already Registered",
+                "status": 409,
+                "detail": "A custom licence with the same authority, requested ID, and version already exists.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+        422: _problem_response_doc(
+            "Request validation failed.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-request-invalid",
+                "title": "Invalid Registration Request",
+                "status": 422,
+                "detail": "The registration request payload is invalid.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+        500: _problem_response_doc(
+            "Registration failed due to an internal persistence or generation error.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-persistence-failed",
+                "title": "Custom Licence Persistence Failed",
+                "status": 500,
+                "detail": "Could not persist the custom licence registration.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+        503: _problem_response_doc(
+            "Custom licence registration or federated publication configuration is unavailable or invalid.",
+            {
+                "type": "https://eosc-eden.eu/problems/custom-licence-registration-config-invalid",
+                "title": "Custom Licence Registration Unavailable",
+                "status": 503,
+                "detail": "Custom licence registration configuration is invalid.",
+                "instance": "https://license.example.org/api/v1/licenses",
+            },
+        ),
+    },
+)
+@router.post("/licences", include_in_schema=False)
+def register_custom_licence(
+    payload: RegisterCustomLicenceRequest,
+    request: Request,
+    auth: AuthService = Depends(get_auth_service),
+    service: CustomLicenceRegistrationService = Depends(get_custom_licence_registration_service),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    """Register a custom licence and optionally enqueue federated publication."""
+    try:
+        principal = _require_mutation_auth(request, auth)
+    except PermissionError as exc:
+        if str(exc) == "authn":
+            return problem_response(
+                status=401,
+                title="Unauthorized",
+                detail="Missing or invalid bearer token.",
+                instance=str(request.url),
+                type_uri="https://eosc-eden.eu/problems/unauthorized",
+            )
+        return problem_response(
+            status=403,
+            title="Forbidden",
+            detail="Authenticated principal lacks required curator/admin role.",
+            instance=str(request.url),
+            type_uri="https://eosc-eden.eu/problems/forbidden",
+        )
+
+    try:
+        result = service.register(
+            RegisterCustomLicenceInput(
+                requested_license_id=payload.requested_license_id,
+                version=payload.version,
+                name=payload.name,
+                summary=payload.summary,
+                description=payload.description,
+                license_text=payload.license_text,
+                scope=payload.scope,
+                aliases=tuple(payload.aliases),
+                creator_role=principal.role,
+            )
+        )
+    except CustomLicenceRegistrationError as exc:
+        return problem_response(
+            status=exc.status,
+            title=exc.title,
+            detail=exc.detail,
+            instance=str(request.url),
+            type_uri=f"https://eosc-eden.eu/problems/{exc.type_slug}",
+            extra=exc.extra,
+        )
+
+    return JSONResponse(
+        status_code=201,
+        content=RegisterCustomLicenceResponse(
+            id=str(result.id),
+            requested_license_id=result.requested_license_id,
+            version=result.version,
+            canonical_id=result.canonical_id,
+            resolving_uuid=str(result.resolving_uuid),
+            resolving_uri=result.resolving_uri,
+            name=result.name,
+            summary=result.summary,
+            description=result.description,
+            scope=result.scope,
+            federation_status=result.federation_status.value,
+            spdx_submission_status=result.spdx_submission_status.value,
+            lifecycle_status=result.lifecycle_status.value,
+            normalized_text_digest=result.normalized_text_digest,
+            spdx_jsonld=result.spdx_jsonld,
+            created_at=result.created_at,
+            updated_at=result.updated_at,
+        ).model_dump(by_alias=True, mode="json"),
+    )
+
+
+@router.post(
     "/licenses/spdx3/minimal",
     tags=["Licences"],
     summary="Generate a minimal SPDX 3.0 JSON-LD document",
     description=(
-        "Creates a minimal example SPDX 3.0 JSON-LD document.\n\n"
+        "Creates a minimal SPDX 3.0.1 JSON-LD document.\n\n"
+        "Generated output is structurally validated offline against the vendored official SPDX 3.0.1 JSON Schema "
+        "(`vendor/spdx/3.0.1/spdx-json-schema.json`) before it is returned. "
+        "No runtime schema/context network access is performed. Validation is structural only; OWL/SHACL semantic "
+        "validation is not performed. These endpoints do not use `spdx-tools` validation.\n\n"
         "Bearer authentication is required. Curator or admin role is sufficient. "
         "This helper does not publish or persist any federation state."
     ),
     operation_id="createMinimalSpdx3Document",
     response_description="Generated minimal SPDX 3.0 JSON-LD document.",
     responses={
+        200: {
+            "description": "Structurally validated minimal SPDX 3.0.1 JSON-LD document.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                        "@graph": [
+                            {
+                                "@id": "_:creation-info",
+                                "type": "CreationInfo",
+                                "specVersion": "3.0.1",
+                                "created": "2026-01-01T00:00:00Z",
+                                "createdBy": ["https://example.org/spdx3/minimal-doc-1/actors/lfs-operator"],
+                            },
+                            {
+                                "type": "Organization",
+                                "spdxId": "https://example.org/spdx3/minimal-doc-1/actors/lfs-operator",
+                                "name": "License Facade Service",
+                                "creationInfo": "_:creation-info",
+                            },
+                            {
+                                "type": "SpdxDocument",
+                                "spdxId": "https://example.org/spdx3/minimal-doc-1/documents/minimal",
+                                "name": "Minimal SPDX 3.0 Document",
+                                "creationInfo": "_:creation-info",
+                                "rootElement": ["https://example.org/spdx3/minimal-doc-1/actors/lfs-operator"],
+                            },
+                        ],
+                    }
+                }
+            },
+        },
         401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
         403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        422: _problem_response_doc(
+            "Invalid SPDX document generation request payload.",
+            {
+                "type": "https://eosc-eden.eu/problems/spdx3-request-invalid",
+                "title": "Invalid SPDX 3 Request",
+                "status": 422,
+                "detail": "The SPDX document generation request payload is invalid.",
+                "instance": "https://license.example.org/api/v1/licenses/spdx3/minimal",
+            },
+        ),
+        500: _problem_response_doc(
+            "Generated SPDX 3.0.1 document failed structural validation.",
+            {
+                "type": "https://eosc-eden.eu/problems/spdx3-document-generation-invalid",
+                "title": "SPDX 3 Document Generation Failed",
+                "status": 500,
+                "detail": "Generated SPDX 3.0.1 document failed structural validation.",
+                "instance": "https://license.example.org/api/v1/licenses/spdx3/minimal",
+            },
+        ),
     },
 )
 @router.post("/licences/spdx3/minimal", include_in_schema=False)
@@ -406,9 +809,10 @@ async def create_minimal_spdx3(
     payload: MinimalSpdx3Request,
     request: Request,
     auth: AuthService = Depends(get_auth_service),
+    spdx3_documents: Spdx3DocumentService | None = Depends(get_spdx3_document_service),
     _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
-    """Create a minimal SPDX 3.0 JSON-LD document after bearer-token authorization."""
+    """Create and structurally validate a minimal SPDX 3.0.1 JSON-LD document."""
     try:
         _require_mutation_auth(request, auth)
     except PermissionError as exc:
@@ -425,28 +829,16 @@ async def create_minimal_spdx3(
             detail="Authenticated principal lacks required curator/admin role.",
             instance=str(request.url),
         )
-    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    creation_info_id = "_:creationInfo_0"
-    document_spdx_id = f"{payload.namespace.rstrip('/')}_document"
-    return {
-        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
-        "@graph": [
-            {
-                "@id": creation_info_id,
-                "type": "CreationInfo",
-                "specVersion": "3.0.1",
-                "createdBy": [f"{payload.namespace.rstrip('/')}/creator"],
-                "created": created,
-            },
-            {
-                "spdxId": document_spdx_id,
-                "type": "SpdxDocument",
-                "rootElement": [document_spdx_id],
-                "name": payload.name,
-                "creationInfo": creation_info_id,
-            },
-        ],
-    }
+    if spdx3_documents is None:
+        return _problem_spdx3_generation_unavailable(request)
+    try:
+        return spdx3_documents.create_minimal_document(name=payload.name, namespace=payload.namespace)
+    except SpdxStructuralValidationError:
+        return _problem_spdx3_generation_failed(request)
+    except Spdx3DocumentGenerationError:
+        return _problem_spdx3_generation_unavailable(request)
+    except RuntimeError:
+        return _problem_spdx3_generation_unavailable(request)
 
 
 @router.post(
@@ -454,16 +846,79 @@ async def create_minimal_spdx3(
     tags=["Licences"],
     summary="Generate a complete SPDX 3.0 JSON-LD document for one licence",
     description=(
-        "Builds a complete SPDX 3.0 JSON-LD document for a single resolved licence.\n\n"
+        "Builds a complete SPDX 3.0.1 JSON-LD document for one resolved licence.\n\n"
+        "Generated output is structurally validated offline against the vendored official SPDX 3.0.1 JSON Schema "
+        "(`vendor/spdx/3.0.1/spdx-json-schema.json`) before it is returned. "
+        "No runtime schema/context network access is performed. Validation is structural only; OWL/SHACL semantic "
+        "validation is not performed. These endpoints do not use `spdx-tools` validation.\n\n"
         "Bearer authentication is required. Curator or admin role is sufficient. "
-        "Use this endpoint when you need a richer SPDX 3.0 representation derived from the current local snapshot."
+        "Use this endpoint when you need a richer SPDX 3.0.1 representation derived from the current local snapshot."
     ),
     operation_id="createCompleteSpdx3Document",
     response_description="Generated SPDX 3.0 JSON-LD document for the requested licence.",
     responses={
+        200: {
+            "description": "Structurally validated complete SPDX 3.0.1 JSON-LD document.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                        "@graph": [
+                            {
+                                "@id": "_:creation-info",
+                                "type": "CreationInfo",
+                                "specVersion": "3.0.1",
+                                "created": "2026-01-01T00:00:00Z",
+                                "createdBy": ["https://example.test/api/v1/licenses/spdx3/documents/actors/lfs-operator"],
+                            },
+                            {
+                                "type": "Organization",
+                                "spdxId": "https://example.test/api/v1/licenses/spdx3/documents/actors/lfs-operator",
+                                "name": "License Facade Service",
+                                "creationInfo": "_:creation-info",
+                            },
+                            {
+                                "type": "SpdxDocument",
+                                "spdxId": "https://example.test/api/v1/licenses/spdx3/documents/MIT",
+                                "name": "SPDX 3.0.1 Document for MIT",
+                                "creationInfo": "_:creation-info",
+                                "rootElement": ["https://example.test/api/v1/licenses/spdx3/documents/licenses/MIT"],
+                            },
+                            {
+                                "type": "expandedlicensing_ListedLicense",
+                                "spdxId": "https://example.test/api/v1/licenses/spdx3/documents/licenses/MIT",
+                                "name": "MIT License",
+                                "simplelicensing_licenseText": "Permission is hereby granted, free of charge, ...",
+                                "creationInfo": "_:creation-info",
+                            },
+                        ],
+                    }
+                }
+            },
+        },
         401: _problem_response_doc("Missing or invalid bearer token.", PROBLEM_EXAMPLES["unauthorized"]),
         403: _problem_response_doc("Authenticated principal lacks curator/admin permission.", PROBLEM_EXAMPLES["forbidden"]),
+        422: _problem_response_doc(
+            "Invalid SPDX document generation request payload.",
+            {
+                "type": "https://eosc-eden.eu/problems/spdx3-request-invalid",
+                "title": "Invalid SPDX 3 Request",
+                "status": 422,
+                "detail": "The SPDX document generation request payload is invalid.",
+                "instance": "https://license.example.org/api/v1/licenses/spdx3/complete/MIT",
+            },
+        ),
         404: _problem_response_doc("No licence matched the supplied licence ID.", PROBLEM_EXAMPLES["not_found"]),
+        500: _problem_response_doc(
+            "Generated SPDX 3.0.1 document failed structural validation.",
+            {
+                "type": "https://eosc-eden.eu/problems/spdx3-document-generation-invalid",
+                "title": "SPDX 3 Document Generation Failed",
+                "status": 500,
+                "detail": "Generated SPDX 3.0.1 document failed structural validation.",
+                "instance": "https://license.example.org/api/v1/licenses/spdx3/complete/MIT",
+            },
+        ),
     },
 )
 @router.post("/licences/spdx3/complete/{license_id}", include_in_schema=False)
@@ -476,9 +931,10 @@ async def create_complete_spdx3(
     ),
     service: LicenseService = Depends(get_license_service),
     auth: AuthService = Depends(get_auth_service),
+    spdx3_documents: Spdx3DocumentService | None = Depends(get_spdx3_document_service),
     _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ):
-    """Create a complete SPDX 3.0 JSON-LD document for a specific license."""
+    """Create and structurally validate a complete SPDX 3.0.1 JSON-LD document."""
     try:
         _require_mutation_auth(request, auth)
     except PermissionError as exc:
@@ -495,37 +951,18 @@ async def create_complete_spdx3(
             detail="Authenticated principal lacks required curator/admin role.",
             instance=str(request.url),
         )
+    if spdx3_documents is None:
+        return _problem_spdx3_generation_unavailable(request)
     try:
         resolved = await service.resolve(license_id)
     except LicenseNotFoundError:
         return _problem_404(license_id, request)
-    details = resolved.details
-    return {
-        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
-        "@graph": [
-            {
-                "@id": "_:creationInfo_0",
-                "type": "CreationInfo",
-                "specVersion": "3.0.1",
-                "createdBy": ["https://spdx.org/tools/lfs"],
-                "created": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-            },
-            {
-                "spdxId": f"https://spdx.org/spdxdocs/{resolved.license_id}_document",
-                "type": "SpdxDocument",
-                "rootElement": [f"https://spdx.org/spdxdocs/{resolved.license_id}#License-{resolved.license_id}"],
-                "name": f"SPDX Document for {resolved.license_id}",
-                "creationInfo": "_:creationInfo_0",
-            },
-            {
-                "spdxId": f"https://spdx.org/spdxdocs/{resolved.license_id}#License-{resolved.license_id}",
-                "type": "expandedlicensing_ListedLicense",
-                "name": details.get("name", resolved.record.get("name")),
-                "simplelicensing_licenseText": details.get("licenseText", ""),
-                "expandedlicensing_standardLicenseTemplate": details.get("standardLicenseTemplate", ""),
-            },
-        ],
-    }
+    try:
+        return spdx3_documents.create_complete_license_document(resolved=resolved)
+    except SpdxStructuralValidationError:
+        return _problem_spdx3_generation_failed(request)
+    except (Spdx3DocumentGenerationError, RuntimeError):
+        return _problem_spdx3_generation_unavailable(request)
 
 
 @router.get(
@@ -896,7 +1333,7 @@ async def resolve_license(
    ),
 ):
     try:
-        return _resolution_service(request).resolve(identifier)
+       return await _resolution_service(request).resolve_async(identifier)
     except ResolutionError as error:
         return _resolution_problem(request, error)
 

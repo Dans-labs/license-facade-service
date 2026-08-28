@@ -38,6 +38,11 @@ from src.license_facade_service.federation.resolution_models import ConflictDeci
 from src.license_facade_service.federation.outbound import FederationError, FederationPublicationService
 from src.license_facade_service.federation.runtime import FederationRuntime
 from src.license_facade_service.services.auth import AuthService, AuthenticationError, AuthorizationError, Principal
+from src.license_facade_service.services.custom_licence_federation_publication import (
+    CustomLicenceFederationPublicationError,
+    CustomLicenceFederationPublicationService,
+)
+from src.license_facade_service.services.custom_licence_registration import CustomLicenceRegistrationService
 from src.license_facade_service.services.problem import ProblemDetails, problem_response
 
 router = APIRouter()
@@ -54,6 +59,19 @@ bearer_scheme = HTTPBearer(
 class PublishRecordResponse(BaseModel):
     canonicalId: str = Field(description="Canonical ID assigned to the newly published local authoritative record.")
     recordId: str = Field(description="Local PostgreSQL UUID of the published record.")
+
+
+class CustomLicenceFederationStatusResponse(BaseModel):
+    customLicenceId: str
+    scope: str
+    federationStatus: str
+    outboxStatus: str | None = None
+    attemptCount: int | None = None
+    nextAttemptAt: str | None = None
+    publishedAt: str | None = None
+    federationRecordId: str | None = None
+    federationEventId: str | None = None
+    lastErrorClass: str | None = None
 
 
 def _problem_response_doc(description: str, example: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +119,13 @@ def _services(request: Request) -> tuple[FederationPeerService, FederationInboun
         FederationInboundSyncService(runtime.db, runtime.settings),
         FederationPublicationService(runtime.db, runtime.settings),
     )
+
+
+def _custom_licence_publication_service(request: Request) -> CustomLicenceFederationPublicationService:
+    registration = getattr(request.app.state, "custom_licence_registration_service", None)
+    if not isinstance(registration, CustomLicenceRegistrationService):
+        raise FederationError("federation-unavailable", "Federation runtime is unavailable.")
+    return registration.publication_service
 
 
 def _resolution_service(request: Request) -> FederationResolutionService:
@@ -161,11 +186,29 @@ def _problem_from_error(request: Request, error: FederationError):
         "circuit-state-stale": (409, "Circuit State Conflict"),
         "circuit-reset-race": (409, "Circuit Reset Conflict"),
         "sync-internal-error": (500, "Synchronization Failed"),
+        "custom-licence-not-found": (404, "Custom Licence Not Found"),
+        "custom-licence-federation-not-configured": (409, "Custom Licence Federation Not Configured"),
+        "custom-licence-already-published": (409, "Custom Licence Already Published"),
+        "custom-licence-retry-illegal-state": (409, "Custom Licence Retry Not Allowed"),
+        "custom-licence-federation-unavailable": (503, "Federated Registration Unavailable"),
+        "custom-licence-federation-database-mismatch": (503, "Federated Registration Unavailable"),
     }
     status, title = mapping.get(error.code, (400, "Federation Administration Error"))
     return problem_response(
         status=status,
         title=title,
+        detail=error.detail,
+        type_uri=f"https://eosc-eden.eu/problems/{error.code}",
+        instance=str(request.url),
+    )
+
+
+def _problem_from_custom_licence_publication_error(
+    request: Request, error: CustomLicenceFederationPublicationError
+):
+    return problem_response(
+        status=error.status,
+        title="Custom Licence Federation Error",
         detail=error.detail,
         type_uri=f"https://eosc-eden.eu/problems/{error.code}",
         instance=str(request.url),
@@ -712,6 +755,97 @@ async def federation_status(request: Request, _token: HTTPAuthorizationCredentia
         runtime = request.app.state.federation_runtime
         ext = await asyncio.to_thread(query_operational_status_extension, runtime.db, runtime.settings)
         return AdminStatusResponse(**{**base.model_dump(), **ext})
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.get(
+    "/api/v1/admin/licenses/{record_id}/federation",
+    response_model=CustomLicenceFederationStatusResponse,
+    tags=["Federation administration"],
+    summary="Inspect custom licence federation publication status",
+    description=(
+        "Returns federated publication status for one custom licence.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. "
+        "This endpoint is read-only and does not trigger publication."
+    ),
+    operation_id="get_custom_licence_federation_status",
+    response_description="Current custom licence publication status and outbox state.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}),
+        403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}),
+        404: _problem_response_doc("The requested custom licence does not exist.", {"type": "https://eosc-eden.eu/problems/custom-licence-not-found", "title": "Custom Licence Not Found", "status": 404, "detail": "Custom licence was not found."}),
+    },
+)
+def get_custom_licence_federation_status(
+    request: Request,
+    record_id: uuid.UUID = Path(..., description="Custom licence UUID.", examples=["33333333-3333-4333-8333-333333333333"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        service = _custom_licence_publication_service(request)
+        status = service.status_for_custom_licence(custom_licence_id=record_id)
+        return CustomLicenceFederationStatusResponse(
+            customLicenceId=str(status.custom_licence_id),
+            scope=status.scope,
+            federationStatus=status.federation_status,
+            outboxStatus=status.outbox_status,
+            attemptCount=status.attempt_count,
+            nextAttemptAt=status.next_attempt_at.isoformat() if status.next_attempt_at else None,
+            publishedAt=status.published_at.isoformat() if status.published_at else None,
+            federationRecordId=str(status.federation_record_id) if status.federation_record_id else None,
+            federationEventId=str(status.federation_event_id) if status.federation_event_id else None,
+            lastErrorClass=status.last_error_class,
+        )
+    except CustomLicenceFederationPublicationError as error:
+        return _problem_from_custom_licence_publication_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/licenses/{record_id}/federation/retry",
+    response_model=CustomLicenceFederationStatusResponse,
+    tags=["Federation administration"],
+    summary="Requeue custom licence federation publication",
+    description=(
+        "Requeues a failed federated publication for one custom licence.\n\n"
+        "Bearer authentication is required and the caller must have the admin role. "
+        "No publication is performed in this HTTP request."
+    ),
+    operation_id="retry_custom_licence_federation_publication",
+    response_description="Updated custom licence publication status after requeue.",
+    responses={
+        401: _problem_response_doc("Missing or invalid bearer token.", {"type": "https://eosc-eden.eu/problems/unauthorized", "title": "Unauthorized", "status": 401, "detail": "Missing or invalid bearer token."}),
+        403: _problem_response_doc("Authenticated principal lacks admin permission.", {"type": "https://eosc-eden.eu/problems/forbidden", "title": "Forbidden", "status": 403, "detail": "Administrator role is required."}),
+        404: _problem_response_doc("The requested custom licence does not exist.", {"type": "https://eosc-eden.eu/problems/custom-licence-not-found", "title": "Custom Licence Not Found", "status": 404, "detail": "Custom licence was not found."}),
+        409: _problem_response_doc("The requested publication state transition is not allowed.", {"type": "https://eosc-eden.eu/problems/custom-licence-retry-illegal-state", "title": "Custom Licence Retry Not Allowed", "status": 409, "detail": "Custom licence publication is not in a retryable state."}),
+    },
+)
+def retry_custom_licence_federation_publication(
+    request: Request,
+    record_id: uuid.UUID = Path(..., description="Custom licence UUID.", examples=["33333333-3333-4333-8333-333333333333"]),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        principal = _admin_guard(request)
+        service = _custom_licence_publication_service(request)
+        status = service.requeue_custom_licence(custom_licence_id=record_id, actor_role=principal.role)
+        return CustomLicenceFederationStatusResponse(
+            customLicenceId=str(status.custom_licence_id),
+            scope=status.scope,
+            federationStatus=status.federation_status,
+            outboxStatus=status.outbox_status,
+            attemptCount=status.attempt_count,
+            nextAttemptAt=status.next_attempt_at.isoformat() if status.next_attempt_at else None,
+            publishedAt=status.published_at.isoformat() if status.published_at else None,
+            federationRecordId=str(status.federation_record_id) if status.federation_record_id else None,
+            federationEventId=str(status.federation_event_id) if status.federation_event_id else None,
+            lastErrorClass=status.last_error_class,
+        )
+    except CustomLicenceFederationPublicationError as error:
+        return _problem_from_custom_licence_publication_error(request, error)
     except FederationError as error:
         return _problem_from_error(request, error)
 

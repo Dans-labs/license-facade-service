@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -148,12 +149,22 @@ class FederationResolutionService:
     def resolve(self, identifier: str) -> LicenseResolutionResponse:
         normalized = _normalize_identifier(identifier)
         if self.db is None:
-            return self._resolve_spdx(normalized)
+            return self._resolve_spdx_sync(normalized)
         with self.db.transaction() as session:
             result = self._resolve_in_session(session, normalized)
         if result is not None:
             return result
-        return self._resolve_spdx(normalized)
+        return self._resolve_spdx_sync(normalized)
+
+    async def resolve_async(self, identifier: str) -> LicenseResolutionResponse:
+        normalized = _normalize_identifier(identifier)
+        if self.db is None:
+            return await self._resolve_spdx_async(normalized)
+        with self.db.transaction() as session:
+            result = self._resolve_in_session(session, normalized)
+        if result is not None:
+            return result
+        return await self._resolve_spdx_async(normalized)
 
     def provenance(self, identifier: str) -> LicenseProvenanceResponse:
         normalized = _normalize_identifier(identifier)
@@ -622,11 +633,21 @@ class FederationResolutionService:
             ),
         )
 
-    def _resolve_spdx(self, normalized: str) -> LicenseResolutionResponse:
+    async def _resolve_spdx_async(self, normalized: str) -> LicenseResolutionResponse:
         try:
-            resolved = self.license_service.resolve(normalized)
+            resolved = await self.license_service.resolve(normalized)
         except LicenseNotFoundError as exc:
             raise ResolutionError("resolution-not-found", "No record or candidate was found.") from exc
+        return self._spdx_resolution_response(normalized, resolved)
+
+    def _resolve_spdx_sync(self, normalized: str) -> LicenseResolutionResponse:
+        try:
+            resolved = asyncio.run(self.license_service.resolve(normalized))
+        except LicenseNotFoundError as exc:
+            raise ResolutionError("resolution-not-found", "No record or candidate was found.") from exc
+        return self._spdx_resolution_response(normalized, resolved)
+
+    def _spdx_resolution_response(self, normalized: str, resolved: Any) -> LicenseResolutionResponse:
         metadata = self.license_service.build_metadata(resolved)
         lifecycle = "deprecated" if metadata.get("isDeprecatedLicenseId") else "active"
         now = datetime.now(timezone.utc)

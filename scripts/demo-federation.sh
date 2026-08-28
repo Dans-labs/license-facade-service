@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lfs-fed-demo.XXXXXX")"
+TMP_ROOT="${ROOT_DIR}/.tmp"
+mkdir -p "${TMP_ROOT}"
+TMP_DIR="$(mktemp -d "${TMP_ROOT}/lfs-fed-demo.XXXXXX")"
 PRESERVE="${FEDERATION_DEMO_PRESERVE_KEYS:-0}"
 RUN_ID="$(uv run python - <<'PY'
 import uuid
@@ -274,6 +276,128 @@ append_transcript "bad-peer-create" "${BAD_CREATE_BODY}"
 [[ "${BAD_CREATE_CODE}" != "200" ]]
 echo "Unapproved private target rejected: yes"
 
+LOCAL_CUSTOM_REQUESTED_ID="Demo-Local-${RUN_ID}"
+LOCAL_CUSTOM_PAYLOAD="$(uv run python - <<'PY' "${LOCAL_CUSTOM_REQUESTED_ID}"
+import json
+import sys
+print(json.dumps({
+    "requestedLicenseId": sys.argv[1],
+    "version": "1.0",
+    "name": "Demo Local Custom License",
+    "summary": "Demo local custom licence.",
+    "description": "Local-only demonstration record.",
+    "licenseText": "Demo local licence text.",
+    "scope": "local",
+    "aliases": [f"{sys.argv[1]}-alias"],
+}))
+PY
+)"
+LOCAL_CUSTOM_CREATED="$(expect_code "$(http_request POST "http://localhost:12114/api/v1/licenses" "${LOCAL_CUSTOM_PAYLOAD}")" "201")"
+append_transcript "custom-local-created" "${LOCAL_CUSTOM_CREATED}"
+LOCAL_CUSTOM_ID="$(json_get "${LOCAL_CUSTOM_CREATED}" "id")"
+LOCAL_CUSTOM_CANONICAL_ID="$(json_get "${LOCAL_CUSTOM_CREATED}" "canonicalId")"
+LOCAL_CUSTOM_STATUS="$(expect_code "$(http_request GET "http://localhost:12114/api/v1/admin/licenses/${LOCAL_CUSTOM_ID}/federation")" "200")"
+append_transcript "custom-local-status-node-a" "${LOCAL_CUSTOM_STATUS}"
+[[ "$(json_get "${LOCAL_CUSTOM_STATUS}" "customLicenceId")" == "${LOCAL_CUSTOM_ID}" ]]
+[[ "$(json_get "${LOCAL_CUSTOM_STATUS}" "federationStatus")" == "not_published" ]]
+CATALOG_A_AFTER_LOCAL="$(curl -fsS "http://localhost:12114/api/v1/federation/catalog?limit=200")"
+CHANGES_A_AFTER_LOCAL="$(curl -fsS "http://localhost:12114/api/v1/federation/changes?limit=200")"
+append_transcript "catalog-a-after-local" "${CATALOG_A_AFTER_LOCAL}"
+append_transcript "changes-a-after-local" "${CHANGES_A_AFTER_LOCAL}"
+[[ "${CATALOG_A_AFTER_LOCAL}" != *"${LOCAL_CUSTOM_CANONICAL_ID}"* ]]
+[[ "${CHANGES_A_AFTER_LOCAL}" != *"${LOCAL_CUSTOM_CANONICAL_ID}"* ]]
+echo "Local-scope custom licence is stored locally and absent from outbound federation feed"
+
+FED_CUSTOM_REQUESTED_ID="Demo-Federated-${RUN_ID}"
+FED_CUSTOM_PAYLOAD="$(uv run python - <<'PY' "${FED_CUSTOM_REQUESTED_ID}"
+import json
+import sys
+print(json.dumps({
+    "requestedLicenseId": sys.argv[1],
+    "version": "1.0",
+    "name": "Demo Federated Custom License",
+    "summary": "Demo federated custom licence.",
+    "description": "Federated demonstration record.",
+    "licenseText": "Demo federated licence text.",
+    "scope": "federated",
+    "aliases": [f"{sys.argv[1]}-alias"],
+}))
+PY
+)"
+FED_CUSTOM_CREATED="$(expect_code "$(http_request POST "http://localhost:12114/api/v1/licenses" "${FED_CUSTOM_PAYLOAD}")" "201")"
+append_transcript "custom-federated-created" "${FED_CUSTOM_CREATED}"
+FED_CUSTOM_ID="$(json_get "${FED_CUSTOM_CREATED}" "id")"
+[[ "$(json_get "${FED_CUSTOM_CREATED}" "federationStatus")" == "pending" ]]
+
+FED_CUSTOM_STATUS=""
+for _ in $(seq 1 90); do
+  FED_CUSTOM_STATUS="$(expect_code "$(http_request GET "http://localhost:12114/api/v1/admin/licenses/${FED_CUSTOM_ID}/federation")" "200")"
+  if [[ "$(json_get "${FED_CUSTOM_STATUS}" "federationStatus")" == "published" ]]; then
+    break
+  fi
+  sleep 1
+done
+append_transcript "custom-federated-status" "${FED_CUSTOM_STATUS}"
+[[ "$(json_get "${FED_CUSTOM_STATUS}" "federationStatus")" == "published" ]]
+
+CHANGES_A_AFTER_FED_CUSTOM="$(curl -fsS "http://localhost:12114/api/v1/federation/changes?limit=200")"
+append_transcript "changes-a-after-federated-custom" "${CHANGES_A_AFTER_FED_CUSTOM}"
+FED_CUSTOM_CANONICAL_ID="$(uv run python - <<'PY' "${CHANGES_A_AFTER_FED_CUSTOM}" "${FED_CUSTOM_ID}"
+import json
+import sys
+events = json.loads(sys.argv[1]).get("events", [])
+target = sys.argv[2]
+for evt in events:
+    payload = evt.get("payload", {})
+    record = payload.get("record", {})
+    business = record.get("payload", {})
+    if business.get("schema") == "lfs.custom-licence.federation.v1" and business.get("customLicenceId") == target:
+        print(record.get("canonicalId"))
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+)"
+FED_CUSTOM_ENCODED="$(encode_record_id "${FED_CUSTOM_CANONICAL_ID}")"
+FED_CUSTOM_RECORD_A="$(curl -fsS "http://localhost:12114/api/v1/federation/records/${FED_CUSTOM_ENCODED}")"
+append_transcript "custom-federated-record-node-a" "${FED_CUSTOM_RECORD_A}"
+[[ "$(json_get "${FED_CUSTOM_RECORD_A}" "record.payload.schema")" == "lfs.custom-licence.federation.v1" ]]
+echo "Federated custom licence published on Node A authoritative feed"
+
+SYNC_CUSTOM_ON_B="$(sync_request "${PEER_ID}")"
+append_transcript "sync-federated-custom" "${SYNC_CUSTOM_ON_B}"
+[[ "$(json_get "${SYNC_CUSTOM_ON_B}" "status")" == "complete" ]]
+FED_CUSTOM_RESOLUTION_B="$(curl -fsS "http://localhost:12124/api/v1/licenses/resolution?identifier=$(url_encode "${FED_CUSTOM_CANONICAL_ID}")")"
+FED_CUSTOM_PROVENANCE_B="$(curl -fsS "http://localhost:12124/api/v1/licenses/provenance?identifier=$(url_encode "${FED_CUSTOM_CANONICAL_ID}")")"
+append_transcript "custom-federated-resolution-node-b" "${FED_CUSTOM_RESOLUTION_B}"
+append_transcript "custom-federated-provenance-node-b" "${FED_CUSTOM_PROVENANCE_B}"
+[[ "$(json_get "${FED_CUSTOM_RESOLUTION_B}" "resolutionOutcome")" == "imported" ]]
+[[ "$(json_get "${FED_CUSTOM_RESOLUTION_B}" "authorityNodeId")" == "${NODE_A_ID}" ]]
+[[ "$(json_get "${FED_CUSTOM_PROVENANCE_B}" "events.0.sourcePeerId")" == "${PEER_ID}" ]]
+CATALOG_B_AFTER_FED_CUSTOM="$(curl -fsS "http://localhost:12124/api/v1/federation/catalog?limit=200")"
+CHANGES_B_AFTER_FED_CUSTOM="$(curl -fsS "http://localhost:12124/api/v1/federation/changes?limit=200")"
+append_transcript "catalog-b-after-federated-custom" "${CATALOG_B_AFTER_FED_CUSTOM}"
+append_transcript "changes-b-after-federated-custom" "${CHANGES_B_AFTER_FED_CUSTOM}"
+[[ "${CATALOG_B_AFTER_FED_CUSTOM}" != *"${FED_CUSTOM_CANONICAL_ID}"* ]]
+[[ "${CHANGES_B_AFTER_FED_CUSTOM}" != *"${FED_CUSTOM_CANONICAL_ID}"* ]]
+SYNC_CUSTOM_REPEAT="$(sync_request "${PEER_ID}")"
+append_transcript "sync-federated-custom-repeat" "${SYNC_CUSTOM_REPEAT}"
+[[ "$(json_get "${SYNC_CUSTOM_REPEAT}" "importedRecords")" == "0" ]]
+echo "Federated custom licence import on B is non-authoritative and idempotent"
+
+SPDX_MINIMAL_PAYLOAD="$(uv run python - <<'PY' "${RUN_ID}"
+import json
+import sys
+print(json.dumps({
+    "name": f"Demo SPDX {sys.argv[1]}",
+    "namespace": f"https://example.org/demo/{sys.argv[1]}",
+}))
+PY
+)"
+SPDX_MINIMAL_RESULT="$(expect_code "$(http_request POST "http://localhost:12114/api/v1/licenses/spdx3/minimal" "${SPDX_MINIMAL_PAYLOAD}")" "200")"
+append_transcript "spdx3-minimal-demo" "${SPDX_MINIMAL_RESULT}"
+[[ "$(json_get "${SPDX_MINIMAL_RESULT}" "@context")" == "https://spdx.org/rdf/3.0.1/spdx-context.jsonld" ]]
+echo "SPDX minimal validation path: passed"
+
 STAGE_EXTRA_FIELD_PAYLOAD="$(uv run python - <<'PY' "${NODE_A_K2}"
 import json
 import sys
@@ -344,12 +468,31 @@ PUBLISHED_R1="$(expect_code "$(http_request POST "http://localhost:12114/api/v1/
 append_transcript "published-r1" "${PUBLISHED_R1}"
 CANONICAL_R1="$(json_get "${PUBLISHED_R1}" "canonicalId")"
 
-CHANGES_A_R1="$(curl -fsS "http://localhost:12114/api/v1/federation/changes?limit=1")"
+CHANGES_A_R1="$(curl -fsS "http://localhost:12114/api/v1/federation/changes?limit=200")"
 append_transcript "changes-a-r1" "${CHANGES_A_R1}"
-R1_EVENT_DIGEST="$(json_get "${CHANGES_A_R1}" "events.0.signed.digestSha256")"
-R1_SIG_KID="$(json_get "${CHANGES_A_R1}" "events.0.signed.signature.kid")"
-R1_SIG_VALUE="$(json_get "${CHANGES_A_R1}" "events.0.signed.signature.value")"
-R1_EVENT_POSITION="$(json_get "${CHANGES_A_R1}" "events.0.payload.eventPosition")"
+R1_EVENT_FIELDS="$(uv run python - <<'PY' "${CHANGES_A_R1}" "${CANONICAL_R1}"
+import json
+import sys
+events = json.loads(sys.argv[1]).get("events", [])
+target = sys.argv[2]
+for evt in events:
+    payload = evt.get("payload", {})
+    record = payload.get("record", {})
+    if record.get("canonicalId") == target:
+        print(json.dumps({
+            "digest": evt["signed"]["digestSha256"],
+            "kid": evt["signed"]["signature"]["kid"],
+            "sig": evt["signed"]["signature"]["value"],
+            "position": payload["eventPosition"],
+        }))
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+)"
+R1_EVENT_DIGEST="$(json_get "${R1_EVENT_FIELDS}" "digest")"
+R1_SIG_KID="$(json_get "${R1_EVENT_FIELDS}" "kid")"
+R1_SIG_VALUE="$(json_get "${R1_EVENT_FIELDS}" "sig")"
+R1_EVENT_POSITION="$(json_get "${R1_EVENT_FIELDS}" "position")"
 [[ "${R1_SIG_KID}" == "${NODE_A_K1}" ]]
 echo "R1 published on A: ${CANONICAL_R1}"
 

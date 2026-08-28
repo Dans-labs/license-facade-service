@@ -1,5 +1,7 @@
 # API Specification Note
 
+Integrated application version: **0.3.0**.
+
 This note aligns the implementation with `LICENCE FACADE SERVICE - Rights & Ethics.docx.pdf`.
 
 ## Normative ambiguity
@@ -268,3 +270,45 @@ Deferred beyond Increment 5:
 - RDF recovery additions beyond existing outbox behavior;
 - rate limiting, metrics, and expanded production logging;
 - additional protocol compatibility enforcement.
+
+## Custom licence registration and publication
+
+`POST /api/v1/licenses` supports three scopes:
+
+- `local`: local-only registration.
+- `federated`: registration + durable publication outbox (`pending` until worker publication).
+- `spdx-submission`: local registration with SPDX submission workflow status.
+
+Federated registration persists local record + aliases + audit + outbox intent atomically in PostgreSQL. Publication is asynchronous via:
+
+- `python -m src.license_facade_service.custom_licence_federation_worker`
+
+Administrative status/retry endpoints:
+
+- `GET /api/v1/admin/licenses/{record_id}/federation`
+- `POST /api/v1/admin/licenses/{record_id}/federation/retry`
+
+The custom publication worker remains separate from the federation sync/rotation worker process.
+
+## OpenREL read-only facade
+
+OpenREL is exposed under `/openrel/api/v0.4/*` (read-only `GET` routes only). It is optional and bounded by configured network/time/size policy.
+
+OpenREL responses are not imported into:
+
+- local authoritative licence records,
+- federation outbound catalog/changes,
+- inbound synchronization state,
+- RDF outbox/index graphs.
+
+OpenREL readiness in `/api/v1/ready` is configuration-readiness only and does not perform provider network probes.
+
+## Migration ownership and startup sequencing
+
+Alembic is authoritative for application tables and schema evolution.
+
+- Startup migration command: `uv run alembic -c alembic.ini upgrade head`
+- No `Base.metadata.create_all` table-creation path is used.
+- The removed SQL dump `docker/postgres-init/001-lfs-schema.sql` is not part of startup.
+
+Each Compose startup path has a single migration owner per database path; API and worker services start only after migration readiness for that path.

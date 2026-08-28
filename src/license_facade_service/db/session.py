@@ -30,3 +30,6 @@ class Database:
             raise
         finally:
             session.close()
+
+    def close(self) -> None:
+        self.engine.dispose()

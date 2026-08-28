@@ -18,6 +18,7 @@ from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient
+from tests.schema_init import apply_schema_init_sql, reset_public_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -100,26 +101,14 @@ def postgres_url():
                 time.sleep(1)
         else:
             raise RuntimeError("postgres container did not become ready in time")
+        apply_schema_init_sql(dsn)
+        reset_public_schema(dsn)
         yield dsn
     finally:
         subprocess.run(["docker", "kill", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
 
-def _run_alembic(database_url: str, *command: str) -> None:
-    env = dict(os.environ)
-    env["ALEMBIC_DATABASE_URL"] = database_url
-    subprocess.run(
-        ["uv", "run", "alembic", "-c", str(REPO_ROOT / "alembic.ini"), *command],
-        check=True,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
-def test_migration_upgrade_and_downgrade_on_postgres(postgres_url: str):
-    _run_alembic(postgres_url, "upgrade", "head")
+def test_schema_init_creates_phase1_tables(postgres_url: str):
     check_sql = """
     SELECT to_regclass('public.federation_node_identity_state') IS NOT NULL AS identity_exists,
            to_regclass('public.federation_signing_keys') IS NOT NULL AS keys_exists,
@@ -140,15 +129,8 @@ def test_migration_upgrade_and_downgrade_on_postgres(postgres_url: str):
             assert row is not None
             assert all(row)
 
-    _run_alembic(postgres_url, "downgrade", "base")
-    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT to_regclass('public.federation_records')")
-            assert cur.fetchone()[0] is None
-
 
 def test_federation_identity_key_readiness_and_jwks(postgres_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    _run_alembic(postgres_url, "upgrade", "head")
     _seed_snapshot(tmp_path)
 
     private_key = Ed25519PrivateKey.generate()

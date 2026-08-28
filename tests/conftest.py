@@ -14,6 +14,9 @@ from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient, generate_license_uri
+from tests.schema_init import apply_schema_init_sql
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeSpdxClient(SPDXClient):
@@ -290,6 +293,6 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     licenses_api._license_service = service
     licenses_api._auth_service = AuthService()
     app = create_app()
-    client = TestClient(app)
     mit_uuid = str(UUID(licenses_payload["licenses"][0]["uri"].rsplit("/", 1)[-1]))
-    return client, service, licenses_payload, details_payload, mit_uuid
+    with TestClient(app) as client:
+        yield client, service, licenses_payload, details_payload, mit_uuid

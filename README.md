@@ -2,12 +2,22 @@
 
 FastAPI service for SPDX-compatible license metadata and negotiated public representations.
 
+Current integrated application version: **0.3.0**.
+
 ## Run
 
 ```bash
 uv sync
 uv run python -m src.license_facade_service.main
 ```
+
+## Docker deployment profiles
+
+- `app`: API + optional Fuseki, configured through environment.
+- `production`: PostgreSQL + Alembic migration owner + persistent key/storage init + API + sync worker + custom-licence publication worker + RDF worker.
+- `federation-demo`: two isolated nodes (A/B), isolated databases, isolated signing-key directories, peer trust/sync, and key-rotation flow.
+
+Database startup is migration-owned by Alembic (`uv run alembic -c alembic.ini upgrade head`). The removed legacy SQL dump is not used.
 
 ## API contract
 
@@ -54,6 +64,16 @@ Detailed JSON responses include the Table 4 fields plus:
 - `conformance`
 - `_links`
 
+## Custom licence registration scopes
+
+`POST /api/v1/licenses` supports:
+
+- `scope=local`: stored locally, not federated.
+- `scope=federated`: stored locally, then published asynchronously by `python -m src.license_facade_service.custom_licence_federation_worker`.
+- `scope=spdx-submission`: stored locally with SPDX submission workflow status for later controlled-fork processing.
+
+Federated custom publication uses durable outbox processing and separate worker execution (no inline cross-node push from the API request).
+
 ## Authentication
 
 Mutation endpoints require bearer auth via env/secret file:
@@ -62,6 +82,12 @@ Mutation endpoints require bearer auth via env/secret file:
 - `LFS_CURATOR_TOKEN` or `LFS_CURATOR_TOKEN_FILE`
 
 `401` means missing/invalid credentials; `403` means insufficient role.
+
+Role boundaries:
+
+- public APIs: licence retrieval, outbound federation discovery/feed, OpenREL read-only facade;
+- curator APIs: custom-licence registration and SPDX helper generation;
+- admin APIs: federation peer/trust/sync/operations and publication controls.
 
 ## OpenAPI and Swagger
 
@@ -72,6 +98,10 @@ Mutation endpoints require bearer auth via env/secret file:
 Public endpoint groups are documented under **Service status**, **Licences**, **Licence representations**, **Federation discovery**, **Federation outbound**, and **Federation resolution**.
 
 Protected endpoint groups are documented under **Federation administration** and **Federation conflicts**. In Swagger UI, use **Authorize** and paste a bearer token value such as `Bearer example-token` for admin/curator operations. Missing or invalid credentials return `401`; authenticated callers without the required role return `403`.
+
+## OpenREL
+
+OpenREL is an optional read-only facade under `/openrel/api/v0.4/*`. OpenREL provider data is not persisted as authoritative licences, not added to federation catalog/changes, and does not change local federation authority.
 
 ## Deployment defaults
 

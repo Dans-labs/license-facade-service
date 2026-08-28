@@ -7,6 +7,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from src.license_facade_service.db.base import Base
+from src.license_facade_service.db.models import custom_licence as _custom_licence_models  # noqa: F401
 from src.license_facade_service.db.models import federation as _federation_models  # noqa: F401
 
 config = context.config

@@ -1,3 +1,9 @@
+from src.license_facade_service.db.models.custom_licence import (
+    CustomLicence,
+    CustomLicenceAlias,
+    CustomLicenceAuditEvent,
+    CustomLicenceFederationOutbox,
+)
 from src.license_facade_service.db.models.federation import (
     FederationChangeEvent,
     FederationConflictRecord,
@@ -16,6 +22,10 @@ from src.license_facade_service.db.models.federation import (
 )
 
 __all__ = [
+    "CustomLicence",
+    "CustomLicenceAlias",
+    "CustomLicenceAuditEvent",
+    "CustomLicenceFederationOutbox",
     "FederationChangeEvent",
     "FederationConflictRecord",
     "FederationInboundEvent",

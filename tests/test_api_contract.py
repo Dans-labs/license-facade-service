@@ -9,7 +9,8 @@ import pytest
 from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService, Principal
-from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense
+from src.license_facade_service.services.licenses import LicenseService, SPDXClient, ResolvedLicense, ResolvedLicenseSource
+from src.license_facade_service.utils.commons import get_project_details
 
 
 def _openapi_operations(client):
@@ -39,6 +40,17 @@ def test_openapi_has_no_duplicate_operations(app_client):
             seen.add(key)
 
 
+def test_root_endpoint_reports_pyproject_version(app_client):
+    client, *_ = app_client
+    response = client.get("/")
+    assert response.status_code == 200
+    body = response.json()
+    expected = get_project_details(Path(__file__).resolve().parents[1], ["title", "version"])
+    assert body["title"] == expected["title"]
+    assert body["version"] == expected["version"]
+    assert body["version"] == "0.3.0"
+    assert client.get("/openapi.json").json()["info"]["version"] == "0.3.0"
+
 def test_openapi_operations_have_summary_description_tags_and_unique_operation_ids(app_client):
     client, *_ = app_client
     openapi, operations = _openapi_operations(client)
@@ -64,6 +76,7 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
     assert "HTTPBearer" in openapi["components"]["securitySchemes"]
 
     protected = {
+        ("post", "/api/v1/licenses"),
         ("post", "/api/v1/licenses/cache/update"),
         ("post", "/api/v1/licenses/cache/refresh"),
         ("post", "/api/v1/licenses/spdx3/minimal"),
@@ -77,6 +90,8 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
         ("post", "/api/v1/admin/federation/peers/{peer_id}/sync"),
         ("get", "/api/v1/admin/federation/status"),
         ("post", "/api/v1/admin/federation/publish"),
+        ("get", "/api/v1/admin/licenses/{record_id}/federation"),
+        ("post", "/api/v1/admin/licenses/{record_id}/federation/retry"),
         ("get", "/api/v1/admin/federation/conflicts"),
         ("get", "/api/v1/admin/federation/conflicts/{conflict_id}"),
         ("post", "/api/v1/admin/federation/conflicts/{conflict_id}/decisions"),
@@ -123,6 +138,7 @@ def test_openapi_problem_media_types_and_public_response_types(app_client):
     openapi, _ = _openapi_operations(client)
 
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["406"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/licenses"]["post"]["responses"]["409"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/resolution"]["get"]["responses"]["404"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/provenance"]["get"]["responses"]["409"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/admin/federation/peers"]["post"]["responses"]["401"]["content"]
@@ -137,6 +153,46 @@ def test_openapi_problem_media_types_and_public_response_types(app_client):
     ]
     assert {"200", "304", "404", "503"}.issubset(openapi["paths"]["/.well-known/lfs"]["get"]["responses"].keys())
     assert "application/json" in openapi["paths"]["/.well-known/jwks.json"]["get"]["responses"]["200"]["content"]
+    ready_schema_ref = openapi["paths"]["/api/v1/ready"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    ready_schema_name = ready_schema_ref.rsplit("/", 1)[-1]
+    assert "openrel" in openapi["components"]["schemas"][ready_schema_name]["properties"]
+
+
+def test_openapi_custom_licence_registration_contract(app_client):
+    client, *_ = app_client
+    openapi, _ = _openapi_operations(client)
+    operation = openapi["paths"]["/api/v1/licenses"]["post"]
+
+    assert operation["operationId"] == "register_custom_licence"
+    assert operation["tags"] == ["Licences"]
+    assert operation["security"] == [{"HTTPBearer": []}]
+    assert "application/problem+json" in operation["responses"]["422"]["content"]
+    assert "application/problem+json" in operation["responses"]["503"]["content"]
+    examples = openapi["components"]["schemas"]["RegisterCustomLicenceRequest"]["examples"]
+    scopes = {example["scope"] for example in examples}
+    assert "local" in scopes
+    assert "spdx-submission" in scopes
+    assert "federated" in scopes
+
+
+def test_openapi_openrel_contract_guardrails(app_client):
+    client, *_ = app_client
+    openapi, operations = _openapi_operations(client)
+    openrel_ops = [(path, method, operation) for path, method, operation in operations if path.startswith("/openrel/api/v0.4")]
+
+    assert len(openrel_ops) == 17
+    assert {method for _, method, _ in openrel_ops} == {"get"}
+    assert all(operation.get("tags") == ["OpenREL"] for _, _, operation in openrel_ops)
+    assert all("requestBody" not in operation for _, _, operation in openrel_ops)
+    assert all(operation["operationId"].startswith("openrel_") for _, _, operation in openrel_ops)
+    assert all(
+        "application/problem+json" in response.get("content", {})
+        for _, _, operation in openrel_ops
+        for status_code, response in operation.get("responses", {}).items()
+        if status_code in {"400", "404", "500", "502", "503", "504"}
+    )
+    serialized_openapi = json.dumps(openapi)
+    assert "provider.example" not in serialized_openapi
 
 
 def test_static_routes_take_precedence(app_client):
@@ -177,6 +233,29 @@ def test_static_routes_take_precedence(app_client):
     assert "/api/v1/federation/catalog" in openapi["paths"]
     assert "/api/v1/federation/changes" in openapi["paths"]
     assert "/api/v1/federation/records/{encoded_id}" in openapi["paths"]
+    assert "/openrel/api/v0.4/actions" in openapi["paths"]
+    assert "/openrel/api/v0.4/mappings/{id}" not in openapi["paths"]
+
+
+def test_custom_registration_alias_hidden_from_openapi_but_callable(app_client):
+    client, *_ = app_client
+    openapi, _ = _openapi_operations(client)
+    assert "/api/v1/licenses" in openapi["paths"]
+    assert "post" in openapi["paths"]["/api/v1/licenses"]
+    assert "/api/v1/licences" not in openapi["paths"]
+
+    payload = {
+        "requestedLicenseId": "Alias-Check",
+        "version": "1.0",
+        "name": "Alias Check Licence",
+        "licenseText": "This is a test licence text.",
+        "scope": "local",
+    }
+    alias_response = client.post("/api/v1/licences", json=payload)
+    canonical_response = client.post("/api/v1/licenses", json=payload)
+    assert alias_response.status_code == 401
+    assert canonical_response.status_code == 401
+    assert alias_response.json()["type"] == canonical_response.json()["type"]
 
 
 def test_default_json_and_aliases(app_client):
@@ -507,6 +586,7 @@ def test_html_escaping_and_safe_redirects(tmp_path: Path):
             "crossRef": [],
         },
         uri="https://example.test/api/v1/licenses/xss",
+        source=ResolvedLicenseSource.SPDX_LISTED,
     )
     html = service._render_html(service.build_metadata(resolved))
     assert "<script>" not in html
@@ -643,6 +723,7 @@ def test_string_crossref_booleans_do_not_crash(tmp_path: Path):
             "crossRef": [{"url": "https://example.org/x", "match": "N/A", "isValid": "maybe"}],
         },
         uri="https://example.test/api/v1/licenses/x",
+        source=ResolvedLicenseSource.SPDX_LISTED,
     )
     metadata = service.build_metadata(resolved)
     assert "match" not in metadata["crossRef"][0]

@@ -110,6 +110,12 @@ class SigningKeyService:
             raise LocalKeyError(LocalKeyErrorCode.MATERIAL_MISMATCH, "Signing key material does not match active public key.")
         return material
 
+    def _load_private_key(self) -> LoadedPrivateKeyMaterial:
+        active_kid = self.settings.active_kid
+        if not active_kid:
+            raise LocalKeyError(LocalKeyErrorCode.ACTIVE_KEY_MISSING, "No active signing key is available.")
+        return self.provider.load_private_key(active_kid)
+
     def _active_snapshot(self) -> _ActiveSnapshot:
         with self.db.transaction() as session:
             row = self._load_exact_active(session)
@@ -209,10 +215,14 @@ class SigningKeyService:
     def verify_bytes(self, payload: bytes, *, signature_b64url: str, kid: str) -> bool:
         with self.db.transaction() as session:
             row = session.execute(select(FederationSigningKey).where(FederationSigningKey.kid == kid)).scalar_one_or_none()
-        if row is None:
-            return False
         try:
-            public_bytes = b64url_decode(row.x)
+            if row is None:
+                if not self.settings.active_kid or kid != self.settings.active_kid:
+                    return False
+                material = self._load_private_key()
+                public_bytes = b64url_decode(material.public_x)
+            else:
+                public_bytes = b64url_decode(row.x)
             key = Ed25519PublicKey.from_public_bytes(public_bytes)
             key.verify(b64url_decode(signature_b64url), payload)
             return True
