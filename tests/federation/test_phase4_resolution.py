@@ -352,18 +352,23 @@ def _imported_record(session, *, peer: FederationTrustedPeer, canonical_id: str,
     return record
 
 
-@pytest.fixture
-def phase4_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
-    _run_alembic(postgres_url, "upgrade", "head")
-    _seed_snapshot(tmp_path)
+@pytest.fixture(scope="module")
+def _module_signing_key_pem() -> bytes:
     key = Ed25519PrivateKey.generate()
-    pem = key.private_bytes(
+    return key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
+
+
+@pytest.fixture
+def phase4_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str, _module_signing_key_pem: bytes):
+    _run_alembic(postgres_url, "upgrade", "head")
+    _seed_snapshot(tmp_path)
     key_path = tmp_path / "node-b.pem"
-    key_path.write_bytes(pem)
+    key_path.write_bytes(_module_signing_key_pem)
+    key_path.chmod(0o600)
 
     monkeypatch.setenv("BASE_DIR", str(REPO_ROOT))
     monkeypatch.setenv("URL_BASE", "https://example.test/api/v1/licenses")

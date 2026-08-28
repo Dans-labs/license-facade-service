@@ -365,7 +365,7 @@ def query_signing_keys(db: Database) -> list[dict]:
     """Returns all local signing keys, no private material."""
     with db.transaction() as session:
         rows = session.execute(
-            select(FederationSigningKey).order_by(FederationSigningKey.created_at)
+            select(FederationSigningKey).order_by(FederationSigningKey.created_at.asc(), FederationSigningKey.kid.asc())
         ).scalars().all()
     return [
         {

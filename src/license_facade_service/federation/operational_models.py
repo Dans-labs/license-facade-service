@@ -9,9 +9,11 @@ import json
 from enum import Enum
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_LOCAL_KEY_KID_PATTERN = r"^[a-z0-9][a-z0-9._-]{0,127}$"
 
 class CursorError(ValueError):
     """Raised when a cursor is tampered, wrong kind, wrong filters, or malformed."""
@@ -191,11 +193,14 @@ class LocalSigningKeyItem(BaseModel):
     kty: str
     crv: str
     x: str
+    publicFingerprint: str
+    materialStatus: str | None = None
     isActive: bool
     status: str
     validFrom: datetime | None = None
     validUntil: datetime | None = None
     rotationScheduledAt: datetime | None = None
+    rotatedToKid: str | None = None
     successorKid: str | None = None
     createdAt: datetime
     updatedAt: datetime
@@ -206,6 +211,148 @@ class LocalSigningKeyListResponse(BaseModel):
 
     items: list[LocalSigningKeyItem]
     total: int
+
+
+class SigningKeyInspectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kid: str = Field(strict=True, min_length=1, max_length=128, pattern=_LOCAL_KEY_KID_PATTERN)
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyStageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kid: str = Field(strict=True, min_length=1, max_length=128, pattern=_LOCAL_KEY_KID_PATTERN)
+    expectedState: Literal["staged"] | None = None
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyScheduleActivationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activateAt: datetime
+    expectedState: Literal["staged"]
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+
+    @field_validator("activateAt")
+    @classmethod
+    def _validate_activate_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("activateAt must include timezone information.")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyCancelScheduleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expectedState: Literal["staged"]
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyActivateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expectedState: Literal["staged"]
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+    warningAck: bool | None = Field(default=None, strict=True)
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyRetireRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expectedState: Literal["staged", "retired"]
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyEmergencyRevokeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expectedState: Literal["active"]
+    successorKid: str = Field(strict=True, min_length=1, max_length=128, pattern=_LOCAL_KEY_KID_PATTERN)
+    successorExpectedState: Literal["staged"]
+    reason: str = Field(strict=True, min_length=1, max_length=1024)
+    warningAck: bool | None = Field(default=None, strict=True)
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank.")
+        return value.strip()
+
+
+class SigningKeyInspectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kid: str
+    publicFingerprint: str
+    publicX: str | None = None
+    resultCode: str
+
+
+class SigningKeyMutationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kid: str
+    status: str
+    resultCode: str
+    rotationScheduledAt: datetime | None = None
+    rotatedToKid: str | None = None
+    previousActiveKid: str | None = None
+    effectiveAt: datetime | None = None
+
+
+class SigningKeyEmergencyResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    revokedKid: str
+    successorKid: str
+    successorStatus: str
+    resultCode: str
+    effectiveAt: datetime | None = None
 
 
 class PeerHealthSnapshotItem(BaseModel):

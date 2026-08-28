@@ -9,8 +9,9 @@ import asyncio
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Path, Query, Request, Response, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Body, Path, Query, Request, Response, Security
+from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import select
 
 from src.license_facade_service.api.federation.admin import (
     _admin_guard,
@@ -28,6 +29,16 @@ from src.license_facade_service.federation.audit import (
 from src.license_facade_service.federation.operational_models import (
     CompatibilityResponse,
     CursorError,
+    SigningKeyActivateRequest,
+    SigningKeyCancelScheduleRequest,
+    SigningKeyEmergencyResponse,
+    SigningKeyEmergencyRevokeRequest,
+    SigningKeyInspectRequest,
+    SigningKeyInspectionResponse,
+    SigningKeyMutationResponse,
+    SigningKeyRetireRequest,
+    SigningKeyScheduleActivationRequest,
+    SigningKeyStageRequest,
     LocalSigningKeyItem,
     LocalSigningKeyListResponse,
     PeerCompatibilityEntry,
@@ -50,6 +61,16 @@ from src.license_facade_service.federation.operational_queries import (
     query_rdf_outbox,
     query_signing_keys,
     query_sync_attempts,
+)
+from src.license_facade_service.db.models.federation import FederationSigningKey
+from src.license_facade_service.federation.keys import SigningKeyService
+from src.license_facade_service.federation.local_key_lifecycle import (
+    LocalKeyError,
+    LocalKeyErrorCode,
+    LocalKeyState,
+    SigningKeyLifecycleService,
+    constant_time_x_match,
+    fingerprint_for_x,
 )
 from src.license_facade_service.federation.outbound import FederationError
 from src.license_facade_service.federation.runtime import FederationRuntime
@@ -135,10 +156,243 @@ _VALIDATION_DOC = _problem_response_doc(
     "Request validation failed.",
     {"type": "https://eosc-eden.eu/problems/validation-error", "title": "Validation Error", "status": 422, "detail": "Request validation failed."},
 )
+_LOCAL_KEY_BAD_REQUEST_DOC = _problem_response_doc(
+    "Signing-key input validation failed.",
+    {
+        "type": "https://eosc-eden.eu/problems/invalid-kid",
+        "title": "Invalid Signing-Key Request",
+        "status": 400,
+        "detail": "Signing-key request is invalid.",
+    },
+)
+_LOCAL_KEY_NOT_FOUND_DOC = _problem_response_doc(
+    "Signing key was not found.",
+    {
+        "type": "https://eosc-eden.eu/problems/key-not-found",
+        "title": "Signing Key Not Found",
+        "status": 404,
+        "detail": "Signing key was not found.",
+    },
+)
+_LOCAL_KEY_CONFLICT_DOC = _problem_response_doc(
+    "Signing-key lifecycle state conflicts with current database state.",
+    {
+        "type": "https://eosc-eden.eu/problems/expected-state-mismatch",
+        "title": "Signing Key State Conflict",
+        "status": 409,
+        "detail": "Current key state does not match expected state.",
+    },
+)
+_LOCAL_KEY_UNAVAILABLE_DOC = _problem_response_doc(
+    "Signing-key material or dependent runtime component is unavailable.",
+    {
+        "type": "https://eosc-eden.eu/problems/key-unreadable",
+        "title": "Signing Key Unavailable",
+        "status": 503,
+        "detail": "Signing key material is unavailable.",
+    },
+)
+_WARNING_ACK_DOC = _problem_response_doc(
+    "Operation requires explicit warning acknowledgement.",
+    {
+        "type": "https://eosc-eden.eu/problems/warning-ack-required",
+        "title": "Warning Acknowledgement Required",
+        "status": 400,
+        "detail": "warningAck must be true for this operation.",
+    },
+)
 
 _HEALTH_STATUSES = {"healthy", "degraded", "unreachable", "unknown"}
 _COMPAT_STATUSES = {"compatible", "incompatible", "unknown", "unchecked"}
 _SYNC_STATUSES = {"running", "complete", "partial", "failed", "already-running"}
+_LOCAL_KEY_PATH_PATTERN = r"^[a-z0-9][a-z0-9._-]{0,127}$"
+
+
+def _local_key_services(request: Request) -> tuple[FederationRuntime, SigningKeyService, SigningKeyLifecycleService]:
+    runtime, _session_factory = _db_helper(request)
+    signing = SigningKeyService(runtime.db, runtime.settings)
+    lifecycle = SigningKeyLifecycleService(runtime.db, signing.provider)
+    return runtime, signing, lifecycle
+
+
+def _warning_ack_problem(request: Request):
+    return problem_response(
+        status=400,
+        title="Warning Acknowledgement Required",
+        detail="warningAck must be true for this operation.",
+        type_uri="https://eosc-eden.eu/problems/warning-ack-required",
+        instance=str(request.url),
+    )
+
+
+def _dependency_failure_problem(request: Request):
+    return problem_response(
+        status=503,
+        title="Service Unavailable",
+        detail="Federation signing-key operation is unavailable.",
+        type_uri="https://eosc-eden.eu/problems/federation-unavailable",
+        instance=str(request.url),
+    )
+
+
+def _problem_from_local_key_error(request: Request, error: LocalKeyError):
+    mapping: dict[LocalKeyErrorCode, tuple[int, str]] = {
+        LocalKeyErrorCode.INVALID_KID: (400, "Invalid Signing Key Identifier"),
+        LocalKeyErrorCode.INVALID_REASON: (400, "Invalid Operation Reason"),
+        LocalKeyErrorCode.INVALID_ACTOR_ID: (400, "Invalid Actor Identifier"),
+        LocalKeyErrorCode.INVALID_ACTIVATION_TIME: (400, "Invalid Activation Time"),
+        LocalKeyErrorCode.KEY_NOT_FOUND: (404, "Signing Key Not Found"),
+        LocalKeyErrorCode.EXPECTED_STATE_MISMATCH: (409, "Signing Key State Conflict"),
+        LocalKeyErrorCode.SCHEDULE_CONFLICT: (409, "Signing Key Schedule Conflict"),
+        LocalKeyErrorCode.TRANSITION_FORBIDDEN: (409, "Signing Key Transition Forbidden"),
+        LocalKeyErrorCode.COLLISION: (409, "Signing Key Collision"),
+        LocalKeyErrorCode.SUCCESSOR_REQUIRED: (409, "Signing Key Successor Required"),
+        LocalKeyErrorCode.ACTIVE_KEY_MISSING: (409, "Active Signing Key Missing"),
+        LocalKeyErrorCode.AMBIGUOUS_ACTIVE_KEY: (409, "Ambiguous Active Signing Key"),
+        LocalKeyErrorCode.KEY_NOT_REGULAR_FILE: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.KEY_UNREADABLE: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.KEY_EMPTY: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.KEY_UNSAFE_PERMISSIONS: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.KEY_PATH_ESCAPE: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.KEY_MALFORMED: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.KEY_NOT_ED25519: (503, "Signing Key Unavailable"),
+        LocalKeyErrorCode.MATERIAL_MISMATCH: (503, "Signing Key Material Mismatch"),
+        LocalKeyErrorCode.AUDIT_FAILED: (503, "Operational Audit Failed"),
+    }
+    status, title = mapping.get(error.code, (503, "Signing Key Operation Failed"))
+    return problem_response(
+        status=status,
+        title=title,
+        detail=error.detail,
+        type_uri=f"https://eosc-eden.eu/problems/{error.code.value}",
+        instance=str(request.url),
+    )
+
+
+def _build_signing_key_inventory_response(runtime: FederationRuntime, signing_service: SigningKeyService) -> LocalSigningKeyListResponse:
+    key_dicts = query_signing_keys(runtime.db)
+    items: list[LocalSigningKeyItem] = []
+    for d in key_dicts:
+        material_status = "ready"
+        try:
+            loaded = signing_service.provider.load_private_key(d["kid"])
+            if not constant_time_x_match(d["x"], loaded.public_x):
+                material_status = LocalKeyErrorCode.MATERIAL_MISMATCH.value
+        except LocalKeyError as error:
+            material_status = error.code.value
+        items.append(
+            LocalSigningKeyItem(
+                id=d["id"],
+                kid=d["kid"],
+                alg=d["alg"],
+                kty=d["kty"],
+                crv=d["crv"],
+                x=d["x"],
+                publicFingerprint=f"sha256:{fingerprint_for_x(d['x'])}",
+                materialStatus=material_status,
+                isActive=d["is_active"],
+                status=d["status"],
+                validFrom=d["valid_from"],
+                validUntil=d["valid_until"],
+                rotationScheduledAt=d["rotation_scheduled_at"],
+                rotatedToKid=d["rotated_to_kid"],
+                successorKid=d["rotated_to_kid"],
+                createdAt=d["created_at"],
+                updatedAt=d["updated_at"],
+            )
+        )
+    return LocalSigningKeyListResponse(items=items, total=len(items))
+
+
+def _load_signing_key_snapshot(runtime: FederationRuntime, kid: str) -> dict | None:
+    with runtime.db.transaction() as session:
+        row = session.execute(select(FederationSigningKey).where(FederationSigningKey.kid == kid)).scalar_one_or_none()
+        if row is None:
+            return None
+        previous_active = session.execute(
+            select(FederationSigningKey.kid)
+            .where(
+                FederationSigningKey.rotated_to_kid == row.kid,
+                FederationSigningKey.status.in_([LocalKeyState.RETIRED.value, LocalKeyState.REVOKED.value]),
+            )
+            .order_by(FederationSigningKey.updated_at.desc(), FederationSigningKey.created_at.desc(), FederationSigningKey.kid.asc())
+            .limit(1)
+        ).scalar_one_or_none()
+        row_values = {
+            "kid": row.kid,
+            "status": row.status,
+            "rotation_scheduled_at": row.rotation_scheduled_at,
+            "rotated_to_kid": row.rotated_to_kid,
+            "valid_from": row.valid_from,
+            "valid_until": row.valid_until,
+            "updated_at": row.updated_at,
+        }
+    return {
+        **row_values,
+        "previous_active_kid": previous_active,
+    }
+
+
+def _lifecycle_response_from_result(runtime: FederationRuntime, result) -> SigningKeyMutationResponse:
+    snapshot = _load_signing_key_snapshot(runtime, result.kid)
+    if snapshot is None:
+        raise LocalKeyError(LocalKeyErrorCode.KEY_NOT_FOUND, "Signing key was not found.")
+    effective_at = snapshot["updated_at"]
+    if snapshot["status"] == LocalKeyState.ACTIVE.value and snapshot["valid_from"] is not None:
+        effective_at = snapshot["valid_from"]
+    elif snapshot["status"] in {LocalKeyState.RETIRED.value, LocalKeyState.REVOKED.value} and snapshot["valid_until"] is not None:
+        effective_at = snapshot["valid_until"]
+    return SigningKeyMutationResponse(
+        kid=snapshot["kid"],
+        status=snapshot["status"],
+        resultCode=result.reason_code,
+        rotationScheduledAt=snapshot["rotation_scheduled_at"],
+        rotatedToKid=snapshot["rotated_to_kid"],
+        previousActiveKid=snapshot["previous_active_kid"],
+        effectiveAt=effective_at,
+    )
+
+
+def _load_signing_key_snapshot_pair(runtime: FederationRuntime, revoked_kid: str, successor_kid: str) -> tuple[dict | None, dict | None]:
+    with runtime.db.transaction() as session:
+        rows = session.execute(
+            select(FederationSigningKey).where(FederationSigningKey.kid.in_([revoked_kid, successor_kid]))
+        ).scalars().all()
+        mapped = {row.kid: row for row in rows}
+        if revoked_kid not in mapped or successor_kid not in mapped:
+            return None, None
+        previous_active = session.execute(
+            select(FederationSigningKey.kid)
+            .where(
+                FederationSigningKey.rotated_to_kid == successor_kid,
+                FederationSigningKey.status.in_([LocalKeyState.RETIRED.value, LocalKeyState.REVOKED.value]),
+            )
+            .order_by(FederationSigningKey.updated_at.desc(), FederationSigningKey.created_at.desc(), FederationSigningKey.kid.asc())
+            .limit(1)
+        ).scalar_one_or_none()
+        revoked = mapped[revoked_kid]
+        successor = mapped[successor_kid]
+        revoked_snapshot = {
+            "kid": revoked.kid,
+            "status": revoked.status,
+            "rotation_scheduled_at": revoked.rotation_scheduled_at,
+            "rotated_to_kid": revoked.rotated_to_kid,
+            "valid_from": revoked.valid_from,
+            "valid_until": revoked.valid_until,
+            "updated_at": revoked.updated_at,
+            "previous_active_kid": previous_active,
+        }
+        successor_snapshot = {
+            "kid": successor.kid,
+            "status": successor.status,
+            "rotation_scheduled_at": successor.rotation_scheduled_at,
+            "rotated_to_kid": successor.rotated_to_kid,
+            "valid_from": successor.valid_from,
+            "valid_until": successor.valid_until,
+            "updated_at": successor.updated_at,
+            "previous_active_kid": previous_active,
+        }
+        return revoked_snapshot, successor_snapshot
 
 
 def _cursor_problem(request: Request):
@@ -386,6 +640,7 @@ async def get_peer_cursor(
         401: _UNAUTHORIZED_DOC,
         403: _FORBIDDEN_DOC,
         404: _FED_DISABLED_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
     },
 )
 async def list_local_signing_keys(
@@ -394,36 +649,392 @@ async def list_local_signing_keys(
 ):
     try:
         _admin_guard(request)
-        runtime, _session_factory = _db_helper(request)
-
-        key_dicts = await asyncio.to_thread(query_signing_keys, runtime.db)
-        items = [
-            LocalSigningKeyItem(
-                id=d["id"],
-                kid=d["kid"],
-                alg=d["alg"],
-                kty=d["kty"],
-                crv=d["crv"],
-                x=d["x"],
-                isActive=d["is_active"],
-                status=d["status"],
-                validFrom=d["valid_from"],
-                validUntil=d["valid_until"],
-                rotationScheduledAt=d["rotation_scheduled_at"],
-                successorKid=d["rotated_to_kid"],
-                createdAt=d["created_at"],
-                updatedAt=d["updated_at"],
-            )
-            for d in key_dicts
-        ]
-        return LocalSigningKeyListResponse(items=items, total=len(items))
-
+        runtime, signing_service, _lifecycle = _local_key_services(request)
+        return await asyncio.to_thread(_build_signing_key_inventory_response, runtime, signing_service)
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
     except FederationError as error:
         return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
 
 
 # ---------------------------------------------------------------------------
-# Endpoint 4: GET /api/v1/admin/federation/rdf-outbox
+# Endpoint 4: POST /api/v1/admin/federation/signing-keys/inspect
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/inspect",
+    response_model=SigningKeyInspectionResponse,
+    tags=["Federation administration"],
+    summary="Inspect local signing-key material",
+    description=(
+        "Loads one configured local signing-key candidate and returns public inspection metadata.\n\n"
+        "Requires admin bearer token. The response never includes private key bytes, PEM, or filesystem paths."
+    ),
+    operation_id="inspectLocalSigningKey",
+    responses={
+        400: _LOCAL_KEY_BAD_REQUEST_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        404: _LOCAL_KEY_NOT_FOUND_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def inspect_local_signing_key(
+    request: Request,
+    payload: SigningKeyInspectRequest = Body(description="Signing-key inspection request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        _runtime, _signing, lifecycle = _local_key_services(request)
+        result = await asyncio.to_thread(
+            lifecycle.inspect_candidate,
+            kid=payload.kid,
+            reason=payload.reason,
+            actor_id="admin",
+        )
+        return SigningKeyInspectionResponse(
+            kid=result.kid,
+            publicFingerprint=f"sha256:{result.fingerprint}",
+            publicX=result.public_x,
+            resultCode=result.reason_code,
+        )
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/stage",
+    response_model=SigningKeyMutationResponse,
+    tags=["Federation administration"],
+    summary="Stage a local signing-key candidate",
+    description=(
+        "Stages a local signing-key candidate for future activation.\n\n"
+        "Requires admin bearer token and validates lifecycle transitions under row lock."
+    ),
+    operation_id="stageLocalSigningKey",
+    responses={
+        400: _LOCAL_KEY_BAD_REQUEST_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        409: _LOCAL_KEY_CONFLICT_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def stage_local_signing_key(
+    request: Request,
+    payload: SigningKeyStageRequest = Body(description="Signing-key staging request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        runtime, _signing, lifecycle = _local_key_services(request)
+        expected_state = LocalKeyState(payload.expectedState) if payload.expectedState else None
+        result = await asyncio.to_thread(
+            lifecycle.stage_candidate,
+            kid=payload.kid,
+            reason=payload.reason,
+            expected_state=expected_state,
+            actor_id="admin",
+        )
+        return await asyncio.to_thread(_lifecycle_response_from_result, runtime, result)
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/{kid}/schedule-activation",
+    response_model=SigningKeyMutationResponse,
+    tags=["Federation administration"],
+    summary="Schedule local signing-key activation",
+    description=(
+        "Schedules activation for a staged local signing key.\n\n"
+        "Requires admin bearer token and timezone-aware activation timestamp."
+    ),
+    operation_id="scheduleLocalSigningKeyActivation",
+    responses={
+        400: _LOCAL_KEY_BAD_REQUEST_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        404: _LOCAL_KEY_NOT_FOUND_DOC,
+        409: _LOCAL_KEY_CONFLICT_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def schedule_local_signing_key_activation(
+    request: Request,
+    kid: str = Path(
+        ...,
+        description="Signing key identifier.",
+        min_length=1,
+        max_length=128,
+        pattern=_LOCAL_KEY_PATH_PATTERN,
+    ),
+    payload: SigningKeyScheduleActivationRequest = Body(description="Activation schedule request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        runtime, _signing, lifecycle = _local_key_services(request)
+        result = await asyncio.to_thread(
+            lifecycle.schedule_activation,
+            kid=kid,
+            activate_at=payload.activateAt,
+            reason=payload.reason,
+            expected_state=LocalKeyState(payload.expectedState),
+            actor_id="admin",
+        )
+        return await asyncio.to_thread(_lifecycle_response_from_result, runtime, result)
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/{kid}/cancel-schedule",
+    response_model=SigningKeyMutationResponse,
+    tags=["Federation administration"],
+    summary="Cancel local signing-key schedule",
+    description=(
+        "Cancels a scheduled activation for a staged local signing key.\n\n"
+        "Requires admin bearer token and expected-state enforcement under row lock."
+    ),
+    operation_id="cancelLocalSigningKeySchedule",
+    responses={
+        400: _LOCAL_KEY_BAD_REQUEST_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        404: _LOCAL_KEY_NOT_FOUND_DOC,
+        409: _LOCAL_KEY_CONFLICT_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def cancel_local_signing_key_schedule(
+    request: Request,
+    kid: str = Path(
+        ...,
+        description="Signing key identifier.",
+        min_length=1,
+        max_length=128,
+        pattern=_LOCAL_KEY_PATH_PATTERN,
+    ),
+    payload: SigningKeyCancelScheduleRequest = Body(description="Schedule cancellation request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        runtime, _signing, lifecycle = _local_key_services(request)
+        result = await asyncio.to_thread(
+            lifecycle.cancel_schedule,
+            kid=kid,
+            reason=payload.reason,
+            expected_state=LocalKeyState(payload.expectedState),
+            actor_id="admin",
+        )
+        return await asyncio.to_thread(_lifecycle_response_from_result, runtime, result)
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/{kid}/activate",
+    response_model=SigningKeyMutationResponse,
+    tags=["Federation administration"],
+    summary="Activate staged local signing key",
+    description=(
+        "Immediately activates a staged local signing key.\n\n"
+        "Requires admin bearer token and explicit warning acknowledgement."
+    ),
+    operation_id="activateLocalSigningKey",
+    responses={
+        400: _WARNING_ACK_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        404: _LOCAL_KEY_NOT_FOUND_DOC,
+        409: _LOCAL_KEY_CONFLICT_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def activate_local_signing_key(
+    request: Request,
+    kid: str = Path(
+        ...,
+        description="Signing key identifier.",
+        min_length=1,
+        max_length=128,
+        pattern=_LOCAL_KEY_PATH_PATTERN,
+    ),
+    payload: SigningKeyActivateRequest = Body(description="Immediate activation request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        if payload.warningAck is not True:
+            return _warning_ack_problem(request)
+        runtime, _signing, lifecycle = _local_key_services(request)
+        result = await asyncio.to_thread(
+            lifecycle.activate_staged_key,
+            kid=kid,
+            reason=payload.reason,
+            expected_state=LocalKeyState(payload.expectedState),
+            actor_id="admin",
+        )
+        return await asyncio.to_thread(_lifecycle_response_from_result, runtime, result)
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/{kid}/retire",
+    response_model=SigningKeyMutationResponse,
+    tags=["Federation administration"],
+    summary="Retire staged local signing key",
+    description=(
+        "Retires a staged local signing key and clears pending schedule state.\n\n"
+        "Requires admin bearer token and expected-state revalidation under row lock."
+    ),
+    operation_id="retireLocalSigningKey",
+    responses={
+        400: _LOCAL_KEY_BAD_REQUEST_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        404: _LOCAL_KEY_NOT_FOUND_DOC,
+        409: _LOCAL_KEY_CONFLICT_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def retire_local_signing_key(
+    request: Request,
+    kid: str = Path(
+        ...,
+        description="Signing key identifier.",
+        min_length=1,
+        max_length=128,
+        pattern=_LOCAL_KEY_PATH_PATTERN,
+    ),
+    payload: SigningKeyRetireRequest = Body(description="Retire request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        runtime, _signing, lifecycle = _local_key_services(request)
+        expected_state = LocalKeyState(payload.expectedState)
+        result = await asyncio.to_thread(
+            lifecycle.retire_staged_key,
+            kid=kid,
+            reason=payload.reason,
+            expected_state=expected_state,
+            actor_id="admin",
+        )
+        return await asyncio.to_thread(_lifecycle_response_from_result, runtime, result)
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+@router.post(
+    "/api/v1/admin/federation/signing-keys/{kid}/revoke-emergency",
+    response_model=SigningKeyEmergencyResponse,
+    tags=["Federation administration"],
+    summary="Emergency revoke active signing key with staged successor",
+    description=(
+        "Emergency-revokes the active key and atomically activates the staged successor.\n\n"
+        "Requires admin bearer token, explicit warning acknowledgement, and expected-state checks under lock."
+    ),
+    operation_id="emergencyRevokeLocalSigningKey",
+    responses={
+        400: _WARNING_ACK_DOC,
+        401: _UNAUTHORIZED_DOC,
+        403: _FORBIDDEN_DOC,
+        404: _LOCAL_KEY_NOT_FOUND_DOC,
+        409: _LOCAL_KEY_CONFLICT_DOC,
+        422: _VALIDATION_DOC,
+        503: _LOCAL_KEY_UNAVAILABLE_DOC,
+    },
+)
+async def emergency_revoke_local_signing_key(
+    request: Request,
+    kid: str = Path(
+        ...,
+        description="Current active signing key identifier.",
+        min_length=1,
+        max_length=128,
+        pattern=_LOCAL_KEY_PATH_PATTERN,
+    ),
+    payload: SigningKeyEmergencyRevokeRequest = Body(description="Emergency revocation request."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        if payload.warningAck is not True:
+            return _warning_ack_problem(request)
+        runtime, _signing, lifecycle = _local_key_services(request)
+        result = await asyncio.to_thread(
+            lifecycle.emergency_revoke_with_successor,
+            active_kid=kid,
+            successor_kid=payload.successorKid,
+            reason=payload.reason,
+            expected_active_state=LocalKeyState(payload.expectedState),
+            expected_successor_state=LocalKeyState(payload.successorExpectedState),
+            actor_id="admin",
+        )
+        revoked_snapshot, successor_snapshot = await asyncio.to_thread(
+            _load_signing_key_snapshot_pair,
+            runtime,
+            result.kid,
+            payload.successorKid,
+        )
+        if revoked_snapshot is None or successor_snapshot is None:
+            raise LocalKeyError(LocalKeyErrorCode.KEY_NOT_FOUND, "Signing key was not found.")
+        effective_at = revoked_snapshot["valid_until"] or revoked_snapshot["updated_at"]
+        return SigningKeyEmergencyResponse(
+            revokedKid=result.kid,
+            successorKid=successor_snapshot["kid"],
+            successorStatus=successor_snapshot["status"],
+            resultCode=result.reason_code,
+            effectiveAt=effective_at,
+        )
+    except LocalKeyError as error:
+        return _problem_from_local_key_error(request, error)
+    except FederationError as error:
+        return _problem_from_error(request, error)
+    except Exception:
+        return _dependency_failure_problem(request)
+
+
+# ---------------------------------------------------------------------------
+# Endpoint 5: GET /api/v1/admin/federation/rdf-outbox
 # ---------------------------------------------------------------------------
 
 

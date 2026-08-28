@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Header, Request
@@ -9,6 +10,7 @@ from src.license_facade_service.federation.canonical_json import canonicalize_to
 from src.license_facade_service.federation.models import JwksResponse
 from src.license_facade_service.federation.outbound import _etag_for_bytes, _parse_if_none_match
 from src.license_facade_service.federation.keys import SigningKeyService
+from src.license_facade_service.federation.local_key_lifecycle import LocalKeyError
 from src.license_facade_service.federation.runtime import FederationRuntime
 from src.license_facade_service.services.problem import ProblemDetails
 from src.license_facade_service.services.problem import problem_response
@@ -75,7 +77,23 @@ async def get_jwks(
         )
 
     service = SigningKeyService(runtime.db, runtime.settings)
-    payload = service.jwks().model_dump(mode="json", exclude_none=True)
+    try:
+        jwks = await asyncio.to_thread(service.jwks)
+    except LocalKeyError:
+        return problem_response(
+            status=503,
+            title="Service Unavailable",
+            detail="Federation signing keys are unavailable.",
+            instance=str(request.url),
+        )
+    except Exception:
+        return problem_response(
+            status=503,
+            title="Service Unavailable",
+            detail="Federation signing keys are unavailable.",
+            instance=str(request.url),
+        )
+    payload = jwks.model_dump(mode="json", exclude_none=True)
     body = canonicalize_to_bytes(payload)
     etag = _etag_for_bytes(body)
     if_none_match = _parse_if_none_match(request.headers.get("if-none-match"))

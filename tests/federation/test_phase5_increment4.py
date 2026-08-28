@@ -150,6 +150,16 @@ def _run_alembic(database_url: str, *command: str) -> None:
     )
 
 
+def _reset_public_schema(database_url: str) -> None:
+    raw = database_url.replace("+psycopg", "")
+    with psycopg.connect(raw, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("DROP SCHEMA IF EXISTS public CASCADE")
+            cur.execute("CREATE SCHEMA public")
+            cur.execute("GRANT ALL ON SCHEMA public TO postgres")
+            cur.execute("GRANT ALL ON SCHEMA public TO public")
+
+
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
 
@@ -258,7 +268,7 @@ def postgres_url():
 
 @pytest.fixture
 def fed_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
-    _run_alembic(postgres_url, "downgrade", "base")
+    _reset_public_schema(postgres_url)
     _run_alembic(postgres_url, "upgrade", "head")
     _seed_snapshot(tmp_path)
 
@@ -270,6 +280,7 @@ def fed_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
     )
     key_path = tmp_path / "node-b-signing-key.pem"
     key_path.write_bytes(pem)
+    key_path.chmod(0o600)
 
     monkeypatch.setenv("BASE_DIR", str(REPO_ROOT))
     monkeypatch.setenv("URL_BASE", "https://example.test/api/v1/licenses")

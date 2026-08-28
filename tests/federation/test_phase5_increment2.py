@@ -513,6 +513,7 @@ def pg_env(postgres_url, tmp_path_factory):
     )
     key_path = key_dir / "signing-key.pem"
     key_path.write_bytes(pem)
+    key_path.chmod(0o600)
     return postgres_url, str(key_path)
 
 

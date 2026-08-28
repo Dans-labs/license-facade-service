@@ -159,6 +159,7 @@ def test_federation_identity_key_readiness_and_jwks(postgres_url: str, tmp_path:
     )
     key_path = tmp_path / "federation_signing_key.pem"
     key_path.write_bytes(pem)
+    key_path.chmod(0o600)
 
     monkeypatch.setenv("BASE_DIR", str(REPO_ROOT))
     monkeypatch.setenv("URL_BASE", "https://example.test/api/v1/licenses")

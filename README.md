@@ -98,7 +98,10 @@ Required federation settings when enabled:
 - `FEDERATION_OPERATOR`
 - `FEDERATION_DATABASE_URL` (PostgreSQL)
 - `FEDERATION_ACTIVE_KID`
-- `FEDERATION_SIGNING_KEY_PATH` or `FEDERATION_SIGNING_KEY_SECRET_PATH`
+- one of:
+  - `FEDERATION_SIGNING_KEY_DIR` (directory provider, Increment 5 default)
+  - `FEDERATION_SIGNING_KEY_PATH`
+  - `FEDERATION_SIGNING_KEY_SECRET_PATH`
 
 Signing-key policy:
 
@@ -177,7 +180,7 @@ Implemented:
 - Fuseki outages do not block PostgreSQL resolution; failed RDF jobs retry with leases/backoff and can be dead-lettered;
 - rebuild/reconcile operate only on graphs owned by this service.
 
-## Federation Phase 5 Increment 3-4 (lease-fenced sync + peer-key trust workflow)
+## Federation Phase 5 Increment 3-5 (lease-fenced sync + peer-key trust workflow + scheduled local-key rotation)
 
 Implemented:
 
@@ -208,9 +211,38 @@ Implemented:
 - historical verification is cryptographic evidence-only (including retired/expired/revoked material) and never authorizes imports or state mutation;
 - enrollment `expectedKeyKid`/`expectedKeyFingerprint` remain enrollment evidence and are not silently overwritten by key approval.
 
-Increment 4 intentionally does **not** include:
+Increment 5 scheduled activation worker:
 
-- local signing-key rotation workflows (deferred to Increment 5);
+- integrated into the existing `python -m src.license_facade_service.worker` loop (no separate scheduler process);
+- worker can run in sync-only, rotation-only, or combined mode; outbound-only publisher nodes can run scheduled rotation with `FEDERATION_INBOUND_ENABLED=false` and `FEDERATION_ROTATION_WORKER_ENABLED=true`;
+- each worker cycle runs enabled subsystems only and at most one scheduled rotation pass (`FEDERATION_ROTATION_MAX_OPERATIONS_PER_PASS=1`);
+- rotation uses PostgreSQL time for due checks and lifecycle state transitions;
+- private-key file loading happens before the locked activation transaction, and no filesystem I/O occurs while `FOR UPDATE` activation locks are held;
+- races are idempotent (`no due`, `not due`, `already activated elsewhere`, `no longer due`, schedule canceled, or candidate retired/revoked during preparation) and do not switch keys incorrectly;
+- benign race outcomes are treated as no-op (not failures): no activation-failed/material-mismatch audit, no error heartbeat, and no backoff penalty;
+- retriable worker failures use bounded exponential backoff with optional jitter `[0.75, 1.25]`, permanent/operator-action failures use max backoff; rotation backoff does not delay peer synchronization scheduling;
+- successful activation is followed by runtime signing verification (degraded status if post-commit verification fails);
+- worker heartbeat updates stay on existing `sync` worker type with bounded status/error codes; idle/deferred no-op rotation states are not recorded as heartbeat errors.
+
+Rotation worker settings:
+
+- `FEDERATION_WORKER_INSTANCE_ID` (optional UUID for stable per-process worker identity; defaults to a generated UUID per startup and is distinct from federation node identity)
+- `FEDERATION_ROTATION_WORKER_ENABLED` (default `true`)
+- `FEDERATION_ROTATION_POLL_INTERVAL_SECONDS` (default `60`)
+- `FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS` (default `30`)
+- `FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS` (default `900`)
+- `FEDERATION_ROTATION_BACKOFF_JITTER_ENABLED` (default `true`)
+- `FEDERATION_ROTATION_MAX_OPERATIONS_PER_PASS` (must be `1`)
+
+Two-node rotation demo (Compose profile `federation-demo`):
+
+- Node A API + Node A rotation worker share only Node A read-only key directory (`FEDERATION_SIGNING_KEY_DIR`) and database.
+- Node B API + Node B inbound worker share only Node B read-only key directory (`FEDERATION_SIGNING_KEY_DIR`) and database.
+- No private-key directory is shared across nodes.
+- The demo script (`./scripts/demo-federation.sh`) exercises staged A2 activation by Node A worker, unknown-key rejection on B with unchanged cursor, explicit key approval/reset, successful resync, historical A1 evidence checks, restart persistence, and output leak scanning.
+
+Deferred beyond Increment 5:
+
 - cursor replay/checkpoint tooling;
 - RDF recovery enhancements beyond existing Phase 4 behavior;
 - rate limiting / metrics / logging expansions;

@@ -519,7 +519,7 @@ class FederationOutboundService:
             nodeName=self.settings.node_name or "",
             operator=self.settings.operator_name or "",
             publicBaseUrl=base,
-            currentSigningKid=self.settings.active_kid or "",
+            currentSigningKid=self.signing.get_active_kid(),
             jwksUrl=f"{base}/.well-known/jwks.json",
             catalogUrl=f"{base}/api/v1/federation/catalog",
             changesUrl=f"{base}/api/v1/federation/changes",

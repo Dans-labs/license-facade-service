@@ -127,6 +127,15 @@ class AuditAction(str, Enum):
     SIGNING_KEY_ROTATION_ACTIVATED = "signing_key.rotation_activated"
     SIGNING_KEY_ROTATION_COMPLETED = "signing_key.rotation_completed"
     SIGNING_KEY_ROTATION_ABORTED   = "signing_key.rotation_aborted"
+    LOCAL_KEY_INSPECT              = "local_key.inspect"
+    LOCAL_KEY_STAGE                = "local_key.stage"
+    LOCAL_KEY_SCHEDULE             = "local_key.schedule"
+    LOCAL_KEY_SCHEDULE_CANCEL      = "local_key.schedule_cancel"
+    LOCAL_KEY_ACTIVATE             = "local_key.activate"
+    LOCAL_KEY_RETIRE               = "local_key.retire"
+    LOCAL_KEY_REVOKE               = "local_key.revoke"
+    LOCAL_KEY_ACTIVATION_FAILED    = "local_key.activation_failed"
+    LOCAL_KEY_MATERIAL_MISMATCH    = "local_key.material_mismatch"
 
     # Cursor recovery
     CURSOR_INSPECT               = "cursor.inspect"

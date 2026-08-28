@@ -71,18 +71,24 @@ def postgres_url():
         subprocess.run(["docker", "stop", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-@pytest.fixture
-def fed_client(postgres_url, monkeypatch, tmp_path):
+@pytest.fixture(scope="module")
+def _module_signing_key_pem():
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
+
+    key = Ed25519PrivateKey.generate()
+    return key.private_bytes(encoding=Encoding.PEM, format=PrivateFormat.PKCS8, encryption_algorithm=NoEncryption())
+
+
+@pytest.fixture
+def fed_client(postgres_url, monkeypatch, tmp_path, _module_signing_key_pem):
     from fastapi.testclient import TestClient
     from src.license_facade_service.api.v1 import licenses as licenses_api
     from src.license_facade_service.main import create_app
 
-    key = Ed25519PrivateKey.generate()
-    pem = key.private_bytes(encoding=Encoding.PEM, format=PrivateFormat.PKCS8, encryption_algorithm=NoEncryption())
     key_path = tmp_path / "k.pem"
-    key_path.write_bytes(pem)
+    key_path.write_bytes(_module_signing_key_pem)
+    key_path.chmod(0o600)
 
     monkeypatch.setenv("LFS_ADMIN_TOKEN", "admin-token")
     monkeypatch.setenv("LFS_CURATOR_TOKEN", "curator-token")
@@ -1095,6 +1101,7 @@ def test_probe_http_happens_outside_db_transaction(postgres_url, monkeypatch, tm
     pem = key.private_bytes(encoding=Encoding.PEM, format=PrivateFormat.PKCS8, encryption_algorithm=NoEncryption())
     key_path = tmp_path / "k.pem"
     key_path.write_bytes(pem)
+    key_path.chmod(0o600)
 
     monkeypatch.setenv("FEDERATION_ENABLED", "true")
     monkeypatch.setenv("FEDERATION_INBOUND_ENABLED", "true")

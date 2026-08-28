@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import FetchedValue
@@ -36,12 +36,15 @@ class FederationSigningKey(Base):
     crv: Mapped[str] = mapped_column(String(32), nullable=False)
     x: Mapped[str] = mapped_column(String(1024), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="staged")
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Phase 5 rotation tracking
     rotation_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    rotated_to_kid: Mapped[str | None] = mapped_column(String(128))
+    rotated_to_kid: Mapped[str | None] = mapped_column(
+        String(128),
+        ForeignKey("federation_signing_keys.kid", ondelete="RESTRICT"),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -49,6 +52,18 @@ class FederationSigningKey(Base):
         CheckConstraint("alg = 'EdDSA'", name="ck_federation_signing_keys_alg"),
         CheckConstraint("kty = 'OKP'", name="ck_federation_signing_keys_kty"),
         CheckConstraint("crv = 'Ed25519'", name="ck_federation_signing_keys_crv"),
+        CheckConstraint("status IN ('staged','active','retired','revoked')", name="ck_fsk_status_v5"),
+        CheckConstraint("is_active = (status = 'active')", name="ck_fsk_active_status_equivalence_v5"),
+        CheckConstraint("rotation_scheduled_at IS NULL OR status = 'staged'", name="ck_fsk_schedule_only_staged_v5"),
+        CheckConstraint("rotated_to_kid IS NULL OR status IN ('retired','revoked')", name="ck_fsk_rotated_to_status_v5"),
+        CheckConstraint("rotated_to_kid IS NULL OR rotated_to_kid <> kid", name="ck_fsk_rotated_to_self_v5"),
+        CheckConstraint("valid_from IS NULL OR valid_until IS NULL OR valid_from < valid_until", name="ck_fsk_validity_bounds_v5"),
+        Index(
+            "uq_fsk_single_scheduled_v5",
+            text("(1)"),
+            unique=True,
+            postgresql_where=text("rotation_scheduled_at IS NOT NULL"),
+        ),
     )
 
 

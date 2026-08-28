@@ -114,20 +114,21 @@ services:
       LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN}
       FEDERATION_ENABLED: "true"
       FEDERATION_INBOUND_ENABLED: "false"
+      FEDERATION_ROTATION_WORKER_ENABLED: "false"
       FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-a-db:5432/lfs_a
       FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_A_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}
       FEDERATION_PUBLIC_BASE_URL: http://node-a:12104
       FEDERATION_NODE_NAME: Demo Node A
       FEDERATION_OPERATOR: Demo Operator A
       FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_A_KID:-node-a-k1}
-      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-a-signing-key.pem
+      FEDERATION_SIGNING_KEY_DIR: /run/keys/node-a
       FEDERATION_ADMIN_CURSOR_SECRET: ${FEDERATION_DEMO_CURSOR_SECRET}
       FEDERATION_JWKS_ENABLED: "true"
       FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
       FEDERATION_SYNC_ALLOWED_PORTS: "12104,443"
     volumes:
       - ./resources:/home/akmi/lfs/resources
-      - ${FEDERATION_DEMO_NODE_A_KEY_FILE:-/tmp/lfs-node-a-key.pem}:/run/secrets/node-a-signing-key.pem:ro
+      - ${FEDERATION_DEMO_NODE_A_KEY_DIR:-/tmp/lfs-node-a-keys}:/run/keys/node-a:ro
     depends_on:
       node-a-db:
         condition: service_healthy
@@ -160,13 +161,14 @@ services:
       LFS_ADMIN_TOKEN: ${FEDERATION_DEMO_ADMIN_TOKEN}
       FEDERATION_ENABLED: "true"
       FEDERATION_INBOUND_ENABLED: "true"
+      FEDERATION_ROTATION_WORKER_ENABLED: "false"
       FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-b-db:5432/lfs_b
       FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_B_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}
       FEDERATION_PUBLIC_BASE_URL: http://node-b:12104
       FEDERATION_NODE_NAME: Demo Node B
       FEDERATION_OPERATOR: Demo Operator B
       FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_B_KID:-node-b-k1}
-      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-b-signing-key.pem
+      FEDERATION_SIGNING_KEY_DIR: /run/keys/node-b
       FEDERATION_ADMIN_CURSOR_SECRET: ${FEDERATION_DEMO_CURSOR_SECRET}
       FEDERATION_JWKS_ENABLED: "true"
       FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
@@ -176,7 +178,7 @@ services:
       FEDERATION_ADMIN_SYNC_TIMEOUT_SECONDS: "30"
     volumes:
       - ./resources:/home/akmi/lfs/resources
-      - ${FEDERATION_DEMO_NODE_B_KEY_FILE:-/tmp/lfs-node-b-key.pem}:/run/secrets/node-b-signing-key.pem:ro
+      - ${FEDERATION_DEMO_NODE_B_KEY_DIR:-/tmp/lfs-node-b-keys}:/run/keys/node-b:ro
     depends_on:
       node-b-db:
         condition: service_healthy
@@ -192,6 +194,45 @@ services:
     networks:
       - federation-demo
 
+  node-a-worker:
+    profiles: ["federation-demo"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "src.license_facade_service.worker"]
+    environment:
+      APP_NAME: License Facade Service Node A Worker
+      BASE_DIR: /home/akmi/lfs
+      FUSEKI_ENABLE: "false"
+      FEDERATION_ENABLED: "true"
+      FEDERATION_INBOUND_ENABLED: "false"
+      FEDERATION_ROTATION_WORKER_ENABLED: "true"
+      FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-a-db:5432/lfs_a
+      FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_A_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}
+      FEDERATION_PUBLIC_BASE_URL: http://node-a:12104
+      FEDERATION_NODE_NAME: Demo Node A
+      FEDERATION_OPERATOR: Demo Operator A
+      FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_A_KID:-node-a-k1}
+      FEDERATION_SIGNING_KEY_DIR: /run/keys/node-a
+      FEDERATION_ADMIN_CURSOR_SECRET: ${FEDERATION_DEMO_CURSOR_SECRET}
+      FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
+      FEDERATION_WORKER_INSTANCE_ID: ${FEDERATION_DEMO_NODE_A_WORKER_ID:-aaaaaaaa-aaaa-4aaa-8aaa-0000000000a1}
+      FEDERATION_ROTATION_POLL_INTERVAL_SECONDS: "2"
+      FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS: "2"
+      FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS: "15"
+      FEDERATION_ROTATION_BACKOFF_JITTER_ENABLED: "false"
+      FEDERATION_WORKER_INTERVAL_SECONDS: "300"
+      FEDERATION_WORKER_MAX_SYNC_SECONDS: "30"
+    volumes:
+      - ${FEDERATION_DEMO_NODE_A_KEY_DIR:-/tmp/lfs-node-a-keys}:/run/keys/node-a:ro
+    depends_on:
+      node-a-db:
+        condition: service_healthy
+      node-a:
+        condition: service_healthy
+    networks:
+      - federation-demo
+
   node-b-worker:
     profiles: ["federation-demo"]
     build:
@@ -204,23 +245,25 @@ services:
       FUSEKI_ENABLE: "false"
       FEDERATION_ENABLED: "true"
       FEDERATION_INBOUND_ENABLED: "true"
+      FEDERATION_ROTATION_WORKER_ENABLED: "false"
       FEDERATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@node-b-db:5432/lfs_b
       FEDERATION_NODE_ID: ${FEDERATION_DEMO_NODE_B_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}
       FEDERATION_PUBLIC_BASE_URL: http://node-b:12104
       FEDERATION_NODE_NAME: Demo Node B
       FEDERATION_OPERATOR: Demo Operator B
       FEDERATION_ACTIVE_KID: ${FEDERATION_DEMO_NODE_B_KID:-node-b-k1}
-      FEDERATION_SIGNING_KEY_PATH: /run/secrets/node-b-signing-key.pem
+      FEDERATION_SIGNING_KEY_DIR: /run/keys/node-b
       FEDERATION_ADMIN_CURSOR_SECRET: ${FEDERATION_DEMO_CURSOR_SECRET}
       FEDERATION_JWKS_ENABLED: "true"
       FEDERATION_ALLOW_HTTP_FOR_DEMO: "true"
       FEDERATION_ALLOW_PRIVATE_NETWORK: "false"
       FEDERATION_SYNC_ALLOWED_HOSTNAMES: "node-a,node-b"
       FEDERATION_SYNC_ALLOWED_PORTS: "12104,443"
-      FEDERATION_WORKER_INTERVAL_SECONDS: "15"
+      FEDERATION_WORKER_INTERVAL_SECONDS: "300"
       FEDERATION_WORKER_MAX_SYNC_SECONDS: "30"
+      FEDERATION_WORKER_INSTANCE_ID: ${FEDERATION_DEMO_NODE_B_WORKER_ID:-bbbbbbbb-bbbb-4bbb-8bbb-0000000000b1}
     volumes:
-      - ${FEDERATION_DEMO_NODE_B_KEY_FILE:-/tmp/lfs-node-b-key.pem}:/run/secrets/node-b-signing-key.pem:ro
+      - ${FEDERATION_DEMO_NODE_B_KEY_DIR:-/tmp/lfs-node-b-keys}:/run/keys/node-b:ro
     depends_on:
       node-b-db:
         condition: service_healthy

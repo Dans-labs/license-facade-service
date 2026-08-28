@@ -197,7 +197,7 @@ Implemented Phase 4 boundaries:
   - `rebuild`
   - `reconcile`
 
-## Federation Phase 5 Increment 3-4 synchronization and peer-key trust hardening
+## Federation Phase 5 Increment 3-5 synchronization and peer-key trust hardening
 
 Implemented boundaries:
 
@@ -217,10 +217,53 @@ Implemented boundaries:
 - `signing-key-not-yet-valid` and `signing-key-expired` are treated as permanent trust/integrity failures and map to permanent identity-mismatch circuit classification;
 - historical-evidence verification remains cryptographic-only and never authorizes imports, cursor movement, or state mutation;
 - enrollment `expected_key_kid` / `expected_key_fingerprint` remain enrollment evidence and are not silently overwritten by approval.
+- scheduled local-key activation is integrated into the existing federation worker loop (no second scheduler process).
+- worker startup requires `FEDERATION_ENABLED=true`, configured database URL, and at least one enabled subsystem (`FEDERATION_INBOUND_ENABLED=true` or `FEDERATION_ROTATION_WORKER_ENABLED=true`).
+- outbound-only federation publishers may run rotation-only worker mode (`inbound=false`, `rotation=true`).
+- each pass runs at most one scheduled activation candidate and uses PostgreSQL time for due-state checks.
+- the worker follows a two-phase activation model:
+  - Phase A: short transaction to identify due staged candidate, then transaction closes;
+  - filesystem/private-material validation happens outside any transaction;
+  - Phase B: locked transition transaction (`FOR UPDATE`) revalidates due state and atomically retires predecessor, activates successor, clears schedule, and writes activation audit.
+- if candidate state changed between Phase A and Phase B (manual activation/cancel/revoke/race), activation resolves as bounded idempotent no-op and does not enter a tight failure loop.
+- benign race/no-op outcomes (expected-state-mismatch from race, cancellation before Phase B, already-active/no-longer-due) do not emit `local_key.activation_failed` or `local_key.material_mismatch` and do not consume failure backoff budget.
+- rotation worker failures are classified as retriable vs operator-action-required:
+  - retriable failures use bounded exponential backoff with optional jitter `[0.75, 1.25]`;
+  - permanent failures keep the schedule and current active key unchanged, emit bounded failure audit, and use maximum backoff.
+- worker identity is process-scoped and independent from federation node identity:
+  - optional `FEDERATION_WORKER_INSTANCE_ID` provides a stable UUID when configured;
+  - if unset, each worker process generates one UUID at startup and reuses it for all heartbeat/audit writes in that process.
+- worker heartbeat remains on existing `sync` worker type with bounded status/result codes:
+  - idle/deferred no-op rotation results are not written as error classes;
+  - `last_error_class` is used only for bounded error/degraded/blocked codes;
+  - successful/no-op rotation does not overwrite sync-failure error reporting in combined mode.
+- rotation and sync failure boundaries are independent:
+  - rotation pass failures do not terminate peer synchronization scheduling;
+  - sync failures do not corrupt rotation state;
+  - loop cadence uses monotonic scheduling with bounded interruptible waits (no busy spin).
 
-Deferred from Increment 4:
+Step 5 rotation worker environment variables:
 
-- local signing-key rotation operations (Increment 5);
+- `FEDERATION_WORKER_INSTANCE_ID` (optional UUID)
+- `FEDERATION_ROTATION_WORKER_ENABLED` (default `true`)
+- `FEDERATION_ROTATION_POLL_INTERVAL_SECONDS` (default `60`)
+- `FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS` (default `30`)
+- `FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS` (default `900`)
+- `FEDERATION_ROTATION_BACKOFF_JITTER_ENABLED` (default `true`)
+- `FEDERATION_ROTATION_MAX_OPERATIONS_PER_PASS` (must be `1`)
+
+Increment 5 Step 6 integration demonstration:
+
+- the `federation-demo` profile uses directory-based key loading (`FEDERATION_SIGNING_KEY_DIR`) for all federation containers;
+- Node A runs a rotation-only worker (`inbound=false`, `rotation=true`) against the same Node A DB + key directory as Node A API;
+- Node B runs inbound synchronization worker against an isolated Node B DB + key directory;
+- no Node A private key material is mounted into Node B services (and vice versa);
+- demo flow validates staged A2 activation, unknown-key rejection with unchanged B cursor, explicit peer-key approval/reset, successful import after approval, historical A1 signature evidence, restart persistence, and leak-safe output.
+
+Manual walkthrough for curl/Postman is documented in `docs/federation-two-node-rotation-demo.md`.
+
+Deferred beyond Increment 5:
+
 - cursor replay/checkpoint/recovery tooling;
 - RDF recovery additions beyond existing outbox behavior;
 - rate limiting, metrics, and expanded production logging;

@@ -41,15 +41,24 @@ class FederationSettings:
     public_base_url: str | None
     node_name: str | None
     operator_name: str | None
-    database_url: str | None
-    signing_key_path: str | None
-    signing_key_secret_path: str | None
+    database_url: str | None = field(repr=False)
+    signing_key_dir: str | None = field(repr=False)
+    signing_key_path: str | None = field(repr=False)
+    signing_key_secret_path: str | None = field(repr=False)
+    signing_key_enforce_permissions: bool
     active_kid: str | None
     jwks_enabled: bool
     inbound_enabled: bool
     admin_sync_timeout_seconds: int
     worker_interval_seconds: int
     worker_max_sync_seconds: int
+    worker_instance_id: str | None
+    rotation_worker_enabled: bool
+    rotation_poll_interval_seconds: int
+    rotation_failure_backoff_min_seconds: int
+    rotation_failure_backoff_max_seconds: int
+    rotation_backoff_jitter_enabled: bool
+    rotation_max_operations_per_pass: int
     sync_connect_timeout_seconds: float
     sync_read_timeout_seconds: float
     sync_write_timeout_seconds: float
@@ -102,12 +111,15 @@ class FederationSettings:
         operator_name = os.getenv("FEDERATION_OPERATOR", "").strip() or None
         database_url = os.getenv("FEDERATION_DATABASE_URL", "").strip() or None
         active_kid = os.getenv("FEDERATION_ACTIVE_KID", "").strip() or None
+        signing_key_dir = os.getenv("FEDERATION_SIGNING_KEY_DIR", "").strip() or None
         signing_key_path = os.getenv("FEDERATION_SIGNING_KEY_PATH", "").strip() or None
         signing_key_secret_path = os.getenv("FEDERATION_SIGNING_KEY_SECRET_PATH", "").strip() or None
+        signing_key_enforce_permissions = _as_bool("FEDERATION_SIGNING_KEY_ENFORCE_PERMISSIONS", default=True)
         inbound_enabled = _as_bool("FEDERATION_INBOUND_ENABLED", default=enabled)
         allow_private_network = _as_bool("FEDERATION_ALLOW_PRIVATE_NETWORK", default=False)
         allow_http_for_demo = _as_bool("FEDERATION_ALLOW_HTTP_FOR_DEMO", default=False)
         demo_tofu_unsafe_enabled = _as_bool("FEDERATION_DEMO_TOFU_UNSAFE", default=False)
+        worker_instance_id_raw = os.getenv("FEDERATION_WORKER_INSTANCE_ID", "").strip() or None
         cursor_secret = (os.getenv("FEDERATION_ADMIN_CURSOR_SECRET", "").strip() or None)
         cursor_secret_file = (os.getenv("FEDERATION_ADMIN_CURSOR_SECRET_FILE", "").strip() or None)
         cursor_secret_allow_ephemeral = _as_bool("FEDERATION_ADMIN_CURSOR_SECRET_ALLOW_EPHEMERAL", default=False)
@@ -133,14 +145,26 @@ class FederationSettings:
         circuit_base_open_seconds = _as_int("FEDERATION_SYNC_CIRCUIT_BASE_OPEN_SECONDS", 30)
         circuit_max_open_seconds = _as_int("FEDERATION_SYNC_CIRCUIT_MAX_OPEN_SECONDS", 900)
         circuit_half_open_probe_limit = _as_int("FEDERATION_SYNC_CIRCUIT_HALF_OPEN_PROBE_LIMIT", 1)
+        rotation_worker_enabled = _as_bool("FEDERATION_ROTATION_WORKER_ENABLED", default=True)
+        rotation_poll_interval_seconds = _as_int("FEDERATION_ROTATION_POLL_INTERVAL_SECONDS", 60)
+        rotation_failure_backoff_min_seconds = _as_int("FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS", 30)
+        rotation_failure_backoff_max_seconds = _as_int("FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS", 900)
+        rotation_backoff_jitter_enabled = _as_bool("FEDERATION_ROTATION_BACKOFF_JITTER_ENABLED", default=True)
+        rotation_max_operations_per_pass = _as_int("FEDERATION_ROTATION_MAX_OPERATIONS_PER_PASS", 1)
         errors: list[str] = []
 
         parsed_node_id: str | None = None
+        parsed_worker_instance_id: str | None = None
         if node_id_raw:
             try:
                 parsed_node_id = str(UUID(node_id_raw))
             except ValueError:
                 errors.append("FEDERATION_NODE_ID must be a valid UUID string")
+        if worker_instance_id_raw:
+            try:
+                parsed_worker_instance_id = str(UUID(worker_instance_id_raw))
+            except ValueError:
+                errors.append("FEDERATION_WORKER_INSTANCE_ID must be a valid UUID string")
 
         if enabled:
             if not node_id_raw:
@@ -155,9 +179,9 @@ class FederationSettings:
                 errors.append("FEDERATION_DATABASE_URL is required when FEDERATION_ENABLED=true")
             if not active_kid:
                 errors.append("FEDERATION_ACTIVE_KID is required when FEDERATION_ENABLED=true")
-            if not signing_key_path and not signing_key_secret_path:
+            if not signing_key_dir and not signing_key_path and not signing_key_secret_path:
                 errors.append(
-                    "FEDERATION_SIGNING_KEY_PATH or FEDERATION_SIGNING_KEY_SECRET_PATH is required when "
+                    "FEDERATION_SIGNING_KEY_DIR, FEDERATION_SIGNING_KEY_PATH, or FEDERATION_SIGNING_KEY_SECRET_PATH is required when "
                     "FEDERATION_ENABLED=true"
                 )
             if public_base_url:
@@ -235,6 +259,19 @@ class FederationSettings:
                 errors.append("FEDERATION_SYNC_LEASE_RENEWAL_SECONDS must be <= FEDERATION_SYNC_LEASE_DURATION_SECONDS")
             if sync_max_duration_seconds < sync_lease_renewal_seconds:
                 errors.append("FEDERATION_SYNC_MAX_DURATION_SECONDS must be >= FEDERATION_SYNC_LEASE_RENEWAL_SECONDS")
+            if rotation_poll_interval_seconds <= 0:
+                errors.append("FEDERATION_ROTATION_POLL_INTERVAL_SECONDS must be positive")
+            if rotation_failure_backoff_min_seconds <= 0:
+                errors.append("FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS must be positive")
+            if rotation_failure_backoff_max_seconds <= 0:
+                errors.append("FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS must be positive")
+            if rotation_failure_backoff_min_seconds > rotation_failure_backoff_max_seconds:
+                errors.append(
+                    "FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS must be <= "
+                    "FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS"
+                )
+            if rotation_max_operations_per_pass != 1:
+                errors.append("FEDERATION_ROTATION_MAX_OPERATIONS_PER_PASS must be 1")
 
         return cls(
             enabled=enabled,
@@ -243,14 +280,23 @@ class FederationSettings:
             node_name=node_name,
             operator_name=operator_name,
             database_url=database_url,
+            signing_key_dir=signing_key_dir,
             signing_key_path=signing_key_path,
             signing_key_secret_path=signing_key_secret_path,
+            signing_key_enforce_permissions=signing_key_enforce_permissions,
             active_kid=active_kid,
             jwks_enabled=_as_bool("FEDERATION_JWKS_ENABLED", default=True if enabled else False),
             inbound_enabled=inbound_enabled,
             admin_sync_timeout_seconds=_as_int("FEDERATION_ADMIN_SYNC_TIMEOUT_SECONDS", 60),
             worker_interval_seconds=_as_int("FEDERATION_WORKER_INTERVAL_SECONDS", 60),
             worker_max_sync_seconds=_as_int("FEDERATION_WORKER_MAX_SYNC_SECONDS", 120),
+            worker_instance_id=parsed_worker_instance_id,
+            rotation_worker_enabled=rotation_worker_enabled,
+            rotation_poll_interval_seconds=rotation_poll_interval_seconds,
+            rotation_failure_backoff_min_seconds=rotation_failure_backoff_min_seconds,
+            rotation_failure_backoff_max_seconds=rotation_failure_backoff_max_seconds,
+            rotation_backoff_jitter_enabled=rotation_backoff_jitter_enabled,
+            rotation_max_operations_per_pass=rotation_max_operations_per_pass,
             sync_connect_timeout_seconds=float(os.getenv("FEDERATION_SYNC_CONNECT_TIMEOUT_SECONDS", "5")),
             sync_read_timeout_seconds=float(os.getenv("FEDERATION_SYNC_READ_TIMEOUT_SECONDS", "10")),
             sync_write_timeout_seconds=float(os.getenv("FEDERATION_SYNC_WRITE_TIMEOUT_SECONDS", "10")),
