@@ -250,6 +250,7 @@ def fed_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
     monkeypatch.setenv("FEDERATION_ALLOW_HTTP_FOR_DEMO", "true")
     monkeypatch.setenv("FEDERATION_ALLOW_PRIVATE_NETWORK", "false")
     monkeypatch.setenv("FEDERATION_SYNC_ALLOWED_PORTS", "443,12104")
+    monkeypatch.setenv("FEDERATION_ADMIN_CURSOR_SECRET", "c" * 64)
     monkeypatch.setenv("LFS_ADMIN_TOKEN", "admin-token")
     monkeypatch.setenv("LFS_CURATOR_TOKEN", "curator-token")
 

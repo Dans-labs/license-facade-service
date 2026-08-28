@@ -381,6 +381,7 @@ def phase4_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: st
     monkeypatch.setenv("FEDERATION_ALLOW_HTTP_FOR_DEMO", "true")
     monkeypatch.setenv("FEDERATION_ALLOW_PRIVATE_NETWORK", "false")
     monkeypatch.setenv("FEDERATION_SYNC_ALLOWED_PORTS", "12104,443")
+    monkeypatch.setenv("FEDERATION_ADMIN_CURSOR_SECRET", "c" * 64)
     monkeypatch.setenv("LFS_ADMIN_TOKEN", "admin-token")
     monkeypatch.setenv("LFS_CURATOR_TOKEN", "curator-token")
     monkeypatch.setenv("FEDERATION_RDF_OUTBOX_RETRY_ATTEMPTS", "2")

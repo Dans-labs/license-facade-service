@@ -132,6 +132,21 @@ class PeerResponse(StrictModel):
     expectedKeyKid: str | None = Field(default=None, description="Pinned signing key identifier expected from the peer.")
     expectedKeyFingerprint: str | None = Field(default=None, description="Pinned signing key fingerprint expected from the peer.")
     archivedAt: datetime | None = Field(default=None, description="Timestamp at which the peer was archived, when applicable.")
+    # Phase 5 — circuit breaker (all optional for backward compatibility)
+    circuitState: str | None = Field(default=None, description="Current circuit breaker state.")
+    circuitRequiresAdminReset: bool | None = Field(default=None, description="Whether the circuit requires admin intervention to reset.")
+    circuitFailureCount: int | None = Field(default=None, description="Number of consecutive circuit failures.")
+    circuitOpenedAt: datetime | None = Field(default=None, description="Timestamp at which the circuit was opened.")
+    circuitNextAttemptAt: datetime | None = Field(default=None, description="Timestamp of the next permitted half-open probe attempt.")
+    circuitLastFailureReason: str | None = Field(default=None, description="Machine-readable reason for the last circuit failure.")
+    # Phase 5 — administrative suspension
+    suspendedUntil: datetime | None = Field(default=None, description="Timestamp until which the peer is administratively suspended.")
+    suspensionReason: str | None = Field(default=None, description="Human-readable reason for the administrative suspension.")
+    # Phase 5 — peer key management
+    lastKeyRefreshAt: datetime | None = Field(default=None, description="Timestamp of the most recent peer key refresh.")
+    # Phase 5 — latest health (from most recent health snapshot)
+    latestHealthStatus: str | None = Field(default=None, description="Health status from the most recent health probe snapshot.")
+    latestCompatibilityStatus: str | None = Field(default=None, description="Compatibility status from the most recent health probe snapshot.")
 
 
 class PeerListResponse(StrictModel):
@@ -180,6 +195,16 @@ class AdminStatusResponse(StrictModel):
     inboundEventsRejected: int = Field(description="Count of inbound events rejected during validation.")
     workerIntervalSeconds: int = Field(description="Configured background synchronization polling interval.")
     maxSyncSeconds: int = Field(description="Configured upper bound for one synchronization run.")
+    # Phase 5 operational extension (all optional)
+    protocolVersion: str | None = Field(default=None, description="Advertised local federation protocol version.")
+    signingKeySummary: dict | None = Field(default=None, description="Signing key counts by lifecycle status.")
+    peerSummary: dict | None = Field(default=None, description="Peer counts by circuit state, trust status.")
+    syncSummary: dict | None = Field(default=None, description="Sync attempt totals and recency.")
+    conflictsByStatus: dict[str, int] | None = Field(default=None, description="Resolution conflict counts by status.")
+    rdfOutboxByStatus: dict[str, int] | None = Field(default=None, description="RDF outbox job counts by status.")
+    workerHeartbeatSummary: list[dict] | None = Field(default=None, description="Per worker type heartbeat freshness summary.")
+    healthSnapshotSummary: dict | None = Field(default=None, description="Health snapshot counts by health/compat status.")
+    operationalState: str | None = Field(default=None, description="Derived operational state: healthy, degraded, or unknown.")
 
 
 class ImportedRecordResponse(StrictModel):

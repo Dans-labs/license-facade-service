@@ -81,6 +81,13 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
         ("get", "/api/v1/admin/federation/conflicts/{conflict_id}"),
         ("post", "/api/v1/admin/federation/conflicts/{conflict_id}/decisions"),
         ("post", "/api/v1/admin/federation/conflicts/{conflict_id}/reversals"),
+        # Phase 5 Increment 2 — operational visibility endpoints
+        ("get", "/api/v1/admin/federation/peers/{peer_id}/health"),
+        ("get", "/api/v1/admin/federation/peers/{peer_id}/cursor"),
+        ("get", "/api/v1/admin/federation/signing-keys"),
+        ("get", "/api/v1/admin/federation/rdf-outbox"),
+        ("get", "/api/v1/admin/federation/sync-attempts"),
+        ("get", "/api/v1/admin/federation/compatibility"),
     }
 
     seen_protected = set()

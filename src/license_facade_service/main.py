@@ -4,14 +4,18 @@ import os
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.middleware.cors import CORSMiddleware
 
 from src.license_facade_service.api.federation import admin as federation_admin
 from src.license_facade_service.api.federation import jwks as federation_jwks
+from src.license_facade_service.api.federation import operational as federation_operational
 from src.license_facade_service.api.federation import outbound as federation_outbound
 from src.license_facade_service.api.v1 import licenses, metrics
 from src.license_facade_service.config.federation import FederationSettings
+from src.license_facade_service.services.problem import problem_response
 from src.license_facade_service.federation.runtime import FederationRuntime, FederationRuntimeState
 from src.license_facade_service.utils.commons import get_project_details
 
@@ -50,6 +54,10 @@ OPENAPI_TAGS = [
         "name": "Federation conflicts",
         "description": "Protected curator/admin workflows for reviewing imported-resolution conflicts and recording append-only decisions.",
     },
+    {
+        "name": "Federation operations",
+        "description": "Protected Phase 5 operational visibility: signing-key inventory, health history, cursor inspection, RDF outbox, sync attempts, and compatibility report. All endpoints are admin-only and read-only.",
+    },
 ]
 
 
@@ -58,6 +66,14 @@ def _cors_origins() -> list[str]:
     if env_origins:
         return [origin.strip() for origin in env_origins.split(",") if origin.strip()]
     return []
+
+
+def _async_db_url(sync_url: str) -> str:
+    if sync_url.startswith("postgresql://"):
+        return sync_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if "://" in sync_url and "+psycopg" not in sync_url:
+        return sync_url.replace(sync_url.split("://", 1)[0] + "://", "postgresql+psycopg://", 1)
+    return sync_url
 
 
 @asynccontextmanager
@@ -69,9 +85,20 @@ async def lifespan(app: FastAPI):
         # Service should remain available with last valid snapshot.
         pass
     runtime: FederationRuntime | None = getattr(app.state, "federation_runtime", None)
+    async_engine = None
     if runtime is not None:
         app.state.federation_state = runtime.initialize()
+        if runtime.settings.enabled and runtime.settings.admin_cursor_secret and runtime.settings.database_url:
+            from src.license_facade_service.federation.operational_models import configure_cursor_secret
+
+            configure_cursor_secret(runtime.settings.admin_cursor_secret)
+            async_db_url = _async_db_url(runtime.settings.database_url)
+            async_engine = create_async_engine(async_db_url, echo=False, pool_pre_ping=True)
+            app.state.federation_async_engine = async_engine
+            app.state.federation_async_sessionmaker = async_sessionmaker(async_engine, expire_on_commit=False)
     yield
+    if async_engine is not None:
+        await async_engine.dispose()
 
 
 def create_app() -> FastAPI:
@@ -86,6 +113,8 @@ def create_app() -> FastAPI:
         openapi_tags=OPENAPI_TAGS,
     )
     app.state.federation_runtime = None
+    app.state.federation_async_engine = None
+    app.state.federation_async_sessionmaker = None
     app.state.federation_state = FederationRuntimeState(enabled=False, ready=True, errors=[])
 
     settings = FederationSettings.from_env()
@@ -113,6 +142,17 @@ def create_app() -> FastAPI:
     app.include_router(federation_outbound.router)
     app.include_router(federation_jwks.router)
     app.include_router(federation_admin.router)
+    app.include_router(federation_operational.router)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_exception_handler(request: Request, exc: RequestValidationError):
+        return problem_response(
+            status=422,
+            title="Validation Error",
+            detail="Request validation failed.",
+            type_uri="https://eosc-eden.eu/problems/validation-error",
+            instance=str(request.url),
+        )
     return app
 
 

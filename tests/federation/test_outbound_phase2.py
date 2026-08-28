@@ -157,6 +157,7 @@ def fed_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_url: str):
     monkeypatch.setenv("FEDERATION_SIGNING_KEY_PATH", str(key_path))
     monkeypatch.setenv("FEDERATION_ACTIVE_KID", "k1")
     monkeypatch.setenv("FEDERATION_JWKS_ENABLED", "true")
+    monkeypatch.setenv("FEDERATION_ADMIN_CURSOR_SECRET", "c" * 64)
     monkeypatch.setenv("RELOAD_ENABLE", "false")
 
     service = LicenseService(base_dir=tmp_path, spdx_client=_StaticSpdx())

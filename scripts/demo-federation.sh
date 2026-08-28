@@ -9,6 +9,11 @@ import secrets
 print(secrets.token_hex(16))
 PY
 )}"
+CURSOR_SECRET="${FEDERATION_DEMO_CURSOR_SECRET:-$(uv run python - <<'PY'
+import secrets
+print(secrets.token_hex(32))
+PY
+)}"
 NODE_A_ID="${FEDERATION_DEMO_NODE_A_ID:-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}"
 NODE_B_ID="${FEDERATION_DEMO_NODE_B_ID:-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb}"
 
@@ -111,6 +116,7 @@ gen_key "${KEY_B}"
 export FEDERATION_DEMO_NODE_A_KEY_FILE="${KEY_A}"
 export FEDERATION_DEMO_NODE_B_KEY_FILE="${KEY_B}"
 export FEDERATION_DEMO_ADMIN_TOKEN="${ADMIN_TOKEN}"
+export FEDERATION_DEMO_CURSOR_SECRET="${CURSOR_SECRET}"
 export FEDERATION_DEMO_NODE_A_ID="${NODE_A_ID}"
 export FEDERATION_DEMO_NODE_B_ID="${NODE_B_ID}"
 

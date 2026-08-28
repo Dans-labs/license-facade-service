@@ -35,6 +35,7 @@ def problem_response(
     instance: str | None = None,
     type_uri: str = "about:blank",
     extra: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     payload = ProblemDetails(
         type=type_uri,
@@ -49,4 +50,5 @@ def problem_response(
         status_code=status,
         content=payload,
         media_type="application/problem+json",
+        headers=headers,
     )

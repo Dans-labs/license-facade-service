@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import secrets
+import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -70,6 +73,10 @@ class FederationSettings:
     rdf_outbox_retry_base_seconds: float
     rdf_outbox_retry_max_seconds: float
     rdf_outbox_batch_size: int
+    admin_cursor_secret: str | None = field(default=None, repr=False, compare=False)
+    admin_cursor_secret_allow_ephemeral: bool = False
+    admin_cursor_secret_generated: bool = False
+    admin_cursor_secret_source: str | None = None
     validation_errors: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -89,6 +96,11 @@ class FederationSettings:
         allow_private_network = _as_bool("FEDERATION_ALLOW_PRIVATE_NETWORK", default=False)
         allow_http_for_demo = _as_bool("FEDERATION_ALLOW_HTTP_FOR_DEMO", default=False)
         demo_tofu_unsafe_enabled = _as_bool("FEDERATION_DEMO_TOFU_UNSAFE", default=False)
+        cursor_secret = (os.getenv("FEDERATION_ADMIN_CURSOR_SECRET", "").strip() or None)
+        cursor_secret_file = (os.getenv("FEDERATION_ADMIN_CURSOR_SECRET_FILE", "").strip() or None)
+        cursor_secret_allow_ephemeral = _as_bool("FEDERATION_ADMIN_CURSOR_SECRET_ALLOW_EPHEMERAL", default=False)
+        cursor_secret_source: str | None = "inline" if cursor_secret else None
+        cursor_secret_generated = False
         allowed_ports = tuple(
             int(value.strip()) for value in os.getenv("FEDERATION_SYNC_ALLOWED_PORTS", "443").split(",") if value.strip()
         )
@@ -134,6 +146,39 @@ class FederationSettings:
                     errors.append("FEDERATION_PUBLIC_BASE_URL must be an absolute URL")
                 elif parsed.scheme != "https" and not (allow_http_for_demo and parsed.scheme == "http"):
                     errors.append("FEDERATION_PUBLIC_BASE_URL must be an absolute https URL")
+            if cursor_secret_file:
+                cursor_secret_path = Path(cursor_secret_file)
+                if not cursor_secret_path.is_file():
+                    errors.append("FEDERATION_ADMIN_CURSOR_SECRET_FILE must point to a readable regular file when set")
+                else:
+                    try:
+                        file_secret = cursor_secret_path.read_text(encoding="utf-8").strip()
+                    except OSError:
+                        errors.append("FEDERATION_ADMIN_CURSOR_SECRET_FILE must point to a readable regular file when set")
+                    else:
+                        if not file_secret:
+                            errors.append("FEDERATION_ADMIN_CURSOR_SECRET_FILE must not be empty")
+                        else:
+                            cursor_secret = file_secret
+                            cursor_secret_source = "file"
+            if not cursor_secret:
+                if cursor_secret_allow_ephemeral:
+                    cursor_secret = secrets.token_hex(32)
+                    cursor_secret_generated = True
+                    cursor_secret_source = "generated"
+                    warnings.warn(
+                        "FEDERATION_ADMIN_CURSOR_SECRET was not configured; using an ephemeral in-memory cursor secret. "
+                        "Pagination cursors will not survive process restart or replica changes.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    errors.append(
+                        "FEDERATION_ADMIN_CURSOR_SECRET or FEDERATION_ADMIN_CURSOR_SECRET_FILE is required when "
+                        "FEDERATION_ENABLED=true"
+                    )
+            if cursor_secret and len(cursor_secret) < 32:
+                errors.append("FEDERATION_ADMIN_CURSOR_SECRET must be at least 32 characters long")
             if inbound_enabled and max_events_per_page <= 0:
                 errors.append("FEDERATION_SYNC_MAX_EVENTS_PER_PAGE must be positive")
             if any(port <= 0 or port > 65535 for port in allowed_ports):
@@ -181,5 +226,9 @@ class FederationSettings:
             rdf_outbox_retry_base_seconds=float(os.getenv("FEDERATION_RDF_OUTBOX_RETRY_BASE_SECONDS", "2")),
             rdf_outbox_retry_max_seconds=float(os.getenv("FEDERATION_RDF_OUTBOX_RETRY_MAX_SECONDS", "30")),
             rdf_outbox_batch_size=_as_int("FEDERATION_RDF_OUTBOX_BATCH_SIZE", 25),
+            admin_cursor_secret=cursor_secret,
+            admin_cursor_secret_allow_ephemeral=cursor_secret_allow_ephemeral,
+            admin_cursor_secret_generated=cursor_secret_generated,
+            admin_cursor_secret_source=cursor_secret_source,
             validation_errors=tuple(errors),
         )

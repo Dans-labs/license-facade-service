@@ -23,6 +23,7 @@ from src.license_facade_service.db.models.federation import (
     FederationInboundEvent,
     FederationPeerAuditLog,
     FederationPeerCursor,
+    FederationPeerHealthSnapshot,
     FederationPeerSigningKey,
     FederationRecord,
     FederationRecordProvenance,
@@ -233,14 +234,57 @@ class FederationPeerService:
                 .scalars()
                 .all()
             )
-        return [self._to_peer_response(row) for row in rows], total
+            # Fetch latest health snapshot per peer (avoid N+1)
+            peer_ids = [r.id for r in rows]
+            health_by_peer: dict[uuid.UUID, dict] = {}
+            if peer_ids:
+                from sqlalchemy import and_, func as sqlfunc
+                from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+
+                # Use a subquery to get the latest sampled_at per peer_id
+                latest_ts_subq = (
+                    select(
+                        FederationPeerHealthSnapshot.peer_id,
+                        sqlfunc.max(FederationPeerHealthSnapshot.sampled_at).label("max_sampled_at"),
+                    )
+                    .where(FederationPeerHealthSnapshot.peer_id.in_(peer_ids))
+                    .group_by(FederationPeerHealthSnapshot.peer_id)
+                    .subquery()
+                )
+                latest_snaps = session.execute(
+                    select(FederationPeerHealthSnapshot).join(
+                        latest_ts_subq,
+                        and_(
+                            FederationPeerHealthSnapshot.peer_id == latest_ts_subq.c.peer_id,
+                            FederationPeerHealthSnapshot.sampled_at == latest_ts_subq.c.max_sampled_at,
+                        ),
+                    )
+                ).scalars().all()
+                for snap in latest_snaps:
+                    if snap.peer_id not in health_by_peer:
+                        health_by_peer[snap.peer_id] = {
+                            "health_status": snap.health_status,
+                            "compatibility_status": snap.compatibility_status,
+                        }
+        return [self._to_peer_response(row, health_by_peer.get(row.id)) for row in rows], total
 
     def get_peer(self, peer_id: uuid.UUID) -> PeerResponse:
         with self.db.transaction() as session:
             row = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
             if row is None:
                 raise FederationError("peer-not-found", "Trusted peer was not found.")
-        return self._to_peer_response(row)
+            # Get latest health snapshot for this peer
+            latest_snap = session.execute(
+                select(FederationPeerHealthSnapshot)
+                .where(FederationPeerHealthSnapshot.peer_id == peer_id)
+                .order_by(FederationPeerHealthSnapshot.sampled_at.desc(), FederationPeerHealthSnapshot.id.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            latest_health = (
+                {"health_status": latest_snap.health_status, "compatibility_status": latest_snap.compatibility_status}
+                if latest_snap else None
+            )
+        return self._to_peer_response(row, latest_health)
 
     def list_imported_records(self, peer_id: uuid.UUID) -> ImportedRecordListResponse:
         with self.db.transaction() as session:
@@ -527,7 +571,7 @@ class FederationPeerService:
         )
 
     @staticmethod
-    def _to_peer_response(peer: FederationTrustedPeer) -> PeerResponse:
+    def _to_peer_response(peer: FederationTrustedPeer, latest_health: dict | None = None) -> PeerResponse:
         return PeerResponse(
             id=peer.id,
             peerNodeId=peer.peer_node_id,
@@ -543,6 +587,21 @@ class FederationPeerService:
             expectedKeyKid=peer.expected_key_kid,
             expectedKeyFingerprint=peer.expected_key_fingerprint,
             archivedAt=peer.archived_at,
+            # Phase 5 circuit breaker
+            circuitState=peer.circuit_state,
+            circuitRequiresAdminReset=peer.circuit_requires_admin_reset,
+            circuitFailureCount=peer.circuit_failure_count,
+            circuitOpenedAt=peer.circuit_opened_at,
+            circuitNextAttemptAt=peer.circuit_next_attempt_at,
+            circuitLastFailureReason=peer.circuit_last_failure_reason,
+            # Phase 5 administrative suspension
+            suspendedUntil=peer.suspended_until,
+            suspensionReason=peer.suspension_reason,
+            # Phase 5 key management
+            lastKeyRefreshAt=peer.last_key_refresh_at,
+            # Phase 5 health
+            latestHealthStatus=latest_health.get("health_status") if latest_health else None,
+            latestCompatibilityStatus=latest_health.get("compatibility_status") if latest_health else None,
         )
 
     def _upsert_peer_key(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from typing import Any
@@ -21,6 +22,7 @@ from src.license_facade_service.federation.inbound_models import (
     PeerResponse,
     SyncResultResponse,
 )
+from src.license_facade_service.federation.operational_queries import query_operational_status_extension
 from src.license_facade_service.federation.resolution import FederationResolutionService, ResolutionError
 from src.license_facade_service.federation.resolution_models import ConflictDecisionRequest, ConflictDecisionResponse, ConflictResponse
 from src.license_facade_service.federation.outbound import FederationError, FederationPublicationService
@@ -407,7 +409,10 @@ async def federation_status(request: Request, _token: HTTPAuthorizationCredentia
     try:
         _admin_guard(request)
         _, sync_service, _ = _services(request)
-        return sync_service.status()
+        base = sync_service.status()
+        runtime = request.app.state.federation_runtime
+        ext = await asyncio.to_thread(query_operational_status_extension, runtime.db, runtime.settings)
+        return AdminStatusResponse(**{**base.model_dump(), **ext})
     except FederationError as error:
         return _problem_from_error(request, error)
 

@@ -172,6 +172,7 @@ def test_federation_identity_key_readiness_and_jwks(postgres_url: str, tmp_path:
     monkeypatch.setenv("FEDERATION_SIGNING_KEY_PATH", str(key_path))
     monkeypatch.setenv("FEDERATION_ACTIVE_KID", "k1")
     monkeypatch.setenv("FEDERATION_JWKS_ENABLED", "true")
+    monkeypatch.setenv("FEDERATION_ADMIN_CURSOR_SECRET", "c" * 64)
     monkeypatch.setenv("RELOAD_ENABLE", "false")
 
     service = LicenseService(base_dir=tmp_path, spdx_client=_StaticSpdx())
