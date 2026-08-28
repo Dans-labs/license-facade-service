@@ -117,6 +117,24 @@ def create_app() -> FastAPI:
     app.state.federation_async_sessionmaker = None
     app.state.federation_state = FederationRuntimeState(enabled=False, ready=True, errors=[])
 
+    @app.get(
+        "/",
+        tags=["Service status"],
+        summary="Read service metadata",
+        description=(
+            "Returns service metadata loaded from `pyproject.toml`.\n\n"
+            "Provides the configured title, version, and description for quick runtime identification."
+        ),
+        operation_id="getServiceMetadata",
+        response_description="Service metadata from project configuration.",
+    )
+    async def service_metadata():
+        return {
+            "title": details["title"],
+            "version": details["version"],
+            "description": details["description"],
+        }
+
     settings = FederationSettings.from_env()
     if settings.enabled:
         app.state.federation_runtime = FederationRuntime(settings=settings)

@@ -406,6 +406,12 @@ def test_previous_snapshot_served_when_spdx_offline(tmp_path: Path):
 
 def test_health_and_readiness(app_client):
     client, *_ = app_client
+    root = client.get("/")
+    assert root.status_code == 200
+    root_payload = root.json()
+    assert root_payload["title"]
+    assert root_payload["version"]
+    assert root_payload["description"]
     assert client.get("/api/v1/health").status_code == 200
     ready = client.get("/api/v1/ready")
     assert ready.status_code == 200
