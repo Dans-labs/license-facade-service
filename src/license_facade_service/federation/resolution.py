@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from src.license_facade_service.config.federation import FederationSettings
+from src.license_facade_service.db.models.custom_licence import CustomLicence, CustomLicenceAlias, normalize_alias
 from src.license_facade_service.db.models.federation import (
     FederationConflictDecisionEvent,
     FederationRecord,
@@ -45,7 +46,7 @@ from src.license_facade_service.federation.resolution_models import (
     SourceOperationalState,
     SourceTrustState,
 )
-from src.license_facade_service.services.licenses import LicenseService, LicenseNotFoundError
+from src.license_facade_service.services.licenses import LicenseService, LicenseNotFoundError, ResolvedLicenseSource
 
 
 class ResolutionError(FederationError):
@@ -65,6 +66,12 @@ class _Candidate:
     operational_state: SourceOperationalState
     availability: SourceAvailability
     freshness_state: FreshnessState
+
+
+@dataclass(frozen=True)
+class _CustomCandidate:
+    record: CustomLicence
+    resolving_uri: str
 
 
 def _normalize_identifier(identifier: str) -> str:
@@ -358,6 +365,10 @@ class FederationResolutionService:
         *,
         include_spdx: bool = True,
     ) -> LicenseResolutionResponse | None:
+        custom_candidate = self._local_custom_candidate(session, normalized)
+        if custom_candidate is not None:
+            return self._build_custom_response(normalized, custom_candidate)
+
         records = self._candidate_records(session, normalized)
         if not records:
             return None
@@ -402,6 +413,150 @@ class FederationResolutionService:
         if chosen.record.lifecycle_state == "tombstoned":
             raise ResolutionError("resolution-tombstoned", "Selected identity is tombstoned.", context=self._resolution_context(conflict, chosen))
         return self._build_response(normalized, chosen, conflict)
+
+    def _local_custom_candidate(self, session: Session, normalized: str) -> _CustomCandidate | None:
+        uuid_match: UUID | None = None
+        try:
+            uuid_match = UUID(normalized)
+        except ValueError:
+            uuid_match = None
+
+        canonical_or_uuid = (
+            session.execute(
+                select(CustomLicence)
+                .where(
+                    or_(
+                        CustomLicence.canonical_id == normalized,
+                        CustomLicence.resolving_uuid == uuid_match,
+                    )
+                )
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+        if canonical_or_uuid is None:
+            resolving_uri_match = (
+                session.execute(
+                    select(CustomLicence)
+                    .join(CustomLicenceAlias, CustomLicenceAlias.custom_licence_id == CustomLicence.id)
+                    .where(
+                        CustomLicenceAlias.alias_type == "resolving_uri",
+                        CustomLicenceAlias.alias == normalized,
+                    )
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            if resolving_uri_match is not None:
+                canonical_or_uuid = resolving_uri_match
+
+        if canonical_or_uuid is not None:
+            return self._eligible_custom_candidate(session, canonical_or_uuid)
+
+        requested = (
+            session.execute(
+                select(CustomLicence)
+                .where(
+                    CustomLicence.requested_license_id == normalized,
+                    CustomLicence.lifecycle_status.in_(("registered", "deprecated")),
+                )
+                .limit(2)
+            )
+            .scalars()
+            .all()
+        )
+        if len(requested) > 1:
+            raise ResolutionError("resolution-ambiguous", "Multiple local custom candidates match requested identifier.")
+        if len(requested) == 1:
+            return self._eligible_custom_candidate(session, requested[0])
+
+        try:
+            normalized_alias = normalize_alias(normalized)
+        except (TypeError, ValueError):
+            return None
+        alias_match = (
+            session.execute(
+                select(CustomLicence)
+                .join(CustomLicenceAlias, CustomLicenceAlias.custom_licence_id == CustomLicence.id)
+                .where(CustomLicenceAlias.normalized_alias == normalized_alias)
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+        if alias_match is None:
+            return None
+        return self._eligible_custom_candidate(session, alias_match)
+
+    def _eligible_custom_candidate(self, session: Session, record: CustomLicence) -> _CustomCandidate | None:
+        if record.lifecycle_status == "tombstoned":
+            raise ResolutionError("resolution-tombstoned", "Selected identity is tombstoned.")
+        if record.lifecycle_status not in {"registered", "deprecated"}:
+            return None
+        resolving_uri_row = (
+            session.execute(
+                select(CustomLicenceAlias)
+                .where(
+                    CustomLicenceAlias.custom_licence_id == record.id,
+                    CustomLicenceAlias.alias_type == "resolving_uri",
+                )
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+        resolving_uri = resolving_uri_row.alias if resolving_uri_row is not None else f"/api/v1/licenses/{record.canonical_id}"
+        return _CustomCandidate(record=record, resolving_uri=resolving_uri)
+
+    def _build_custom_response(self, normalized: str, candidate: _CustomCandidate) -> LicenseResolutionResponse:
+        now = datetime.now(timezone.utc)
+        lifecycle: LifecycleState = "deprecated" if candidate.record.lifecycle_status == "deprecated" else "active"
+        canonical = candidate.record.canonical_id
+        return LicenseResolutionResponse(
+            identifier=normalized,
+            canonicalId=canonical,
+            authoritativeCanonicalId=canonical,
+            authorityNodeId=self.settings.node_id,
+            sourcePeerId=None,
+            sourcePeerNodeId=None,
+            recordId=None,
+            version=candidate.record.version,
+            resolutionOutcome="local-authoritative",
+            lifecycleState=lifecycle,
+            conflictState="none",
+            sourceTrustState="trusted",
+            sourceOperationalState="enabled",
+            sourceAvailability="online",
+            freshnessState="fresh",
+            freshness=ResolutionFreshness(
+                resolvedAt=now,
+                sourceObservedAt=candidate.record.updated_at,
+                lastSyncedAt=None,
+                stale=False,
+            ),
+            provenance=ProvenanceSummary(
+                summary="Local authoritative custom record",
+                sourceUri=candidate.resolving_uri,
+                sourceDigestSha256=candidate.record.normalized_text_digest,
+            ),
+            conflictId=None,
+            conflictStatus=None,
+            conflictDecisionEffectiveness=None,
+            resolutionContextId=None,
+            links=ResolutionLinkSet(
+                self=f"/api/v1/licenses/resolution?identifier={normalized}",
+                canonical=f"/api/v1/licenses/{canonical}",
+                provenance=f"/api/v1/licenses/provenance?identifier={normalized}",
+                conflict=None,
+                resolution=f"/api/v1/licenses/resolution?identifier={normalized}",
+                representation=[
+                    f"/api/v1/licenses/{canonical}",
+                    f"/api/v1/licenses/{canonical}/json",
+                ],
+            ),
+        )
 
     def _choose_by_decision(
         self,
@@ -648,6 +803,45 @@ class FederationResolutionService:
         return self._spdx_resolution_response(normalized, resolved)
 
     def _spdx_resolution_response(self, normalized: str, resolved: Any) -> LicenseResolutionResponse:
+        if getattr(resolved, "source", None) == ResolvedLicenseSource.LOCAL_CUSTOM:
+            canonical = str(resolved.record.get("canonicalId") or resolved.license_id)
+            lifecycle = "deprecated" if str(resolved.record.get("lifecycleStatus", "")).lower() == "deprecated" else "active"
+            now = datetime.now(timezone.utc)
+            return LicenseResolutionResponse(
+                identifier=normalized,
+                canonicalId=canonical,
+                authoritativeCanonicalId=canonical,
+                authorityNodeId=self.settings.node_id,
+                sourcePeerId=None,
+                sourcePeerNodeId=None,
+                recordId=None,
+                version=str(resolved.record.get("version") or ""),
+                resolutionOutcome="local-authoritative",
+                lifecycleState=lifecycle,  # type: ignore[arg-type]
+                conflictState="none",
+                sourceTrustState="trusted",
+                sourceOperationalState="enabled",
+                sourceAvailability="online",
+                freshnessState="fresh",
+                freshness=ResolutionFreshness(resolvedAt=now, sourceObservedAt=None, lastSyncedAt=None, stale=False),
+                provenance=ProvenanceSummary(
+                    summary="Local authoritative custom record",
+                    sourceUri=str(resolved.record.get("resolvingUri") or f"/api/v1/licenses/{canonical}"),
+                    sourceDigestSha256=str(resolved.record.get("normalizedTextDigest") or ""),
+                ),
+                conflictId=None,
+                conflictStatus=None,
+                conflictDecisionEffectiveness=None,
+                resolutionContextId=None,
+                links=ResolutionLinkSet(
+                    self=f"/api/v1/licenses/resolution?identifier={normalized}",
+                    canonical=f"/api/v1/licenses/{canonical}",
+                    provenance=f"/api/v1/licenses/provenance?identifier={normalized}",
+                    conflict=None,
+                    resolution=f"/api/v1/licenses/resolution?identifier={normalized}",
+                    representation=[f"/api/v1/licenses/{canonical}", f"/api/v1/licenses/{canonical}/json"],
+                ),
+            )
         metadata = self.license_service.build_metadata(resolved)
         lifecycle = "deprecated" if metadata.get("isDeprecatedLicenseId") else "active"
         now = datetime.now(timezone.utc)

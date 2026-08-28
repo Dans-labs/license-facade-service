@@ -63,6 +63,7 @@ def _problem_from_error(request: Request, error: FederationError) -> Response:
         "record-not-found": (404, "Record Not Found"),
         "non-authoritative-record": (404, "Non-Authoritative Record"),
         "unpublished-record": (404, "Unpublished Record"),
+        "stored-federation-event-invalid": (500, "Stored Federation Event Invalid"),
     }
     status, title = mapping.get(error.code, (400, "Federation Request Error"))
     return problem_response(
@@ -145,6 +146,7 @@ async def federation_discovery(
         304: {"description": "Catalog page unchanged for the supplied ETag."},
         400: _problem_response_doc("The supplied cursor or page size was invalid.", {"type": "https://eosc-eden.eu/problems/invalid-cursor", "title": "Invalid Cursor", "status": 400, "detail": "Cursor is invalid."}),
         404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+        500: _problem_response_doc("Stored authoritative events failed integrity validation.", {"type": "https://eosc-eden.eu/problems/stored-federation-event-invalid", "title": "Stored Federation Event Invalid", "status": 500, "detail": "Stored federation event is invalid at position 42."}),
         503: _problem_response_doc("Federation runtime is not ready to serve the outbound catalog.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
     },
 )
@@ -181,6 +183,7 @@ async def federation_catalog(
         304: {"description": "Change-feed page unchanged for the supplied ETag."},
         400: _problem_response_doc("The supplied cursor or page size was invalid.", {"type": "https://eosc-eden.eu/problems/invalid-cursor", "title": "Invalid Cursor", "status": 400, "detail": "Cursor is invalid."}),
         404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
+        500: _problem_response_doc("Stored authoritative events failed integrity validation.", {"type": "https://eosc-eden.eu/problems/stored-federation-event-invalid", "title": "Stored Federation Event Invalid", "status": 500, "detail": "Stored federation event is invalid at position 42."}),
         503: _problem_response_doc("Federation runtime is not ready to serve the outbound change feed.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
     },
 )
@@ -216,6 +219,7 @@ async def federation_changes(
         304: {"description": "Record unchanged for the supplied ETag."},
         400: _problem_response_doc("The canonical identifier encoding was invalid.", {"type": "https://eosc-eden.eu/problems/invalid-cursor", "title": "Invalid Cursor", "status": 400, "detail": "Cursor is invalid."}),
         404: _problem_response_doc("No locally authoritative published record exists for the supplied canonical ID.", {"type": "https://eosc-eden.eu/problems/record-not-found", "title": "Record Not Found", "status": 404, "detail": "Record not found."}),
+        500: _problem_response_doc("Stored authoritative events failed integrity validation.", {"type": "https://eosc-eden.eu/problems/stored-federation-event-invalid", "title": "Stored Federation Event Invalid", "status": 500, "detail": "Stored federation event is invalid at position 42."}),
         503: _problem_response_doc("Federation runtime is not ready to serve outbound records.", {"type": "https://eosc-eden.eu/problems/federation-unavailable", "title": "Federation Unavailable", "status": 503, "detail": "Federation service is unavailable."}),
     },
 )

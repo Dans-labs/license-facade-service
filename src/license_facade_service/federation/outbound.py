@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -37,12 +38,15 @@ from src.license_facade_service.federation.models import (
     SignedFederationRecordPayload,
 )
 
+from pydantic import ValidationError
+
 CANONICAL_ID_PATTERN = re.compile(r"^lfs:[0-9a-fA-F-]{36}:[A-Za-z0-9._-]+:[A-Za-z0-9._-]+$")
 CURSOR_VERSION = 1
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 MAX_IDENTIFIER_LENGTH = 512
 PROTOCOL_VERSION = "2.0.0"
+LOGGER = logging.getLogger(__name__)
 
 
 class FederationError(Exception):
@@ -353,7 +357,12 @@ class FederationPublicationService:
             "provenance": provenance_type,
             "backfillCreatedAt": _iso_z(backfill_created_at) if backfill_created_at else None,
         }
-        payload_bytes = canonicalize_to_bytes(payload)
+        try:
+            signed_event_payload = SignedFederationChangeEventPayload.model_validate(payload)
+        except ValidationError as exc:
+            raise FederationError("invalid-event-payload", "Federation event payload failed schema validation.") from exc
+        payload_json = signed_event_payload.model_dump(mode="json")
+        payload_bytes = canonicalize_to_bytes(payload_json)
         if isinstance(self.signing, SigningKeyService):
             self.signing.ensure_runtime_active_key()
         signature = self.signing.sign_bytes(payload_bytes)
@@ -368,14 +377,14 @@ class FederationPublicationService:
                 operation=operation,
                 generated_at=generated_at,
                 payload_schema_version="1",
-                signed_payload=payload,
+                signed_payload=payload_json,
                 signed_payload_digest_sha256=digest,
                 signature_base64url=signature.value,
                 signature_kid=signature.kid,
                 signature_alg=signature.alg,
                 provenance_type=provenance_type,
                 backfill_created_at=backfill_created_at,
-                event_payload=payload,
+                event_payload=payload_json,
                 event_digest_sha256=digest,
                 occurred_at=generated_at,
                 created_at=datetime.now(timezone.utc),
@@ -628,16 +637,18 @@ class FederationOutboundService:
             )
         )
 
-        items = [
-            FederationChangeEventItem(
-                payload=SignedFederationChangeEventPayload.model_validate(event.signed_payload),
-                signed=SignedDomainObject(
-                    digestSha256=event.signed_payload_digest_sha256,
-                    signature={"kid": event.signature_kid, "alg": event.signature_alg, "value": event.signature_base64url},
-                ),
+        items: list[FederationChangeEventItem] = []
+        for event in page:
+            payload = self._validated_event_payload(event)
+            items.append(
+                FederationChangeEventItem(
+                    payload=payload,
+                    signed=SignedDomainObject(
+                        digestSha256=event.signed_payload_digest_sha256,
+                        signature={"kid": event.signature_kid, "alg": event.signature_alg, "value": event.signature_base64url},
+                    ),
+                )
             )
-            for event in page
-        ]
         response = FederationChangesResponse(
             events=items,
             limit=effective_limit,
@@ -720,6 +731,8 @@ class FederationOutboundService:
             )
             for record, event in page
         ]
+        for _, event in page:
+            self._validated_event_payload(event)
         response = FederationCatalogResponse(
             items=items,
             limit=effective_limit,
@@ -753,6 +766,7 @@ class FederationOutboundService:
             )
         if latest is None:
             raise FederationError("unpublished-record", "Record has no published state event.")
+        self._validated_event_payload(latest)
         state = _state_from_operation(latest.operation)
         if state == "tombstoned":
             raise FederationError("unpublished-record", "Record has been tombstoned.")
@@ -776,6 +790,19 @@ class FederationOutboundService:
             latestEventPosition=latest.event_sequence,
             latestEventDigestSha256=latest.signed_payload_digest_sha256,
         )
+
+    def _validated_event_payload(self, event: FederationChangeEvent) -> SignedFederationChangeEventPayload:
+        try:
+            return SignedFederationChangeEventPayload.model_validate(event.signed_payload)
+        except ValidationError as exc:
+            LOGGER.warning(
+                "stored federation event payload invalid",
+                extra={"event_id": str(event.id), "event_position": int(event.event_sequence)},
+            )
+            raise FederationError(
+                "stored-federation-event-invalid",
+                f"Stored federation event is invalid at position {int(event.event_sequence)}.",
+            ) from exc
 
     def _resolve_changes_cursor(self, since: str | None) -> tuple[int, int]:
         current_max = self._max_event_sequence()

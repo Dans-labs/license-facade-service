@@ -21,6 +21,7 @@ from src.license_facade_service.db.session import Database
 from src.license_facade_service.db.models.federation import FederationSigningKey
 from src.license_facade_service.federation.canonical_json import canonicalize_to_bytes
 from src.license_facade_service.federation.keys import SigningKeyService
+from src.license_facade_service.federation.models import SignedFederationChangeEventPayload
 from src.license_facade_service.federation.outbound import (
     FederationBackfillService,
     FederationError,
@@ -304,6 +305,7 @@ def test_get_is_read_only_and_event_signatures_stable(fed_env):
         assert r1.status_code == 200 and r2.status_code == 200
         e1 = r1.json()["events"][0]
         e2 = r2.json()["events"][0]
+        SignedFederationChangeEventPayload.model_validate(e1["payload"])
         assert e1["payload"] == e2["payload"]
         assert e1["signed"]["digestSha256"] == e2["signed"]["digestSha256"]
         assert e1["signed"]["signature"]["value"] == e2["signed"]["signature"]["value"]
@@ -315,6 +317,47 @@ def test_get_is_read_only_and_event_signatures_stable(fed_env):
         )
     after = _count(fed_env["dsn"], "federation_change_events")
     assert before == after
+
+
+def test_changes_fails_safely_on_malformed_stored_event_payload(fed_env):
+    pub: FederationPublicationService = fed_env["publisher"]
+    canonical = f"lfs:{NODE_ID}:SAFEFAIL:1"
+    pub.publish_new_version(
+        canonical_id=canonical,
+        authority_node_id=NODE_ID,
+        local_id="SAFEFAIL",
+        version="1",
+        payload={"licenseId": "SAFEFAIL"},
+    )
+    with psycopg.connect(fed_env["dsn"].replace("+psycopg", "")) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM federation_records WHERE canonical_id=%s", (canonical,))
+            record_id = cur.fetchone()[0]
+            cur.execute("SELECT COALESCE(MAX(event_sequence), 0) FROM federation_change_events")
+            next_sequence = int(cur.fetchone()[0]) + 1
+            cur.execute(
+                """
+                INSERT INTO federation_change_events (
+                  id, event_sequence, event_type, authority_node_id, record_id, operation, generated_at,
+                  payload_schema_version, signed_payload, signed_payload_digest_sha256, signature_base64url,
+                  signature_kid, signature_alg, provenance_type, event_payload, event_digest_sha256,
+                  occurred_at, created_at
+                ) VALUES (%s, %s, 'record.changed', %s, %s, 'upsert', now(), '1',
+                          '{"tampered": true}'::jsonb, 'bad', 'bad', %s, 'EdDSA', 'publication',
+                          '{}'::jsonb, 'bad', now(), now())
+                """,
+                (str(uuid4()), next_sequence, NODE_ID, record_id, fed_env["settings"].active_kid),
+            )
+        conn.commit()
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/federation/changes?limit=200")
+        assert response.status_code == 500
+        body = response.json()
+        assert body["type"] == "https://eosc-eden.eu/problems/stored-federation-event-invalid"
+        assert "tampered" not in response.text
+        assert "ValidationError" not in response.text
+        assert "events" not in body
 
 
 def test_verify_bytes_fallback_rejects_unknown_non_active_kid(fed_env, monkeypatch: pytest.MonkeyPatch):

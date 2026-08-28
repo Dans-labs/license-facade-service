@@ -16,12 +16,14 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.license_facade_service.api.v1 import licenses as licenses_api
 from src.license_facade_service.api.federation import admin as federation_admin
 from src.license_facade_service.config.federation import FederationSettings
+from src.license_facade_service.db.models.custom_licence import CustomLicence, CustomLicenceAlias, normalize_alias
 from src.license_facade_service.db.models.federation import (
+    FederationChangeEvent,
     FederationConflictDecisionEvent,
     FederationRecord,
     FederationRecordProvenance,
@@ -40,6 +42,12 @@ from src.license_facade_service.federation.runtime import FederationRuntime
 from src.license_facade_service.main import create_app
 from src.license_facade_service.services.auth import AuthService
 from src.license_facade_service.services.licenses import LicenseService, SPDXClient
+from src.license_facade_service.services.custom_licence_registration import (
+    build_canonical_id,
+    build_resolving_uri,
+    build_resolving_uuid,
+    build_versioned_requested_id_alias,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -352,6 +360,69 @@ def _imported_record(session, *, peer: FederationTrustedPeer, canonical_id: str,
     return record
 
 
+def _insert_custom_local(
+    session,
+    *,
+    authority_id: str,
+    authority_base_iri: str,
+    requested_id: str,
+    version: str,
+    alias: str,
+    lifecycle_status: str = "registered",
+) -> CustomLicence:
+    now = datetime.now(timezone.utc)
+    canonical_id = build_canonical_id(authority_id=authority_id, requested_license_id=requested_id, version=version)
+    resolving_uuid = build_resolving_uuid(authority_id=authority_id, requested_license_id=requested_id, version=version)
+    resolving_uri = build_resolving_uri(
+        authority_base_iri=authority_base_iri,
+        authority_id=authority_id,
+        requested_license_id=requested_id,
+        version=version,
+    )
+    row = CustomLicence(
+        id=uuid4(),
+        authority_id=authority_id,
+        requested_license_id=requested_id,
+        version=version,
+        canonical_id=canonical_id,
+        resolving_uuid=resolving_uuid,
+        public_scope="local",
+        federation_status="not_published",
+        spdx_submission_status="not_requested",
+        lifecycle_status=lifecycle_status,
+        name=f"{requested_id} {version}",
+        summary="Local custom summary",
+        description="Local custom description",
+        license_text="Custom terms",
+        normalized_text_digest="a" * 64,
+        spdx_jsonld={"licenseId": requested_id},
+        creator_role="curator",
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(row)
+    session.flush()
+    alias_rows = [
+        ("canonical_id", canonical_id),
+        ("resolving_uuid", str(resolving_uuid)),
+        ("resolving_uri", resolving_uri),
+        ("requested_id", build_versioned_requested_id_alias(requested_license_id=requested_id, version=version)),
+        ("legacy", alias),
+    ]
+    for alias_type, alias_value in alias_rows:
+        session.add(
+            CustomLicenceAlias(
+                id=uuid4(),
+                custom_licence_id=row.id,
+                alias_type=alias_type,
+                alias=alias_value,
+                normalized_alias=normalize_alias(alias_value),
+                created_at=now,
+            )
+        )
+    return row
+
+
 @pytest.fixture(scope="module")
 def _module_signing_key_pem() -> bytes:
     key = Ed25519PrivateKey.generate()
@@ -446,6 +517,70 @@ def test_local_authority_wins_and_imported_never_overwrites(phase4_env):
         assert len(imported) == 1
         conflicts = session.execute(select(FederationResolutionConflict)).scalars().all()
         assert len(conflicts) == 0
+
+
+def test_local_custom_resolution_precedence_and_scope_isolation(phase4_env):
+    db = phase4_env["db"]
+    client = phase4_env["client"]
+    settings = phase4_env["settings"]
+    authority_id = "lfs-local-authority"
+    requested = "Demo-Custom"
+    alias = "shared-local-custom-alias"
+    custom_id: UUID | None = None
+    with db.transaction() as session:
+        custom = _insert_custom_local(
+            session,
+            authority_id=authority_id,
+            authority_base_iri="https://node-b.example.org",
+            requested_id=requested,
+            version="1.0",
+            alias=alias,
+        )
+        peer = _peer(session, peer_node_id="88888888-8888-4888-8888-888888888888")
+        _imported_record(
+            session,
+            peer=peer,
+            canonical_id="lfs:88888888-8888-4888-8888-888888888888:RemoteAlias:1",
+            local_id="RemoteAlias",
+            version="1",
+            payload={"licenseId": "RemoteAlias", "aliases": [alias]},
+            source_event_position=51,
+            aliases=(alias,),
+        )
+        custom_id = custom.id
+
+    identifiers = [
+        custom.canonical_id,
+        str(custom.resolving_uuid),
+        "https://node-b.example.org/custom-licences/lfs-local-authority/Demo-Custom/1.0",
+        alias,
+        requested,
+    ]
+    for identifier in identifiers:
+        response = client.get("/api/v1/licenses/resolution", params={"identifier": identifier})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["resolutionOutcome"] == "local-authoritative"
+        assert body["canonicalId"] == custom.canonical_id
+        assert body["authorityNodeId"] == settings.node_id
+
+    with db.transaction() as session:
+        before_changes = session.execute(select(func.count()).select_from(FederationChangeEvent)).scalar_one()
+        before_records = session.execute(select(func.count()).select_from(FederationRecord)).scalar_one()
+    catalog_ids = {item["canonicalId"] for item in client.get("/api/v1/federation/catalog?limit=200").json()["items"]}
+    assert custom.canonical_id not in catalog_ids
+    changes = client.get("/api/v1/federation/changes?limit=200").json()["events"]
+    changed_canonicals = {event["payload"]["record"]["canonicalId"] for event in changes}
+    assert custom.canonical_id not in changed_canonicals
+    with db.transaction() as session:
+        after_changes = session.execute(select(func.count()).select_from(FederationChangeEvent)).scalar_one()
+        after_records = session.execute(select(func.count()).select_from(FederationRecord)).scalar_one()
+    assert before_changes == after_changes
+    assert before_records == after_records
+    if custom_id is not None:
+        with db.transaction() as session:
+            session.query(CustomLicenceAlias).filter(CustomLicenceAlias.custom_licence_id == custom_id).delete()
+            session.query(CustomLicence).filter(CustomLicence.id == custom_id).delete()
 
 
 def test_imported_ambiguity_conflict_and_reversal(phase4_env):

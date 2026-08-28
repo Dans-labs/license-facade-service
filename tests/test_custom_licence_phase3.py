@@ -40,6 +40,7 @@ from src.license_facade_service.federation.license_identity import build_canonic
 from src.license_facade_service.main import create_app
 from src.license_facade_service.federation.canonical_json import canonicalize_to_bytes
 from src.license_facade_service.federation.digests import canonical_json_sha256_hex, sha256_hex
+from src.license_facade_service.federation.models import SignedFederationChangeEventPayload
 from src.license_facade_service.federation.outbound import FederationError, FederationPublicationService
 from src.license_facade_service.services.custom_licence_federation_publication import (
     CustomLicenceFederationPublicationService,
@@ -1526,6 +1527,7 @@ def test_published_custom_licence_record_endpoint_returns_signed_payload(phase3_
     event = next(
         item for item in changes.json()["events"] if item["payload"]["record"]["canonicalId"] == federation_canonical_id
     )
+    SignedFederationChangeEventPayload.model_validate(event["payload"])
     _verify_ed25519_signature_from_jwks(
         jwks=jwks,
         kid=event["signed"]["signature"]["kid"],

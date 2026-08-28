@@ -16,7 +16,11 @@ from uuid import UUID, NAMESPACE_DNS, uuid5
 
 import httpx
 from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
 
+from src.license_facade_service.db.models.custom_licence import CustomLicence, CustomLicenceAlias, normalize_alias
+from src.license_facade_service.db.session import Database
+from src.license_facade_service.services.custom_licence_registration import build_resolving_uri
 from src.license_facade_service.utils.rdf_transformer import json_to_rdf
 from src.license_facade_service.services.contract import (
     ConformanceRequirement,
@@ -87,6 +91,10 @@ class ConcurrentRefreshError(Exception):
 
 class OptionalRepresentationUnavailable(Exception):
     """Raised when optional representation is unavailable for this license."""
+
+
+class AmbiguousCustomLicenseIdentifierError(LicenseNotFoundError):
+    """Custom-licence identifier maps to multiple local records."""
 
 
 @dataclass(frozen=True)
@@ -328,6 +336,9 @@ class LicenseService:
         retries = int(os.getenv("SPDX_RETRIES", "3"))
         backoff = float(os.getenv("SPDX_RETRY_BACKOFF_SECONDS", "0.5"))
         self.spdx = spdx_client or SPDXClient(timeout=timeout, retries=retries, backoff_seconds=backoff)
+        self._custom_database_url = os.getenv("CUSTOM_LICENCE_REGISTRATION_DATABASE_URL")
+        self._custom_authority_base_iri = os.getenv("CUSTOM_LICENCE_AUTHORITY_BASE_IRI")
+        self._custom_db: Database | None = None
 
     async def ensure_cache_updated(self) -> None:
         if self.cache.get_status().cached:
@@ -370,6 +381,10 @@ class LicenseService:
         if ".." in normalized or "\\" in normalized:
             raise LicenseNotFoundError
 
+        custom = self._resolve_custom_record(normalized)
+        if custom is not None:
+            return custom
+
         licenses_list = await self.get_all_licenses()
         licenses = licenses_list.get("licenses", [])
         record = self._resolve_record(normalized, licenses)
@@ -390,6 +405,132 @@ class LicenseService:
             uri=uri,
             source=ResolvedLicenseSource.SPDX_LISTED,
         )
+
+    @property
+    def custom_db(self) -> Database | None:
+        if not self._custom_database_url:
+            return None
+        if self._custom_db is None:
+            self._custom_db = Database.from_url(self._custom_database_url)
+        return self._custom_db
+
+    def _resolve_custom_record(self, identifier: str) -> ResolvedLicense | None:
+        database = self.custom_db
+        if database is None:
+            return None
+        with database.transaction() as session:
+            strong_match = (
+                session.execute(
+                    select(CustomLicence).where(
+                        or_(
+                            CustomLicence.canonical_id == identifier,
+                            CustomLicence.resolving_uuid == self._uuid_or_none(identifier),
+                        )
+                    ).limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            if strong_match is None:
+                uri_match = (
+                    session.execute(
+                        select(CustomLicence)
+                        .join(CustomLicenceAlias, CustomLicenceAlias.custom_licence_id == CustomLicence.id)
+                        .where(
+                            CustomLicenceAlias.alias_type == "resolving_uri",
+                            CustomLicenceAlias.alias == identifier,
+                        )
+                        .limit(1)
+                    )
+                    .scalars()
+                    .first()
+                )
+                if uri_match is not None:
+                    strong_match = uri_match
+            if strong_match is not None:
+                return self._build_custom_resolved(strong_match)
+
+            requested_rows = (
+                session.execute(
+                    select(CustomLicence)
+                    .where(
+                        CustomLicence.requested_license_id == identifier,
+                        CustomLicence.lifecycle_status.in_(("registered", "deprecated")),
+                    )
+                    .limit(2)
+                )
+                .scalars()
+                .all()
+            )
+            if len(requested_rows) > 1:
+                raise AmbiguousCustomLicenseIdentifierError
+            if len(requested_rows) == 1:
+                return self._build_custom_resolved(requested_rows[0])
+
+            try:
+                normalized_alias = normalize_alias(identifier)
+            except (TypeError, ValueError):
+                return None
+            alias_match = (
+                session.execute(
+                    select(CustomLicence)
+                    .join(CustomLicenceAlias, CustomLicenceAlias.custom_licence_id == CustomLicence.id)
+                    .where(CustomLicenceAlias.normalized_alias == normalized_alias)
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            if alias_match is None:
+                return None
+            return self._build_custom_resolved(alias_match)
+
+    def _build_custom_resolved(self, row: CustomLicence) -> ResolvedLicense | None:
+        if row.lifecycle_status not in {"registered", "deprecated"}:
+            return None
+        resolving_uri = (
+            build_resolving_uri(
+                authority_base_iri=self._custom_authority_base_iri,
+                authority_id=row.authority_id,
+                requested_license_id=row.requested_license_id,
+                version=row.version,
+            )
+            if self._custom_authority_base_iri
+            else ""
+        )
+        record: dict[str, Any] = {
+            "id": str(row.id),
+            "requestedLicenseId": row.requested_license_id,
+            "version": row.version,
+            "canonicalId": row.canonical_id,
+            "resolvingUuid": str(row.resolving_uuid),
+            "resolvingUri": resolving_uri,
+            "name": row.name,
+            "summary": row.summary,
+            "description": row.description,
+            "scope": row.public_scope,
+            "federationStatus": row.federation_status,
+            "spdxSubmissionStatus": row.spdx_submission_status,
+            "lifecycleStatus": row.lifecycle_status,
+            "normalizedTextDigest": row.normalized_text_digest,
+            "spdxJsonld": row.spdx_jsonld,
+            "createdAt": row.created_at,
+            "updatedAt": row.updated_at,
+        }
+        return ResolvedLicense(
+            license_id=row.canonical_id,
+            identifier=row.canonical_id,
+            record=record,
+            details=row.spdx_jsonld,
+            uri=resolving_uri or row.canonical_id,
+            source=ResolvedLicenseSource.LOCAL_CUSTOM,
+        )
+
+    def _uuid_or_none(self, value: str) -> UUID | None:
+        try:
+            return UUID(value)
+        except ValueError:
+            return None
 
     def _resolve_record(self, identifier: str, licenses: list[dict[str, Any]]) -> dict[str, Any] | None:
         by_id = next((item for item in licenses if item.get("licenseId") == identifier), None)

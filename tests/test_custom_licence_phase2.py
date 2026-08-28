@@ -7,6 +7,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 import psycopg
@@ -106,6 +107,7 @@ def registration_client(postgres_urls: tuple[str, str], monkeypatch: pytest.Monk
     monkeypatch.setenv("CUSTOM_LICENCE_AUTHORITY_BASE_IRI", "https://lfs.example")
     monkeypatch.setenv("CUSTOM_LICENCE_CREATOR_ORGANIZATION_NAME", "LFS Operator")
     monkeypatch.setenv("CUSTOM_LICENCE_CREATOR_ORGANIZATION_IRI", "https://lfs.example/spdx/agents/lfs-operator")
+    licenses_api._license_service = None
     licenses_api._auth_service = AuthService()
     app = create_app()
     with TestClient(app) as client:
@@ -446,6 +448,67 @@ def test_requested_id_multiple_versions_coexist_with_distinct_identity(registrat
                 ("requested_id", build_versioned_requested_id_alias(requested_license_id=requested, version="1.0")),
                 ("requested_id", build_versioned_requested_id_alias(requested_license_id=requested, version="2.0")),
             ]
+
+
+def test_local_custom_resolves_by_public_identifiers(registration_client):
+    client, _ = registration_client
+    requested = f"DANS-Resolve-{uuid.uuid4().hex[:8]}"
+    alias = "Demo Alias"
+    created = client.post(
+        "/api/v1/licenses",
+        json=_payload(scope="local", requested=requested, aliases=[alias]),
+        headers={"Authorization": "Bearer curator-token"},
+    )
+    assert created.status_code == 201
+    registration = created.json()
+
+    for identifier in (
+        registration["canonicalId"],
+        registration["resolvingUuid"],
+        quote(registration["resolvingUri"], safe=""),
+        quote(alias, safe=""),
+    ):
+        response = client.get(f"/api/v1/licenses/{identifier}")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["canonicalId"] == registration["canonicalId"]
+        assert body["requestedLicenseId"] == requested
+        assert body["scope"] == "local"
+
+    requested_response = client.get(f"/api/v1/licenses/{quote(requested, safe='')}")
+    assert requested_response.status_code == 200
+    assert requested_response.json()["canonicalId"] == registration["canonicalId"]
+
+    by_uri_resolution = client.get("/api/v1/licenses/resolution", params={"identifier": registration["resolvingUri"]})
+    assert by_uri_resolution.status_code == 200
+    resolved = by_uri_resolution.json()
+    assert resolved["resolutionOutcome"] == "local-authoritative"
+    assert resolved["canonicalId"] == registration["canonicalId"]
+
+
+def test_requested_identifier_with_multiple_versions_is_not_arbitrarily_selected(registration_client):
+    client, _ = registration_client
+    requested = f"DANS-Multi-{uuid.uuid4().hex[:8]}"
+    one = client.post(
+        "/api/v1/licenses",
+        json=_payload(scope="local", requested=requested, version="1.0", aliases=["multi-version-one"]),
+        headers={"Authorization": "Bearer curator-token"},
+    )
+    two = client.post(
+        "/api/v1/licenses",
+        json=_payload(scope="local", requested=requested, version="2.0", aliases=["multi-version-two"]),
+        headers={"Authorization": "Bearer curator-token"},
+    )
+    assert one.status_code == 201
+    assert two.status_code == 201
+
+    unresolved = client.get(f"/api/v1/licenses/{quote(requested, safe='')}")
+    assert unresolved.status_code == 404
+
+    requested_v1 = build_versioned_requested_id_alias(requested_license_id=requested, version="1.0")
+    requested_v2 = build_versioned_requested_id_alias(requested_license_id=requested, version="2.0")
+    assert client.get(f"/api/v1/licenses/{quote(requested_v1, safe='')}").status_code == 200
+    assert client.get(f"/api/v1/licenses/{quote(requested_v2, safe='')}").status_code == 200
 
 
 def test_same_legacy_alias_across_versions_conflicts(registration_client):

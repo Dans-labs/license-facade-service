@@ -26,6 +26,7 @@ from src.license_facade_service.services.auth import (
 from src.license_facade_service.services.licenses import (
     LicenseNotFoundError,
     LicenseService,
+    ResolvedLicenseSource,
     REPRESENTATION_HTML,
     REPRESENTATION_JSON,
     REPRESENTATION_JSON_LD,
@@ -1470,6 +1471,10 @@ async def _render_license_response(
         resolved = await service.resolve(identifier)
     except LicenseNotFoundError:
         return _problem_404(identifier, request)
+    if resolved.source == ResolvedLicenseSource.LOCAL_CUSTOM:
+        custom_response = RegisterCustomLicenceResponse.model_validate(resolved.record)
+        headers = _response_headers(f"/api/v1/licenses/{custom_response.canonical_id}", include_vary=negotiated)
+        return JSONResponse(content=custom_response.model_dump(by_alias=True, mode="json"), headers=headers)
     body, media_type = service.render_representation(resolved, representation)
     links = service.representation_links(resolved)
     content_location = links["self"] if negotiated else links[representation]

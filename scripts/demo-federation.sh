@@ -858,19 +858,6 @@ ACTIVATION_AUDIT_COUNT_AFTER_RESTART="$(docker compose exec -T node-a-db psql -U
 [[ "${ACTIVATION_AUDIT_COUNT_AFTER_RESTART}" == "1" ]]
 echo "Restart persistence confirmed: A2 remains active"
 
-TAMPER_EVENT_ID="$(uuidgen)"
-TAMPER_RECORD_ID="$(docker compose exec -T node-a-db psql -U postgres -d lfs_a -tAc "SELECT id FROM federation_records ORDER BY created_at DESC LIMIT 1" | tr -d '[:space:]')"
-LATEST_POSITION_A="$(docker compose exec -T node-a-db psql -U postgres -d lfs_a -tAc "SELECT COALESCE(MAX(event_sequence), 0) FROM federation_change_events" | tr -d '[:space:]')"
-docker compose exec -T node-a-db psql -U postgres -d lfs_a -c "INSERT INTO federation_change_events (id, event_sequence, event_type, authority_node_id, record_id, operation, generated_at, payload_schema_version, signed_payload, signed_payload_digest_sha256, signature_base64url, signature_kid, signature_alg, provenance_type, event_payload, event_digest_sha256, occurred_at, created_at) VALUES ('${TAMPER_EVENT_ID}', ${LATEST_POSITION_A} + 1, 'record.changed', '${NODE_A_ID}', '${TAMPER_RECORD_ID}', 'upsert', NOW(), '1', '{\"tampered\":true}'::jsonb, 'bad', 'tampered', '${NODE_A_K2}', 'EdDSA', 'publication', '{}'::jsonb, 'bad', NOW(), NOW());" >/dev/null
-CURSOR_BEFORE_TAMPER="$(docker compose exec -T node-b-db psql -U postgres -d lfs_b -tAc "SELECT COALESCE((SELECT cursor FROM federation_peer_cursors WHERE peer_id='${PEER_ID}' ORDER BY updated_at DESC LIMIT 1), '')" | tr -d '[:space:]')"
-TAMPER_SYNC="$(sync_request "${PEER_ID}")"
-append_transcript "sync-after-tamper" "${TAMPER_SYNC}"
-[[ "$(json_get "${TAMPER_SYNC}" "status")" != "complete" ]]
-[[ "$(json_get "${TAMPER_SYNC}" "importedRecords")" == "0" ]]
-CURSOR_AFTER_TAMPER="$(docker compose exec -T node-b-db psql -U postgres -d lfs_b -tAc "SELECT COALESCE((SELECT cursor FROM federation_peer_cursors WHERE peer_id='${PEER_ID}' ORDER BY updated_at DESC LIMIT 1), '')" | tr -d '[:space:]')"
-[[ "${CURSOR_AFTER_TAMPER}" == "${CURSOR_BEFORE_TAMPER}" ]]
-echo "Tamper rejection and cursor immutability: passed"
-
 docker compose stop node-a >/dev/null
 SYNC_OFFLINE="$(sync_request "${PEER_ID}")"
 append_transcript "sync-offline" "${SYNC_OFFLINE}"
@@ -884,6 +871,25 @@ append_transcript "resolution-offline-r1" "${RESOLUTION_OFFLINE}"
 docker compose start node-a >/dev/null
 wait_ready "http://localhost:12114/api/v1/ready" "Node A restored"
 echo "Offline imported-record behavior retained"
+
+TAMPER_EVENT_ID="$(uuidgen)"
+TAMPER_RECORD_ID="$(docker compose exec -T node-a-db psql -U postgres -d lfs_a -tAc "SELECT id FROM federation_records ORDER BY created_at DESC LIMIT 1" | tr -d '[:space:]')"
+LATEST_POSITION_A="$(docker compose exec -T node-a-db psql -U postgres -d lfs_a -tAc "SELECT COALESCE(MAX(event_sequence), 0) FROM federation_change_events" | tr -d '[:space:]')"
+docker compose exec -T node-a-db psql -U postgres -d lfs_a -c "INSERT INTO federation_change_events (id, event_sequence, event_type, authority_node_id, record_id, operation, generated_at, payload_schema_version, signed_payload, signed_payload_digest_sha256, signature_base64url, signature_kid, signature_alg, provenance_type, event_payload, event_digest_sha256, occurred_at, created_at) VALUES ('${TAMPER_EVENT_ID}', ${LATEST_POSITION_A} + 1, 'record.changed', '${NODE_A_ID}', '${TAMPER_RECORD_ID}', 'upsert', NOW(), '1', '{\"tampered\":true}'::jsonb, 'bad', 'tampered', '${NODE_A_K2}', 'EdDSA', 'publication', '{}'::jsonb, 'bad', NOW(), NOW());" >/dev/null
+TAMPER_OUTBOUND_RESP="$(http_request GET "http://localhost:12114/api/v1/federation/changes?limit=200" "" 0)"
+TAMPER_OUTBOUND_BODY="$(echo "${TAMPER_OUTBOUND_RESP}" | sed '$d')"
+TAMPER_OUTBOUND_CODE="$(echo "${TAMPER_OUTBOUND_RESP}" | tail -n1)"
+append_transcript "changes-after-tamper-a" "${TAMPER_OUTBOUND_BODY}"
+[[ "${TAMPER_OUTBOUND_CODE}" == "500" ]]
+[[ "$(json_get "${TAMPER_OUTBOUND_BODY}" "type")" == "https://eosc-eden.eu/problems/stored-federation-event-invalid" ]]
+CURSOR_BEFORE_TAMPER="$(docker compose exec -T node-b-db psql -U postgres -d lfs_b -tAc "SELECT COALESCE((SELECT cursor FROM federation_peer_cursors WHERE peer_id='${PEER_ID}' ORDER BY updated_at DESC LIMIT 1), '')" | tr -d '[:space:]')"
+TAMPER_SYNC="$(sync_request "${PEER_ID}")"
+append_transcript "sync-after-tamper" "${TAMPER_SYNC}"
+[[ "$(json_get "${TAMPER_SYNC}" "status")" != "complete" ]]
+[[ "$(json_get "${TAMPER_SYNC}" "importedRecords")" == "0" ]]
+CURSOR_AFTER_TAMPER="$(docker compose exec -T node-b-db psql -U postgres -d lfs_b -tAc "SELECT COALESCE((SELECT cursor FROM federation_peer_cursors WHERE peer_id='${PEER_ID}' ORDER BY updated_at DESC LIMIT 1), '')" | tr -d '[:space:]')"
+[[ "${CURSOR_AFTER_TAMPER}" == "${CURSOR_BEFORE_TAMPER}" ]]
+echo "Tamper rejection and cursor immutability: passed"
 
 append_transcript "final-jwks-a" "$(curl -fsS http://localhost:12114/.well-known/jwks.json)"
 append_transcript "final-status-node-b" "$(expect_code "$(http_request GET "http://localhost:12124/api/v1/admin/federation/status")" "200")"
