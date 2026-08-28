@@ -172,7 +172,7 @@ class SyncResultResponse(StrictModel):
         },
     )
 
-    status: Literal["complete", "partial", "failed", "already-running"] = Field(
+    status: Literal["complete", "partial", "failed", "already-running", "skipped"] = Field(
         description="Overall synchronization outcome. `partial` means some data committed before a later failure. `already-running` indicates a conflicting lock.",
     )
     pagesProcessed: int = Field(description="Number of change-feed pages processed during the operation.")
@@ -242,3 +242,35 @@ class AdminPublishRequest(StrictModel):
     localId: str = Field(description="Authority-local identifier to publish as a local authoritative federation record.")
     version: str = Field(description="Authority-local version string to publish.")
     payload: dict[str, Any] = Field(description="Authoritative business payload to wrap and sign for outbound federation.")
+
+
+class PeerSuspendRequest(StrictModel):
+    reason: str = Field(min_length=1, max_length=1024, description="Required operator reason for suspension.")
+    suspendedUntil: datetime | None = Field(
+        default=None,
+        description="Optional timezone-aware suspension end timestamp. Omit for indefinite suspension.",
+    )
+
+
+class PeerResumeRequest(StrictModel):
+    reason: str | None = Field(default=None, max_length=1024, description="Optional operator reason for resuming synchronization.")
+
+
+class PeerCircuitResetRequest(StrictModel):
+    reason: str = Field(min_length=1, max_length=1024, description="Required operator reason for resetting peer circuit state.")
+    expectedState: Literal["closed", "open", "half_open"] | None = Field(
+        default=None,
+        description="Optional expected current circuit state for optimistic concurrency.",
+    )
+
+
+class PeerProbeResponse(StrictModel):
+    peerId: UUID = Field(description="Local trusted peer UUID.")
+    peerNodeId: str = Field(description="Pinned immutable peer node UUID.")
+    reachableDiscovery: bool = Field(description="Whether discovery endpoint was reachable and valid.")
+    reachableJwks: bool = Field(description="Whether JWKS endpoint was reachable and valid.")
+    roundTripMs: int = Field(ge=0, description="Approximate end-to-end probe round-trip time in milliseconds.")
+    healthStatus: str = Field(description="Bounded health status.")
+    errorCode: str | None = Field(default=None, description="Bounded machine-readable error code, if probe failed.")
+    circuitState: Literal["closed", "open", "half_open"] = Field(description="Circuit state after probe transition.")
+    sampledAt: datetime = Field(description="Probe sample timestamp.")

@@ -88,6 +88,10 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
         ("get", "/api/v1/admin/federation/rdf-outbox"),
         ("get", "/api/v1/admin/federation/sync-attempts"),
         ("get", "/api/v1/admin/federation/compatibility"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/suspend"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/resume"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/circuit/reset"),
+        ("post", "/api/v1/admin/federation/peers/{peer_id}/probe"),
     }
 
     seen_protected = set()

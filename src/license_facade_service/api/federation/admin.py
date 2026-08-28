@@ -13,13 +13,17 @@ from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.api.v1.licenses import get_auth_service
 from src.license_facade_service.federation.inbound import FederationInboundSyncService, FederationPeerService
 from src.license_facade_service.federation.inbound_models import (
+    PeerCircuitResetRequest,
     AdminPublishRequest,
     AdminStatusResponse,
     ImportedRecordListResponse,
+    PeerProbeResponse,
     PeerCreateRequest,
     PeerListResponse,
     PeerPatchRequest,
     PeerResponse,
+    PeerResumeRequest,
+    PeerSuspendRequest,
     SyncResultResponse,
 )
 from src.license_facade_service.federation.operational_queries import query_operational_status_extension
@@ -119,6 +123,7 @@ def _problem_from_error(request: Request, error: FederationError):
         "peer-key-mismatch": (400, "Peer Key Mismatch"),
         "peer-key-required": (400, "Peer Key Required"),
         "remote-unreachable": (503, "Remote Peer Unavailable"),
+        "remote-tls-error": (503, "Remote Peer Unavailable"),
         "remote-http-error": (502, "Remote Peer Error"),
         "remote-content-type": (502, "Remote Peer Error"),
         "remote-payload-too-large": (502, "Remote Peer Error"),
@@ -131,6 +136,14 @@ def _problem_from_error(request: Request, error: FederationError):
         "authority-mismatch": (400, "Authority Mismatch"),
         "digest-mismatch": (400, "Digest Mismatch"),
         "already-running": (409, "Synchronization Already Running"),
+        "sync-lease-stale": (409, "Synchronization Lease Stale"),
+        "peer-suspended": (409, "Peer Suspended"),
+        "peer-archived": (409, "Peer Archived"),
+        "circuit-open": (409, "Circuit Open"),
+        "circuit-open-admin-reset": (409, "Circuit Open"),
+        "invalid-suspension": (400, "Invalid Suspension"),
+        "circuit-state-stale": (409, "Circuit State Conflict"),
+        "circuit-reset-race": (409, "Circuit Reset Conflict"),
         "sync-internal-error": (500, "Synchronization Failed"),
     }
     status, title = mapping.get(error.code, (400, "Federation Administration Error"))
@@ -219,7 +232,7 @@ async def list_peers(
         404: _problem_response_doc("Federation is disabled for this deployment.", {"type": "https://eosc-eden.eu/problems/federation-disabled", "title": "Federation Disabled", "status": 404, "detail": "Federation is disabled."}),
         400: _problem_response_doc("Peer identity, pinned key, or remote response validation failed.", {"type": "https://eosc-eden.eu/problems/peer-node-mismatch", "title": "Peer Identity Mismatch", "status": 400, "detail": "Discovery nodeId does not match requested peerNodeId."}),
         409: _problem_response_doc("A peer with the same node identity already exists.", {"type": "https://eosc-eden.eu/problems/peer-exists", "title": "Peer Already Exists", "status": 409, "detail": "Trusted peer already exists."}),
-        502: _problem_response_doc("The remote peer responded with invalid or unexpected data.", {"type": "https://eosc-eden.eu/problems/remote-http-error", "title": "Remote Peer Error", "status": 502, "detail": "Remote endpoint returned HTTP 500."}),
+        502: _problem_response_doc("The remote peer responded with invalid or unexpected data.", {"type": "https://eosc-eden.eu/problems/remote-http-error", "title": "Remote Peer Error", "status": 502, "detail": "Remote endpoint returned a server error."}),
         503: _problem_response_doc("The remote peer could not be reached under the current security policy.", {"type": "https://eosc-eden.eu/problems/remote-unreachable", "title": "Remote Peer Unavailable", "status": 503, "detail": "Remote endpoint is unreachable."}),
     },
 )
@@ -373,7 +386,8 @@ async def sync_peer(
     try:
         _admin_guard(request)
         _, sync_service, _ = _services(request)
-        result = sync_service.sync_peer(
+        result = await asyncio.to_thread(
+            sync_service.sync_peer,
             peer_id=peer_id,
             trigger_type="manual",
             max_seconds=sync_service.settings.admin_sync_timeout_seconds,
@@ -387,6 +401,123 @@ async def sync_peer(
                 instance=str(request.url),
             )
         return result
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/suspend",
+    response_model=PeerResponse,
+    tags=["Federation administration"],
+    summary="Suspend inbound synchronization for one peer",
+    description=(
+        "Suspends synchronization for one trusted peer without archiving trust configuration.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="suspendFederationPeer",
+)
+async def suspend_peer(
+    request: Request,
+    payload: PeerSuspendRequest = Body(description="Suspension parameters."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.suspend_peer,
+            peer_id=peer_id,
+            reason=payload.reason,
+            suspended_until=payload.suspendedUntil,
+            actor="admin",
+        )
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/resume",
+    response_model=PeerResponse,
+    tags=["Federation administration"],
+    summary="Resume inbound synchronization for one peer",
+    description=(
+        "Clears administrative suspension for one trusted peer.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="resumeFederationPeer",
+)
+async def resume_peer(
+    request: Request,
+    payload: PeerResumeRequest = Body(default=PeerResumeRequest(), description="Optional resume reason."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.resume_peer,
+            peer_id=peer_id,
+            reason=payload.reason,
+            actor="admin",
+        )
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/circuit/reset",
+    response_model=PeerResponse,
+    tags=["Federation administration"],
+    summary="Reset one peer circuit breaker state",
+    description=(
+        "Resets one peer circuit to closed without changing trust state or cursor.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="resetFederationPeerCircuit",
+)
+async def reset_peer_circuit(
+    request: Request,
+    payload: PeerCircuitResetRequest = Body(description="Circuit reset parameters."),
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        return await asyncio.to_thread(
+            peer_service.reset_peer_circuit,
+            peer_id=peer_id,
+            reason=payload.reason,
+            expected_state=payload.expectedState,
+            actor="admin",
+        )
+    except FederationError as error:
+        return _problem_from_error(request, error)
+
+
+@router.post(
+    "/api/v1/admin/federation/peers/{peer_id}/probe",
+    response_model=PeerProbeResponse,
+    tags=["Federation administration"],
+    summary="Run read-only peer discovery/JWKS probe",
+    description=(
+        "Runs a lease-fenced read-only connectivity and identity probe.\n\n"
+        "Bearer authentication is required and the caller must have the admin role."
+    ),
+    operation_id="probeFederationPeer",
+)
+async def probe_peer(
+    request: Request,
+    peer_id: uuid.UUID = Path(..., description="Local UUID of the trusted peer configuration."),
+    _token: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+):
+    try:
+        _admin_guard(request)
+        peer_service, _, _ = _services(request)
+        result = await asyncio.to_thread(peer_service.probe_peer, peer_id=peer_id, actor="admin")
+        return PeerProbeResponse(**result)
     except FederationError as error:
         return _problem_from_error(request, error)
 

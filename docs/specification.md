@@ -196,3 +196,24 @@ Implemented Phase 4 boundaries:
   - `requeue`
   - `rebuild`
   - `reconcile`
+
+## Federation Phase 5 Increment 3 synchronization hardening
+
+Implemented boundaries:
+
+- synchronization coordination uses persisted per-peer leases with fencing tokens (no long-held advisory lock during HTTP traversal);
+- lease claim and release are short transactions, and page commit re-verifies owner/token/expiry against PostgreSQL time;
+- remote discovery/JWKS/changes/record HTTP is executed outside DB transactions;
+- cursor advancement is atomic with per-page import commit and lease renewal;
+- transient/permanent peer circuit states (`closed`, `open`, `half_open`) govern synchronization/probe eligibility;
+- admin controls exist for suspend/resume, circuit reset, and read-only probe;
+- health snapshots and operational audit events are persisted for explicit probe and actual synchronization attempts.
+
+Deferred from Increment 3:
+
+- peer-key inspection/approval operations;
+- local signing-key rotation operations;
+- cursor replay/checkpoint/recovery tooling;
+- RDF recovery additions beyond existing outbox behavior;
+- rate limiting, metrics, and expanded production logging;
+- additional protocol compatibility enforcement.

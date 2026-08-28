@@ -8,13 +8,14 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlencode
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import ValidationError
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.license_facade_service.config.federation import FederationSettings
@@ -47,13 +48,50 @@ from src.license_facade_service.federation.inbound_models import (
     RemoteRecordResponse,
     SyncResultResponse,
 )
+from src.license_facade_service.federation.audit import (
+    AuditAction,
+    AuditActorType,
+    AuditDetailBuilder,
+    AuditOutcome,
+    AuditTargetType,
+    CircuitState,
+    sanitize_free_text,
+    write_audit_row_sync,
+)
+from src.license_facade_service.federation.circuit import PeerCircuitService
 from src.license_facade_service.federation.json_strict import DuplicateJsonKeyError, loads_json_no_duplicates
+from src.license_facade_service.federation.lease import ClaimedLease, LeaseConflictError, SyncLeaseRepository
 from src.license_facade_service.federation.license_identity import build_canonical_license_identity
 from src.license_facade_service.federation.outbound import FederationError, encode_canonical_id
 from src.license_facade_service.federation.rdf_outbox import RdfOutboxService
 from src.license_facade_service.federation.security import FederationUrlPolicy, UrlSecurityError
 
 logger = logging.getLogger(__name__)
+
+_HEALTH_ERROR_SUMMARIES: dict[str, str] = {
+    "remote-unreachable": "Remote peer is unreachable.",
+    "remote-tls-error": "TLS connection to remote peer failed.",
+    "remote-server-error": "Remote peer returned a server error.",
+    "remote-http-error": "Remote peer returned a request error.",
+    "peer-node-mismatch": "Remote peer identity did not match pinned identity.",
+    "peer-base-url-mismatch": "Remote peer base URL did not match pinned identity.",
+    "peer-key-missing": "Pinned peer signing key is no longer advertised.",
+    "unknown-signing-key": "Remote event used an unapproved signing key.",
+    "invalid-signature-alg": "Remote signature validation failed.",
+    "invalid-signature": "Remote signature validation failed.",
+    "digest-mismatch": "Remote signature validation failed.",
+    "record-payload-digest-mismatch": "Remote signature validation failed.",
+    "event-id-collision": "Remote event integrity validation failed.",
+    "event-position-collision": "Remote event integrity validation failed.",
+    "event-replay-mismatch": "Remote event integrity validation failed.",
+    "sync-timeout": "Federation synchronization timed out.",
+}
+
+
+def _safe_health_error_detail(error: FederationError) -> str:
+    if error.code in _HEALTH_ERROR_SUMMARIES:
+        return _HEALTH_ERROR_SUMMARIES[error.code]
+    return sanitize_free_text("Federation operation failed.", max_len=256)
 
 
 def ed25519_key_fingerprint_hex(x_b64url: str) -> str:
@@ -131,9 +169,11 @@ class FederationRemoteClient:
                             except UrlSecurityError:
                                 pass
                         raise FederationError("remote-redirect", "Remote redirects are not allowed.")
-                    if response.status_code >= 500 and attempt + 1 < attempts:
-                        time.sleep(min(self.settings.sync_retry_base_seconds * (2**attempt), self.settings.sync_retry_max_seconds) + random.uniform(0, 0.1))
-                        continue
+                    if response.status_code >= 500:
+                        if attempt + 1 < attempts:
+                            time.sleep(min(self.settings.sync_retry_base_seconds * (2**attempt), self.settings.sync_retry_max_seconds) + random.uniform(0, 0.1))
+                            continue
+                        raise FederationError("remote-server-error", f"Remote endpoint returned HTTP {response.status_code}.")
                     if response.status_code >= 400:
                         raise FederationError("remote-http-error", f"Remote endpoint returned HTTP {response.status_code}.")
                     content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -164,6 +204,10 @@ class FederationRemoteClient:
                     except Exception as exc:
                         raise FederationError("invalid-remote-json", "Remote JSON is malformed.") from exc
             except (httpx.TimeoutException, httpx.TransportError) as exc:
+                if isinstance(exc, httpx.TransportError):
+                    msg = str(exc).lower()
+                    if any(token in msg for token in ("tls", "ssl", "certificate", "cert verify")):
+                        raise FederationError("remote-tls-error", "Remote TLS validation failed.") from exc
                 if attempt + 1 < attempts:
                     time.sleep(min(self.settings.sync_retry_base_seconds * (2**attempt), self.settings.sync_retry_max_seconds) + random.uniform(0, 0.1))
                     continue
@@ -172,10 +216,26 @@ class FederationRemoteClient:
 
 
 class FederationPeerService:
-    def __init__(self, db: Database, settings: FederationSettings, remote_client: FederationRemoteClient | None = None):
+    def __init__(
+        self,
+        db: Database,
+        settings: FederationSettings,
+        remote_client: FederationRemoteClient | None = None,
+        *,
+        owner_instance_id: uuid.UUID | None = None,
+        now_provider: Callable[[], datetime] | None = None,
+        jitter_provider: Callable[[], float] | None = None,
+    ):
         self.db = db
         self.settings = settings
         self.remote_client = remote_client or FederationRemoteClient(settings)
+        self.owner_instance_id = owner_instance_id or uuid.uuid4()
+        self.lease_repo = SyncLeaseRepository()
+        self.circuit = PeerCircuitService(
+            settings,
+            now_provider=now_provider or (lambda: datetime.now(timezone.utc)),
+            jitter_provider=jitter_provider or (lambda: random.uniform(0.75, 1.25)),
+        )
 
     def _combined_allowlists(
         self,
@@ -288,7 +348,9 @@ class FederationPeerService:
 
     def list_imported_records(self, peer_id: uuid.UUID) -> ImportedRecordListResponse:
         with self.db.transaction() as session:
-            peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+            peer = session.execute(
+                select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+            ).scalar_one_or_none()
             if peer is None:
                 raise FederationError("peer-not-found", "Trusted peer was not found.")
             records = (
@@ -384,7 +446,9 @@ class FederationPeerService:
 
     def patch_peer(self, *, peer_id: uuid.UUID, payload: PeerPatchRequest, actor: str) -> PeerResponse:
         with self.db.transaction() as session:
-            peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+            peer = session.execute(
+                select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+            ).scalar_one_or_none()
             if peer is None:
                 raise FederationError("peer-not-found", "Trusted peer was not found.")
             current_base_url = peer.base_url
@@ -477,6 +541,384 @@ class FederationPeerService:
             payload=PeerPatchRequest(trustStatus="archived", syncEnabled=False),
             actor=actor,
         )
+
+    def _claim_lease(self, *, peer_id: uuid.UUID, trigger_type: str) -> ClaimedLease | None:
+        try:
+            with self.db.transaction() as session:
+                return self.lease_repo.claim_sync(
+                    session,
+                    peer_id=peer_id,
+                    owner_instance_id=self.owner_instance_id,
+                    trigger_type=trigger_type,
+                    duration_seconds=self.settings.sync_lease_duration_seconds,
+                )
+        except IntegrityError as exc:
+            raise FederationError("peer-not-found", "Trusted peer was not found.") from exc
+
+    def _release_lease(self, lease: ClaimedLease) -> None:
+        with self.db.transaction() as session:
+            self.lease_repo.release_sync(
+                session,
+                peer_id=lease.peer_id,
+                owner_instance_id=lease.owner_instance_id,
+                fencing_token=lease.fencing_token,
+            )
+
+    def _write_operational_audit(
+        self,
+        *,
+        action: AuditAction,
+        peer_id: uuid.UUID,
+        target_id: str,
+        outcome: AuditOutcome,
+        actor_id: str | None,
+        reason: str | None = None,
+        details: dict[str, Any] | None = None,
+        session: Session | None = None,
+    ) -> None:
+        def _write_row(target_session: Session) -> None:
+            write_audit_row_sync(
+                target_session,
+                actor_type=AuditActorType.HUMAN_OPERATOR if actor_id else AuditActorType.WORKER,
+                action=action,
+                target_type=AuditTargetType.PEER,
+                target_id=target_id,
+                peer_id=peer_id,
+                outcome=outcome,
+                actor_id=actor_id,
+                reason=reason,
+                details=details,
+            )
+
+        if session is not None:
+            _write_row(session)
+            return
+        with self.db.transaction() as local_session:
+            _write_row(local_session)
+
+    def _record_health_snapshot(
+        self,
+        *,
+        peer_id: uuid.UUID,
+        peer_node_id: str,
+        discovery_reachable: bool | None,
+        jwks_reachable: bool | None,
+        feed_reachable: bool | None,
+        last_event_position: int | None,
+        round_trip_ms: int | None,
+        health_status: str,
+        compatibility_status: str,
+        error_code: str | None,
+        error_detail: str | None,
+        session: Session | None = None,
+    ) -> None:
+        safe_detail = sanitize_free_text(error_detail, max_len=1024) if error_detail else None
+
+        def _add_row(target_session: Session) -> None:
+            target_session.add(
+                FederationPeerHealthSnapshot(
+                    id=uuid.uuid4(),
+                    peer_id=peer_id,
+                    peer_node_id=peer_node_id[:256],
+                    sampled_at=datetime.now(timezone.utc),
+                    discovery_reachable=discovery_reachable,
+                    jwks_reachable=jwks_reachable,
+                    feed_reachable=feed_reachable,
+                    last_event_position=last_event_position,
+                    round_trip_ms=round_trip_ms if round_trip_ms is None else max(0, round_trip_ms),
+                    health_status=health_status,
+                    compatibility_status=compatibility_status,
+                    error_code=error_code[:64] if error_code else None,
+                    error_detail=safe_detail,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+        if session is not None:
+            _add_row(session)
+            return
+        with self.db.transaction() as local_session:
+            _add_row(local_session)
+
+    def suspend_peer(self, *, peer_id: uuid.UUID, reason: str, suspended_until: datetime | None, actor: str) -> PeerResponse:
+        now = datetime.now(timezone.utc)
+        if suspended_until is not None:
+            if suspended_until.tzinfo is None or suspended_until.utcoffset() is None:
+                raise FederationError("invalid-suspension", "suspendedUntil must include timezone information.")
+            if suspended_until <= now:
+                raise FederationError("invalid-suspension", "suspendedUntil must be in the future.")
+        with self.db.transaction() as session:
+            peer = session.execute(
+                select(FederationTrustedPeer)
+                .where(FederationTrustedPeer.id == peer_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if peer is None:
+                raise FederationError("peer-not-found", "Trusted peer was not found.")
+            peer.suspension_reason = reason[:1024]
+            peer.suspended_until = suspended_until
+            peer.updated_at = now
+            self._audit(session, peer.id, "peer.suspended", actor, {"reason": reason[:256], "suspendedUntil": suspended_until.isoformat() if suspended_until else None})
+            self._write_operational_audit(
+                action=AuditAction.PEER_SUSPEND,
+                peer_id=peer_id,
+                target_id=str(peer_id),
+                outcome=AuditOutcome.SUCCESS,
+                actor_id=actor,
+                reason=reason[:1024],
+                details={"suspendedUntil": suspended_until.isoformat() if suspended_until else None},
+                session=session,
+            )
+        return self.get_peer(peer_id)
+
+    def resume_peer(self, *, peer_id: uuid.UUID, reason: str | None, actor: str) -> PeerResponse:
+        with self.db.transaction() as session:
+            peer = session.execute(
+                select(FederationTrustedPeer)
+                .where(FederationTrustedPeer.id == peer_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if peer is None:
+                raise FederationError("peer-not-found", "Trusted peer was not found.")
+            peer.suspension_reason = None
+            peer.suspended_until = None
+            peer.updated_at = datetime.now(timezone.utc)
+            self._audit(session, peer.id, "peer.resumed", actor, {"reason": (reason or "")[:256]})
+            self._write_operational_audit(
+                action=AuditAction.PEER_RESUME,
+                peer_id=peer_id,
+                target_id=str(peer_id),
+                outcome=AuditOutcome.SUCCESS,
+                actor_id=actor,
+                reason=(reason or "")[:1024] if reason else None,
+                session=session,
+            )
+        return self.get_peer(peer_id)
+
+    def reset_peer_circuit(self, *, peer_id: uuid.UUID, reason: str, expected_state: str | None, actor: str) -> PeerResponse:
+        lease = self._claim_lease(peer_id=peer_id, trigger_type="manual")
+        if lease is None:
+            raise FederationError("circuit-reset-race", "Peer synchronization lease is currently active.")
+        try:
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                if expected_state is not None and expected_state != peer.circuit_state:
+                    raise FederationError("circuit-state-stale", "Expected circuit state does not match current state.")
+                self.circuit.reset(peer)
+                peer.updated_at = datetime.now(timezone.utc)
+                self._audit(session, peer.id, "peer.circuit-reset", actor, {"reason": reason[:256], "expectedState": expected_state})
+                self._write_operational_audit(
+                    action=AuditAction.PEER_CIRCUIT_RESET,
+                    peer_id=peer_id,
+                    target_id=str(peer_id),
+                    outcome=AuditOutcome.SUCCESS,
+                    actor_id=actor,
+                    reason=reason[:1024],
+                    details={"expectedState": expected_state},
+                    session=session,
+                )
+            return self.get_peer(peer_id)
+        finally:
+            try:
+                self._release_lease(lease)
+            except Exception:
+                logger.exception("Failed to release circuit-reset lease for peer %s", peer_id)
+
+    def probe_peer(self, *, peer_id: uuid.UUID, actor: str) -> dict[str, Any]:
+        lease = self._claim_lease(peer_id=peer_id, trigger_type="probe")
+        if lease is None:
+            raise FederationError("already-running", "Synchronization already running for this peer.")
+        started = datetime.now(timezone.utc)
+        peer_node_id = None
+        phase = "discovery"
+        attempted_remote = False
+        discovery_reachable = False
+        jwks_reachable = False
+        expected_node_id = ""
+        try:
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
+                if peer is None:
+                    raise FederationError("peer-not-found", "Trusted peer was not found.")
+                peer_node_id = peer.peer_node_id
+                allowed_hostnames, allowed_cidrs = self._combined_allowlists(
+                    peer_allowed_hostnames=peer.allowed_hostnames,
+                    peer_allowed_cidrs=peer.allowed_cidrs,
+                )
+                if peer.archived_at is not None:
+                    raise FederationError("peer-archived", "Peer is archived.")
+                if peer.trust_status != "trusted" or not peer.sync_enabled:
+                    raise FederationError("peer-disabled", "Peer is disabled or not trusted.")
+                now = datetime.now(timezone.utc)
+                if peer.suspension_reason and (peer.suspended_until is None or peer.suspended_until > now):
+                    raise FederationError("peer-suspended", "Peer is administratively suspended.")
+                gate = self.circuit.evaluate_gate(peer)
+                if gate.transitioned:
+                    self._write_operational_audit(
+                        action=AuditAction.SYNC_CIRCUIT_HALF_OPENED,
+                        peer_id=peer_id,
+                        target_id=str(peer_id),
+                        outcome=AuditOutcome.SUCCESS,
+                        actor_id=actor,
+                        details={"state": gate.state.value},
+                        session=session,
+                    )
+                if not gate.allowed:
+                    raise FederationError("circuit-open-admin-reset" if gate.reason == "circuit-open-admin-reset" else "circuit-open", "Peer circuit is open.")
+                base_url = peer.base_url
+                allow_private_network = peer.allow_private_network
+                expected_node_id = peer.peer_node_id
+            attempted_remote = True
+            discovery = self._fetch_discovery(
+                base_url,
+                allow_private_network=allow_private_network,
+                allowed_hostnames=allowed_hostnames,
+                allowed_cidrs=allowed_cidrs,
+            )
+            discovery_reachable = True
+            if discovery.nodeId != expected_node_id:
+                raise FederationError("peer-node-mismatch", "Discovery nodeId does not match requested peerNodeId.")
+            if discovery.publicBaseUrl.rstrip("/") != base_url.rstrip("/"):
+                raise FederationError("peer-base-url-mismatch", "Discovery publicBaseUrl does not match expected base URL.")
+            phase = "jwks"
+            jwks = self._fetch_jwks(
+                discovery.jwksUrl,
+                allow_private_network=allow_private_network,
+                allowed_hostnames=allowed_hostnames,
+                allowed_cidrs=allowed_cidrs,
+            )
+            jwks_reachable = True
+            elapsed_ms = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one()
+                if peer.archived_at is not None:
+                    raise FederationError("peer-archived", "Peer is archived.")
+                if peer.trust_status != "trusted" or not peer.sync_enabled:
+                    raise FederationError("peer-disabled", "Peer is disabled or not trusted.")
+                pinned = session.execute(
+                    select(FederationPeerSigningKey).where(
+                        FederationPeerSigningKey.peer_id == peer_id,
+                        FederationPeerSigningKey.key_status.in_(["active", "retired"]),
+                    )
+                ).scalars().all()
+                advertised = {item.kid for item in jwks.keys}
+                missing = sorted({k.kid for k in pinned} - advertised)
+                if missing:
+                    raise FederationError("peer-key-missing", "Peer JWKS no longer advertises a pinned signing key.")
+                circuit_closed = self.circuit.mark_success(peer)
+                self._record_health_snapshot(
+                    peer_id=peer_id,
+                    peer_node_id=peer_node_id,
+                    discovery_reachable=discovery_reachable,
+                    jwks_reachable=jwks_reachable,
+                    feed_reachable=None,
+                    last_event_position=None,
+                    round_trip_ms=elapsed_ms,
+                    health_status="healthy",
+                    compatibility_status="unchecked",
+                    error_code=None,
+                    error_detail=None,
+                    session=session,
+                )
+                self._write_operational_audit(
+                    action=AuditAction.PEER_PROBE,
+                    peer_id=peer_id,
+                    target_id=str(peer_id),
+                    outcome=AuditOutcome.SUCCESS,
+                    actor_id=actor,
+                    details={"roundTripMs": elapsed_ms, "reachableDiscovery": discovery_reachable, "reachableJwks": jwks_reachable},
+                    session=session,
+                )
+                if circuit_closed:
+                    self._write_operational_audit(
+                        action=AuditAction.SYNC_CIRCUIT_CLOSED,
+                        peer_id=peer_id,
+                        target_id=str(peer_id),
+                        outcome=AuditOutcome.SUCCESS,
+                        actor_id=actor,
+                        session=session,
+                    )
+                state = peer.circuit_state
+            return {
+                "peerId": peer_id,
+                "peerNodeId": expected_node_id,
+                "reachableDiscovery": True,
+                "reachableJwks": True,
+                "roundTripMs": elapsed_ms,
+                "healthStatus": "healthy",
+                "errorCode": None,
+                "circuitState": state,
+                "sampledAt": datetime.now(timezone.utc),
+            }
+        except FederationError as exc:
+            classification = self.circuit.classify_failure(exc, phase=phase)
+            elapsed_ms = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
+            with self.db.transaction() as session:
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
+                opened_circuit = False
+                if peer is not None and classification.kind in {"transient", "permanent"}:
+                    previous_state = peer.circuit_state
+                    self.circuit.mark_failure(peer, classification=classification)
+                    opened_circuit = previous_state != CircuitState.OPEN.value and peer.circuit_state == CircuitState.OPEN.value
+                    state = peer.circuit_state
+                    node_id = peer.peer_node_id
+                elif peer is not None:
+                    state = peer.circuit_state
+                    node_id = peer.peer_node_id
+                else:
+                    state = "closed"
+                    node_id = peer_node_id or ""
+                if attempted_remote and node_id:
+                    self._record_health_snapshot(
+                        peer_id=peer_id,
+                        peer_node_id=node_id,
+                        discovery_reachable=discovery_reachable,
+                        jwks_reachable=jwks_reachable,
+                        feed_reachable=None,
+                        last_event_position=None,
+                        round_trip_ms=elapsed_ms,
+                        health_status="unreachable" if exc.code in {"remote-unreachable", "remote-server-error", "remote-tls-error"} else "degraded",
+                        compatibility_status="unknown",
+                        error_code=exc.code,
+                        error_detail=_safe_health_error_detail(exc),
+                        session=session,
+                    )
+                self._write_operational_audit(
+                    action=AuditAction.PEER_PROBE,
+                    peer_id=peer_id,
+                    target_id=str(peer_id),
+                    outcome=AuditOutcome.BLOCKED if exc.code in {"circuit-open", "circuit-open-admin-reset"} else AuditOutcome.FAILED,
+                    actor_id=actor,
+                    reason=exc.code,
+                    details=AuditDetailBuilder().add("errorCode", exc.code).add("roundTripMs", elapsed_ms).build(),
+                    session=session,
+                )
+                if opened_circuit:
+                    self._write_operational_audit(
+                        action=AuditAction.SYNC_CIRCUIT_OPENED,
+                        peer_id=peer_id,
+                        target_id=str(peer_id),
+                        outcome=AuditOutcome.SUCCESS,
+                        actor_id=actor,
+                        reason=classification.reason.value if classification.reason else None,
+                        session=session,
+                    )
+            raise
+        finally:
+            if lease is not None:
+                try:
+                    self._release_lease(lease)
+                except Exception:
+                    logger.exception("Failed to release probe lease for peer %s", peer_id)
 
     def _fetch_discovery(
         self,
@@ -783,12 +1225,28 @@ class _SyncStats:
 
 
 class FederationInboundSyncService:
-    def __init__(self, db: Database, settings: FederationSettings, remote_client: FederationRemoteClient | None = None):
+    def __init__(
+        self,
+        db: Database,
+        settings: FederationSettings,
+        remote_client: FederationRemoteClient | None = None,
+        *,
+        owner_instance_id: uuid.UUID | None = None,
+        now_provider: Callable[[], datetime] | None = None,
+        jitter_provider: Callable[[], float] | None = None,
+    ):
         self.db = db
         self.settings = settings
         self.remote_client = remote_client or FederationRemoteClient(settings)
         self.peer_service = FederationPeerService(db, settings, remote_client=self.remote_client)
         self.rdf_outbox = RdfOutboxService(db, settings)
+        self.owner_instance_id = owner_instance_id or uuid.uuid4()
+        self.lease_repo = SyncLeaseRepository()
+        self.circuit = PeerCircuitService(
+            settings,
+            now_provider=now_provider or (lambda: datetime.now(timezone.utc)),
+            jitter_provider=jitter_provider or (lambda: random.uniform(0.75, 1.25)),
+        )
 
     def _refresh_peer_verification_state(
         self,
@@ -907,17 +1365,122 @@ class FederationInboundSyncService:
                 peer.last_sync_error_detail = detail
                 peer.updated_at = datetime.now(timezone.utc)
 
+    def _claim_lease(self, *, peer_id: uuid.UUID, trigger_type: str) -> ClaimedLease | None:
+        try:
+            with self.db.transaction() as session:
+                return self.lease_repo.claim_sync(
+                    session,
+                    peer_id=peer_id,
+                    owner_instance_id=self.owner_instance_id,
+                    trigger_type=trigger_type,
+                    duration_seconds=self.settings.sync_lease_duration_seconds,
+                )
+        except IntegrityError as exc:
+            raise FederationError("peer-not-found", "Trusted peer was not found.") from exc
+
+    def _release_lease(self, lease: ClaimedLease) -> None:
+        with self.db.transaction() as session:
+            self.lease_repo.release_sync(
+                session,
+                peer_id=lease.peer_id,
+                owner_instance_id=lease.owner_instance_id,
+                fencing_token=lease.fencing_token,
+            )
+
+    def _write_operational_audit(
+        self,
+        *,
+        action: AuditAction,
+        peer_id: uuid.UUID,
+        target_id: str,
+        outcome: AuditOutcome,
+        actor_id: str | None,
+        reason: str | None = None,
+        details: dict[str, Any] | None = None,
+        session: Session | None = None,
+    ) -> None:
+        def _write_row(target_session: Session) -> None:
+            write_audit_row_sync(
+                target_session,
+                actor_type=AuditActorType.HUMAN_OPERATOR if actor_id else AuditActorType.WORKER,
+                action=action,
+                target_type=AuditTargetType.PEER,
+                target_id=target_id,
+                peer_id=peer_id,
+                outcome=outcome,
+                actor_id=actor_id,
+                reason=reason,
+                details=details,
+            )
+
+        if session is not None:
+            _write_row(session)
+            return
+        with self.db.transaction() as local_session:
+            _write_row(local_session)
+
+    def _record_health_snapshot(
+        self,
+        *,
+        peer_id: uuid.UUID,
+        peer_node_id: str,
+        discovery_reachable: bool | None,
+        jwks_reachable: bool | None,
+        feed_reachable: bool | None,
+        last_event_position: int | None,
+        round_trip_ms: int | None,
+        health_status: str,
+        compatibility_status: str,
+        error_code: str | None,
+        error_detail: str | None,
+        session: Session | None = None,
+    ) -> None:
+        safe_detail = sanitize_free_text(error_detail, max_len=1024) if error_detail else None
+
+        def _add_row(target_session: Session) -> None:
+            target_session.add(
+                FederationPeerHealthSnapshot(
+                    id=uuid.uuid4(),
+                    peer_id=peer_id,
+                    peer_node_id=peer_node_id[:256],
+                    sampled_at=datetime.now(timezone.utc),
+                    discovery_reachable=discovery_reachable,
+                    jwks_reachable=jwks_reachable,
+                    feed_reachable=feed_reachable,
+                    last_event_position=last_event_position,
+                    round_trip_ms=round_trip_ms if round_trip_ms is None else max(0, round_trip_ms),
+                    health_status=health_status,
+                    compatibility_status=compatibility_status,
+                    error_code=error_code[:64] if error_code else None,
+                    error_detail=safe_detail,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+        if session is not None:
+            _add_row(session)
+            return
+        with self.db.transaction() as local_session:
+            _add_row(local_session)
+
     def sync_peer(self, *, peer_id: uuid.UUID, trigger_type: str, max_seconds: int) -> SyncResultResponse:
         if not self.settings.inbound_enabled:
             raise FederationError("federation-inbound-disabled", "Federation inbound synchronization is disabled.")
         started = datetime.now(timezone.utc)
         stats = _SyncStats()
         attempt_id = uuid.uuid4()
-        lock_key = self._advisory_lock_key(peer_id)
-        lock_session = self.db.session_factory()
+        lease: ClaimedLease | None = None
+        phase = "discovery"
+        attempted_remote = False
+        peer_node_id_for_health: str | None = None
+        last_position_for_health: int | None = None
+        discovery_reachable = False
+        jwks_reachable = False
+        feed_reachable = False
         try:
-            locked = bool(lock_session.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": lock_key}).scalar_one())
-            if not locked:
+            lease = self._claim_lease(peer_id=peer_id, trigger_type=trigger_type)
+            if lease is None:
+                if trigger_type == "manual":
+                    raise FederationError("already-running", "Synchronization already running for this peer.")
                 return SyncResultResponse(
                     status="already-running",
                     pagesProcessed=0,
@@ -926,11 +1489,34 @@ class FederationInboundSyncService:
                     detail="Synchronization already running for this peer.",
                 )
             with self.db.transaction() as session:
-                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one_or_none()
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one_or_none()
                 if peer is None:
                     raise FederationError("peer-not-found", "Trusted peer was not found.")
+                peer_node_id_for_health = peer.peer_node_id
+                if peer.archived_at is not None:
+                    raise FederationError("peer-archived", "Peer is archived.")
                 if peer.trust_status != "trusted" or not peer.sync_enabled:
                     raise FederationError("peer-disabled", "Peer is disabled or not trusted.")
+                now = datetime.now(timezone.utc)
+                if peer.suspension_reason and (peer.suspended_until is None or peer.suspended_until > now):
+                    raise FederationError("peer-suspended", "Peer is administratively suspended.")
+                gate = self.circuit.evaluate_gate(peer)
+                if gate.transitioned:
+                    self._write_operational_audit(
+                        action=AuditAction.SYNC_CIRCUIT_HALF_OPENED,
+                        peer_id=peer_id,
+                        target_id=str(peer_id),
+                        outcome=AuditOutcome.SUCCESS,
+                        actor_id="admin" if trigger_type == "manual" else None,
+                        details={"state": gate.state.value},
+                        session=session,
+                    )
+                if not gate.allowed:
+                    if gate.reason == "circuit-open-admin-reset":
+                        raise FederationError("circuit-open-admin-reset", "Peer circuit is open and requires admin reset.")
+                    raise FederationError("circuit-open", "Peer circuit is open and backoff has not elapsed.")
                 allowed_hostnames, allowed_cidrs = self.peer_service._combined_allowlists(
                     peer_allowed_hostnames=peer.allowed_hostnames,
                     peer_allowed_cidrs=peer.allowed_cidrs,
@@ -964,34 +1550,52 @@ class FederationInboundSyncService:
                 peer.last_sync_status = "running"
                 peer.updated_at = started
 
+            if trigger_type == "manual":
+                self._write_operational_audit(
+                    action=AuditAction.SYNC_MANUAL_TRIGGERED,
+                    peer_id=peer_id,
+                    target_id=str(peer_id),
+                    outcome=AuditOutcome.SUCCESS,
+                    actor_id="admin",
+                )
+
+            attempted_remote = True
             self._refresh_peer_verification_state(
                 peer_id=peer_id,
                 allowlists=(allowed_hostnames, allowed_cidrs),
                 trigger_type=trigger_type,
             )
+            discovery_reachable = True
+            jwks_reachable = True
 
             request_cursor = stats.cursor_before
             committed_resume = stats.cursor_before
             while True:
-                if (datetime.now(timezone.utc) - started).total_seconds() > max_seconds:
+                if (datetime.now(timezone.utc) - started).total_seconds() > min(max_seconds, self.settings.sync_max_duration_seconds):
                     raise FederationError("sync-timeout", "Synchronization exceeded maximum allowed duration.")
+                phase = "changes"
                 page = self._fetch_changes_page(
                     peer_id=peer_id,
                     since=request_cursor,
                     allowed_hostnames=allowed_hostnames,
                     allowed_cidrs=allowed_cidrs,
                 )
+                feed_reachable = True
+                phase = "records"
                 batch_result = self._process_page(
                     peer_id=peer_id,
                     page=page,
                     allowed_hostnames=allowed_hostnames,
                     allowed_cidrs=allowed_cidrs,
+                    lease=lease,
                 )
                 stats.pages_processed += 1
                 stats.events_processed += batch_result[0]
                 stats.imported_records += batch_result[1]
                 committed_resume = page.resumeCursor
                 stats.cursor_after = committed_resume
+                if batch_result[2] is not None:
+                    last_position_for_health = batch_result[2]
                 if not page.hasMore:
                     break
                 if not page.nextCursor:
@@ -999,17 +1603,19 @@ class FederationInboundSyncService:
                 request_cursor = page.nextCursor
 
             with self.db.transaction() as session:
-                cursor_row = session.execute(select(FederationPeerCursor).where(FederationPeerCursor.peer_id == peer_id)).scalar_one()
-                cursor_row.cursor = committed_resume
-                cursor_row.synced_at = datetime.now(timezone.utc)
-                cursor_row.updated_at = datetime.now(timezone.utc)
-                if stats.events_processed > 0:
-                    latest_position = session.execute(
-                        select(func.max(FederationInboundEvent.remote_event_position)).where(FederationInboundEvent.source_peer_id == peer_id)
-                    ).scalar_one()
-                    cursor_row.last_remote_position = int(latest_position or 0)
-
-                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one()
+                peer = session.execute(
+                    select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                ).scalar_one()
+                circuit_closed = self.circuit.mark_success(peer)
+                if circuit_closed:
+                    self._write_operational_audit(
+                        action=AuditAction.SYNC_CIRCUIT_CLOSED,
+                        peer_id=peer_id,
+                        target_id=str(peer_id),
+                        outcome=AuditOutcome.SUCCESS,
+                        actor_id="admin" if trigger_type == "manual" else None,
+                        session=session,
+                    )
                 peer.last_sync_success_at = datetime.now(timezone.utc)
                 peer.last_sync_status = "complete"
                 peer.last_sync_error_code = None
@@ -1022,6 +1628,21 @@ class FederationInboundSyncService:
                 attempt.events_processed = stats.events_processed
                 attempt.cursor_after = committed_resume
                 attempt.completed_at = datetime.now(timezone.utc)
+            if peer_node_id_for_health is not None:
+                elapsed_ms = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
+                self._record_health_snapshot(
+                    peer_id=peer_id,
+                    peer_node_id=peer_node_id_for_health,
+                    discovery_reachable=discovery_reachable,
+                    jwks_reachable=jwks_reachable,
+                    feed_reachable=feed_reachable,
+                    last_event_position=last_position_for_health,
+                    round_trip_ms=elapsed_ms,
+                    health_status="healthy",
+                    compatibility_status="unchecked",
+                    error_code=None,
+                    error_detail=None,
+                )
             return SyncResultResponse(
                 status="complete",
                 pagesProcessed=stats.pages_processed,
@@ -1031,7 +1652,28 @@ class FederationInboundSyncService:
                 cursorAfter=stats.cursor_after,
             )
         except FederationError as exc:
-            failed_status = "partial" if stats.pages_processed > 0 else "failed"
+            classification = self.circuit.classify_failure(exc, phase=phase)
+            if trigger_type == "scheduled" and exc.code in {"peer-suspended", "circuit-open", "circuit-open-admin-reset", "peer-disabled", "peer-archived"}:
+                failed_status = "skipped"
+            else:
+                failed_status = "partial" if stats.pages_processed > 0 else "failed"
+            if classification.kind in {"transient", "permanent"}:
+                with self.db.transaction() as session:
+                    peer = session.execute(
+                        select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id).with_for_update()
+                    ).scalar_one_or_none()
+                    if peer is not None:
+                        new_state = self.circuit.mark_failure(peer, classification=classification)
+                        if new_state == CircuitState.OPEN:
+                            self._write_operational_audit(
+                                action=AuditAction.SYNC_CIRCUIT_OPENED,
+                                peer_id=peer_id,
+                                target_id=str(peer_id),
+                                outcome=AuditOutcome.SUCCESS,
+                                actor_id="admin" if trigger_type == "manual" else None,
+                                reason=classification.reason.value if classification.reason else None,
+                                session=session,
+                            )
             self._finalize_sync_attempt(
                 peer_id=peer_id,
                 attempt_id=attempt_id,
@@ -1039,6 +1681,23 @@ class FederationInboundSyncService:
                 error=exc,
                 stats=stats,
             )
+            if attempted_remote and peer_node_id_for_health is not None:
+                elapsed_ms = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
+                self._record_health_snapshot(
+                    peer_id=peer_id,
+                    peer_node_id=peer_node_id_for_health,
+                    discovery_reachable=discovery_reachable,
+                    jwks_reachable=jwks_reachable,
+                    feed_reachable=feed_reachable,
+                    last_event_position=last_position_for_health,
+                    round_trip_ms=elapsed_ms,
+                    health_status="unreachable" if exc.code in {"remote-unreachable", "remote-server-error", "remote-tls-error"} else "degraded",
+                    compatibility_status="unknown",
+                    error_code=exc.code,
+                    error_detail=_safe_health_error_detail(exc),
+                )
+            if trigger_type == "manual" and exc.code in {"peer-disabled", "peer-suspended", "circuit-open", "circuit-open-admin-reset", "peer-archived", "already-running"}:
+                raise
             return SyncResultResponse(
                 status=failed_status,
                 pagesProcessed=stats.pages_processed,
@@ -1058,12 +1717,21 @@ class FederationInboundSyncService:
                 stats=stats,
             )
             raise
+        except (KeyboardInterrupt, SystemExit):
+            self._finalize_sync_attempt(
+                peer_id=peer_id,
+                attempt_id=attempt_id,
+                status="failed",
+                error=FederationError("sync-cancelled", "Synchronization cancelled during graceful shutdown."),
+                stats=stats,
+            )
+            raise
         finally:
-            try:
-                lock_session.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": lock_key})
-                lock_session.commit()
-            finally:
-                lock_session.close()
+            if lease is not None:
+                try:
+                    self._release_lease(lease)
+                except Exception:
+                    logger.exception("Failed to release sync lease for peer %s", peer_id)
 
     def sync_all_trusted_peers_once(self, *, max_seconds_per_peer: int) -> list[tuple[uuid.UUID, SyncResultResponse]]:
         with self.db.transaction() as session:
@@ -1145,9 +1813,11 @@ class FederationInboundSyncService:
         page: RemoteChangesResponse,
         allowed_hostnames: tuple[str, ...],
         allowed_cidrs: tuple[str, ...],
-    ) -> tuple[int, int]:
+        lease: ClaimedLease,
+    ) -> tuple[int, int, int | None]:
         events_processed = 0
         imported = 0
+        latest_position: int | None = None
         current_item: Any | None = None
         try:
             with self.db.transaction() as session:
@@ -1163,38 +1833,50 @@ class FederationInboundSyncService:
                     .scalars()
                     .all()
                 )
-                key_map = {item.kid: item for item in trusted_keys}
                 expected_last = cursor_row.last_remote_position or 0
-                verified_events: list[tuple[Any, Any, RemoteRecordResponse | None]] = []
-                for item in page.events:
-                    current_item = item
-                    self._validate_event(item=item, peer=peer, key_map=key_map)
-                    payload = item.payload
-                    if payload.generatedAt > datetime.now(timezone.utc) + timedelta(seconds=self.settings.sync_max_future_seconds):
-                        raise FederationError("event-future-time", "Event generatedAt is too far in the future.")
-                    position = payload.eventPosition
-                    if position <= expected_last:
-                        existing = self._find_inbound_event(peer.peer_node_id, payload.eventId, position)
-                        if existing is None:
-                            raise FederationError("event-order", "Event position decreased unexpectedly.")
-                        if (
-                            existing.remote_event_id == uuid.UUID(payload.eventId)
-                            and existing.signed_payload_digest_sha256 == item.signed.digestSha256
-                        ):
-                            continue
-                        raise FederationError("event-replay-mismatch", "Existing event replay does not match previously accepted content.")
-                    expected_last = position
-                    remote_record: RemoteRecordResponse | None = None
-                    if payload.operation == "upsert":
-                        remote_record = self._fetch_record(
-                            peer=peer,
-                            canonical_id=payload.record.canonicalId,
-                            allowed_hostnames=allowed_hostnames,
-                            allowed_cidrs=allowed_cidrs,
-                        )
-                        self._validate_record_response(remote_record=remote_record, key_map=key_map, peer=peer, payload=payload)
-                    verified_events.append((item.payload, item.signed, remote_record))
+            key_map = {item.kid: item for item in trusted_keys}
+            verified_events: list[tuple[Any, Any, RemoteRecordResponse | None]] = []
+            for item in page.events:
+                current_item = item
+                self._validate_event(item=item, peer=peer, key_map=key_map)
+                payload = item.payload
+                if payload.generatedAt > datetime.now(timezone.utc) + timedelta(seconds=self.settings.sync_max_future_seconds):
+                    raise FederationError("event-future-time", "Event generatedAt is too far in the future.")
+                position = payload.eventPosition
+                if position <= expected_last:
+                    existing = self._find_inbound_event(peer.peer_node_id, payload.eventId, position)
+                    if existing is None:
+                        raise FederationError("event-order", "Event position decreased unexpectedly.")
+                    if (
+                        existing.remote_event_id == uuid.UUID(payload.eventId)
+                        and existing.signed_payload_digest_sha256 == item.signed.digestSha256
+                    ):
+                        continue
+                    raise FederationError("event-replay-mismatch", "Existing event replay does not match previously accepted content.")
+                expected_last = position
+                remote_record: RemoteRecordResponse | None = None
+                if payload.operation == "upsert":
+                    remote_record = self._fetch_record(
+                        peer=peer,
+                        canonical_id=payload.record.canonicalId,
+                        allowed_hostnames=allowed_hostnames,
+                        allowed_cidrs=allowed_cidrs,
+                    )
+                    self._validate_record_response(remote_record=remote_record, key_map=key_map, peer=peer, payload=payload)
+                verified_events.append((item.payload, item.signed, remote_record))
 
+            with self.db.transaction() as session:
+                still_owned = self.lease_repo.verify_still_owned_sync(
+                    session,
+                    peer_id=peer_id,
+                    owner_instance_id=lease.owner_instance_id,
+                    claimed_fencing_token=lease.fencing_token,
+                )
+                if not still_owned:
+                    raise FederationError("sync-lease-stale", "Synchronization lease is stale; page commit aborted.")
+
+                peer = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer_id)).scalar_one()
+                cursor_row = session.execute(select(FederationPeerCursor).where(FederationPeerCursor.peer_id == peer_id)).scalar_one()
                 for payload, signed, remote_record in verified_events:
                     event_id = uuid.UUID(payload.eventId)
                     existing = session.execute(
@@ -1228,16 +1910,28 @@ class FederationInboundSyncService:
                         remote_record=remote_record,
                     )
                     events_processed += 1
+                    latest_position = payload.eventPosition
                     if payload.operation == "upsert":
                         imported += 1
+
                 cursor_row.cursor = page.resumeCursor
-                if verified_events:
-                    cursor_row.last_remote_position = verified_events[-1][0].eventPosition
+                if latest_position is not None:
+                    cursor_row.last_remote_position = latest_position
                 cursor_row.synced_at = datetime.now(timezone.utc)
                 cursor_row.updated_at = datetime.now(timezone.utc)
-            return events_processed, imported
+                try:
+                    self.lease_repo.renew_sync(
+                        session,
+                        peer_id=peer_id,
+                        owner_instance_id=lease.owner_instance_id,
+                        fencing_token=lease.fencing_token,
+                        duration_seconds=self.settings.sync_lease_renewal_seconds,
+                    )
+                except LeaseConflictError as exc:
+                    raise FederationError("sync-lease-stale", "Synchronization lease is stale; page commit aborted.") from exc
+            return events_processed, imported, latest_position
         except FederationError as exc:
-            if current_item is not None:
+            if current_item is not None and exc.code != "sync-lease-stale":
                 self._persist_rejection(peer_id=peer_id, item=current_item, error=exc)
             raise
 
@@ -1545,10 +2239,6 @@ class FederationInboundSyncService:
                         )
                     )
                 return
-
-    @staticmethod
-    def _advisory_lock_key(peer_id: uuid.UUID) -> int:
-        return int.from_bytes(peer_id.bytes[:8], byteorder="big", signed=True)
 
     @staticmethod
     def _record_conflict(session: Session, *, peer: FederationTrustedPeer, record_key: str, reason: str) -> None:

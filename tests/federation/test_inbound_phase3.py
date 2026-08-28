@@ -539,8 +539,9 @@ def test_unknown_key_and_authority_mismatch_reject(fed_env):
             )
         ).scalar_one()
         key.key_status = "revoked"
-    result_revoked = sync.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
-    assert result_revoked.status == "failed"
+    with pytest.raises(FederationError) as exc:
+        sync.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
+    assert exc.value.code in {"circuit-open-admin-reset", "circuit-open"}
 
 
 def test_sync_finalizes_on_remote_schema_validation_error(fed_env):
@@ -1135,10 +1136,11 @@ def test_concurrent_sync_triggers_single_runner(fed_env):
     t = threading.Thread(target=run_first)
     t.start()
     time.sleep(0.2)
-    second = sync.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
+    with pytest.raises(FederationError) as exc:
+        sync.sync_peer(peer_id=peer.id, trigger_type="manual", max_seconds=10)
     t.join()
     assert "complete" in first_result
-    assert second.status == "already-running"
+    assert exc.value.code == "already-running"
 
 
 def test_tombstone_keeps_imported_history_and_provenance(fed_env):

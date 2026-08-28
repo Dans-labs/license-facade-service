@@ -35,6 +35,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 # ---------------------------------------------------------------------------
 # Duration bounds
@@ -151,6 +152,17 @@ _VERIFY_SQL = text("""
     FOR UPDATE
 """)
 
+_RENEW_SQL = text("""
+    UPDATE federation_sync_leases
+       SET expires_at   = now() + (:duration_seconds * INTERVAL '1 second'),
+           heartbeat_at = now()
+     WHERE peer_id           = :peer_id
+       AND owner_instance_id = :owner_instance_id
+       AND fencing_token     = :fencing_token
+       AND expires_at > now()
+    RETURNING expires_at
+""")
+
 
 # ---------------------------------------------------------------------------
 # Repository
@@ -211,6 +223,35 @@ class SyncLeaseRepository:
             expires_at=row.expires_at,
         )
 
+    def claim_sync(
+        self,
+        session: Session,
+        *,
+        peer_id: uuid.UUID,
+        owner_instance_id: uuid.UUID,
+        trigger_type: str,
+        duration_seconds: int,
+    ) -> ClaimedLease | None:
+        _validate_duration(duration_seconds)
+        result = session.execute(
+            _CLAIM_SQL,
+            {
+                "peer_id": peer_id,
+                "owner_instance_id": owner_instance_id,
+                "duration_seconds": duration_seconds,
+                "trigger_type": trigger_type,
+            },
+        )
+        row = result.fetchone()
+        if row is None or row.owner_instance_id != owner_instance_id:
+            return None
+        return ClaimedLease(
+            peer_id=peer_id,
+            owner_instance_id=owner_instance_id,
+            fencing_token=row.fencing_token,
+            expires_at=row.expires_at,
+        )
+
     async def release(
         self,
         session: AsyncSession,
@@ -226,6 +267,24 @@ class SyncLeaseRepository:
         it after fencing-token expiry, or it was already released).
         """
         result = await session.execute(
+            _RELEASE_SQL,
+            {
+                "peer_id": peer_id,
+                "owner_instance_id": owner_instance_id,
+                "fencing_token": fencing_token,
+            },
+        )
+        return result.rowcount > 0
+
+    def release_sync(
+        self,
+        session: Session,
+        *,
+        peer_id: uuid.UUID,
+        owner_instance_id: uuid.UUID,
+        fencing_token: int,
+    ) -> bool:
+        result = session.execute(
             _RELEASE_SQL,
             {
                 "peer_id": peer_id,
@@ -269,3 +328,78 @@ class SyncLeaseRepository:
             and row.fencing_token == claimed_fencing_token
             and bool(row.not_expired)
         )
+
+    def verify_still_owned_sync(
+        self,
+        session: Session,
+        *,
+        peer_id: uuid.UUID,
+        owner_instance_id: uuid.UUID,
+        claimed_fencing_token: int,
+    ) -> bool:
+        result = session.execute(_VERIFY_SQL, {"peer_id": peer_id})
+        row = result.fetchone()
+        if row is None:
+            return False
+        return (
+            row.owner_instance_id == owner_instance_id
+            and row.fencing_token == claimed_fencing_token
+            and bool(row.not_expired)
+        )
+
+    async def renew(
+        self,
+        session: AsyncSession,
+        *,
+        peer_id: uuid.UUID,
+        owner_instance_id: uuid.UUID,
+        fencing_token: int,
+        duration_seconds: int,
+    ) -> datetime:
+        """Renew an existing lease using PostgreSQL time.
+
+        The lease is renewed only when owner, fencing token, and non-expired
+        state all match exactly. Returns the exact new expires_at from
+        PostgreSQL.
+
+        Raises LeaseConflictError when the lease is stale, expired, or owned
+        by someone else.
+        """
+        _validate_duration(duration_seconds)
+        result = await session.execute(
+            _RENEW_SQL,
+            {
+                "peer_id": peer_id,
+                "owner_instance_id": owner_instance_id,
+                "fencing_token": fencing_token,
+                "duration_seconds": duration_seconds,
+            },
+        )
+        row = result.fetchone()
+        if row is None:
+            raise LeaseConflictError("Lease renewal rejected for stale, expired, or mismatched owner/token.")
+        return row.expires_at
+
+    def renew_sync(
+        self,
+        session: Session,
+        *,
+        peer_id: uuid.UUID,
+        owner_instance_id: uuid.UUID,
+        fencing_token: int,
+        duration_seconds: int,
+    ) -> datetime:
+        _validate_duration(duration_seconds)
+        result = session.execute(
+            _RENEW_SQL,
+            {
+                "peer_id": peer_id,
+                "owner_instance_id": owner_instance_id,
+                "fencing_token": fencing_token,
+                "duration_seconds": duration_seconds,
+            },
+        )
+        row = result.fetchone()
+        if row is None:
+            raise LeaseConflictError("Lease renewal rejected for stale, expired, or mismatched owner/token.")
+        return row.expires_at

@@ -29,6 +29,10 @@ def _as_csv(name: str) -> tuple[str, ...]:
         return ()
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
+# Keep these bounds aligned with federation/lease.py duration validation.
+_SYNC_LEASE_MIN_SECONDS = 10
+_SYNC_LEASE_MAX_SECONDS = 3_600
+
 
 @dataclass(frozen=True)
 class FederationSettings:
@@ -61,6 +65,14 @@ class FederationSettings:
     sync_max_jwks_keys: int
     sync_max_events_per_page: int
     sync_max_future_seconds: int
+    sync_max_duration_seconds: int
+    sync_lease_duration_seconds: int
+    sync_lease_renewal_seconds: int
+    sync_probe_timeout_seconds: int
+    circuit_open_threshold: int
+    circuit_base_open_seconds: int
+    circuit_max_open_seconds: int
+    circuit_half_open_probe_limit: int
     sync_allowed_ports: tuple[int, ...]
     sync_allowed_hostnames: tuple[str, ...]
     sync_allowed_cidrs: tuple[str, ...]
@@ -113,6 +125,14 @@ class FederationSettings:
         max_embedded_payload_bytes = _as_int("FEDERATION_SYNC_MAX_EMBEDDED_PAYLOAD_BYTES", 512_000)
         max_jwks_keys = _as_int("FEDERATION_SYNC_MAX_JWKS_KEYS", 32)
         max_events_per_page = _as_int("FEDERATION_SYNC_MAX_EVENTS_PER_PAGE", 200)
+        sync_max_duration_seconds = _as_int("FEDERATION_SYNC_MAX_DURATION_SECONDS", 300)
+        sync_lease_duration_seconds = _as_int("FEDERATION_SYNC_LEASE_DURATION_SECONDS", 120)
+        sync_lease_renewal_seconds = _as_int("FEDERATION_SYNC_LEASE_RENEWAL_SECONDS", 60)
+        sync_probe_timeout_seconds = _as_int("FEDERATION_SYNC_PROBE_TIMEOUT_SECONDS", 10)
+        circuit_open_threshold = _as_int("FEDERATION_SYNC_CIRCUIT_OPEN_THRESHOLD", 3)
+        circuit_base_open_seconds = _as_int("FEDERATION_SYNC_CIRCUIT_BASE_OPEN_SECONDS", 30)
+        circuit_max_open_seconds = _as_int("FEDERATION_SYNC_CIRCUIT_MAX_OPEN_SECONDS", 900)
+        circuit_half_open_probe_limit = _as_int("FEDERATION_SYNC_CIRCUIT_HALF_OPEN_PROBE_LIMIT", 1)
         errors: list[str] = []
 
         parsed_node_id: str | None = None
@@ -183,6 +203,38 @@ class FederationSettings:
                 errors.append("FEDERATION_SYNC_MAX_EVENTS_PER_PAGE must be positive")
             if any(port <= 0 or port > 65535 for port in allowed_ports):
                 errors.append("FEDERATION_SYNC_ALLOWED_PORTS must contain valid TCP ports")
+            if sync_max_duration_seconds <= 0:
+                errors.append("FEDERATION_SYNC_MAX_DURATION_SECONDS must be positive")
+            if sync_lease_duration_seconds <= 0:
+                errors.append("FEDERATION_SYNC_LEASE_DURATION_SECONDS must be positive")
+            if sync_lease_duration_seconds < _SYNC_LEASE_MIN_SECONDS or sync_lease_duration_seconds > _SYNC_LEASE_MAX_SECONDS:
+                errors.append(
+                    "FEDERATION_SYNC_LEASE_DURATION_SECONDS must be between "
+                    f"{_SYNC_LEASE_MIN_SECONDS} and {_SYNC_LEASE_MAX_SECONDS}"
+                )
+            if sync_lease_renewal_seconds <= 0:
+                errors.append("FEDERATION_SYNC_LEASE_RENEWAL_SECONDS must be positive")
+            if sync_lease_renewal_seconds < _SYNC_LEASE_MIN_SECONDS or sync_lease_renewal_seconds > _SYNC_LEASE_MAX_SECONDS:
+                errors.append(
+                    "FEDERATION_SYNC_LEASE_RENEWAL_SECONDS must be between "
+                    f"{_SYNC_LEASE_MIN_SECONDS} and {_SYNC_LEASE_MAX_SECONDS}"
+                )
+            if sync_probe_timeout_seconds <= 0:
+                errors.append("FEDERATION_SYNC_PROBE_TIMEOUT_SECONDS must be positive")
+            if circuit_open_threshold <= 0 or circuit_open_threshold > 100:
+                errors.append("FEDERATION_SYNC_CIRCUIT_OPEN_THRESHOLD must be between 1 and 100")
+            if circuit_base_open_seconds <= 0:
+                errors.append("FEDERATION_SYNC_CIRCUIT_BASE_OPEN_SECONDS must be positive")
+            if circuit_max_open_seconds <= 0:
+                errors.append("FEDERATION_SYNC_CIRCUIT_MAX_OPEN_SECONDS must be positive")
+            if circuit_base_open_seconds > circuit_max_open_seconds:
+                errors.append("FEDERATION_SYNC_CIRCUIT_BASE_OPEN_SECONDS must be <= FEDERATION_SYNC_CIRCUIT_MAX_OPEN_SECONDS")
+            if circuit_half_open_probe_limit <= 0 or circuit_half_open_probe_limit > 20:
+                errors.append("FEDERATION_SYNC_CIRCUIT_HALF_OPEN_PROBE_LIMIT must be between 1 and 20")
+            if sync_lease_renewal_seconds > sync_lease_duration_seconds:
+                errors.append("FEDERATION_SYNC_LEASE_RENEWAL_SECONDS must be <= FEDERATION_SYNC_LEASE_DURATION_SECONDS")
+            if sync_max_duration_seconds < sync_lease_renewal_seconds:
+                errors.append("FEDERATION_SYNC_MAX_DURATION_SECONDS must be >= FEDERATION_SYNC_LEASE_RENEWAL_SECONDS")
 
         return cls(
             enabled=enabled,
@@ -214,6 +266,14 @@ class FederationSettings:
             sync_max_jwks_keys=max_jwks_keys,
             sync_max_events_per_page=max_events_per_page,
             sync_max_future_seconds=_as_int("FEDERATION_SYNC_MAX_FUTURE_SECONDS", 300),
+            sync_max_duration_seconds=sync_max_duration_seconds,
+            sync_lease_duration_seconds=sync_lease_duration_seconds,
+            sync_lease_renewal_seconds=sync_lease_renewal_seconds,
+            sync_probe_timeout_seconds=sync_probe_timeout_seconds,
+            circuit_open_threshold=circuit_open_threshold,
+            circuit_base_open_seconds=circuit_base_open_seconds,
+            circuit_max_open_seconds=circuit_max_open_seconds,
+            circuit_half_open_probe_limit=circuit_half_open_probe_limit,
             sync_allowed_ports=allowed_ports,
             sync_allowed_hostnames=_as_csv("FEDERATION_SYNC_ALLOWED_HOSTNAMES"),
             sync_allowed_cidrs=_as_csv("FEDERATION_SYNC_ALLOWED_CIDRS"),

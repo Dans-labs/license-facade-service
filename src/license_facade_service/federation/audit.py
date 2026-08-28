@@ -37,6 +37,7 @@ from enum import Enum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from src.license_facade_service.db.models.federation import FederationOperationalAudit
 
@@ -446,6 +447,66 @@ class AuditDetailBuilder:
         return dict(self._data)
 
 
+def sanitize_free_text(value: str, *, max_len: int = _MAX_REASON_LEN) -> str:
+    sanitized = _apply_value_patterns(value)
+    if len(sanitized) > max_len:
+        sanitized = sanitized[:max_len]
+    return sanitized
+
+
+def build_audit_row(
+    *,
+    actor_type: AuditActorType,
+    action: AuditAction,
+    target_type: AuditTargetType,
+    target_id: str,
+    outcome: AuditOutcome,
+    actor_id: str | None = None,
+    peer_id: uuid.UUID | None = None,
+    request_id: str | None = None,
+    reason: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> FederationOperationalAudit:
+    if target_id and len(target_id) > _MAX_TARGET_ID_LEN:
+        raise AuditValidationError(
+            f"target_id exceeds {_MAX_TARGET_ID_LEN} characters "
+            f"(got {len(target_id)}). Use a stable internal UUID as target_id; "
+            "include the canonical identifier in the details mapping."
+        )
+    if request_id and len(request_id) > _MAX_REQUEST_ID_LEN:
+        raise AuditValidationError(
+            f"request_id exceeds {_MAX_REQUEST_ID_LEN} characters "
+            f"(got {len(request_id)})."
+        )
+    if actor_id and len(actor_id) > _MAX_ACTOR_ID_LEN:
+        raise AuditValidationError(
+            f"actor_id exceeds {_MAX_ACTOR_ID_LEN} characters "
+            f"(got {len(actor_id)})."
+        )
+    if reason and len(reason) > _MAX_REASON_LEN:
+        raise AuditValidationError(
+            f"reason exceeds {_MAX_REASON_LEN} characters "
+            f"(got {len(reason)})."
+        )
+
+    sanitized: dict[str, Any] | None = None
+    if details is not None:
+        sanitized = _sanitize_details(details)
+
+    return FederationOperationalAudit(
+        actor_type=actor_type.value,
+        actor_id=actor_id,
+        action=action.value,
+        target_type=target_type.value,
+        target_id=target_id,
+        peer_id=peer_id,
+        outcome=outcome.value,
+        reason=reason,
+        request_id=request_id,
+        redacted_details=sanitized,
+    )
+
+
 # ---------------------------------------------------------------------------
 # write_audit_row
 # ---------------------------------------------------------------------------
@@ -484,45 +545,47 @@ async def write_audit_row(
     - All supplied details are recursively sanitized regardless of source.
     - Sanitized details exceeding _MAX_DETAILS_BYTES raise AuditDetailsTooLarge.
     """
-    # Validate identity-bearing fields: reject rather than silently truncate.
-    if target_id and len(target_id) > _MAX_TARGET_ID_LEN:
-        raise AuditValidationError(
-            f"target_id exceeds {_MAX_TARGET_ID_LEN} characters "
-            f"(got {len(target_id)}). Use a stable internal UUID as target_id; "
-            "include the canonical identifier in the details mapping."
-        )
-    if request_id and len(request_id) > _MAX_REQUEST_ID_LEN:
-        raise AuditValidationError(
-            f"request_id exceeds {_MAX_REQUEST_ID_LEN} characters "
-            f"(got {len(request_id)})."
-        )
-    if actor_id and len(actor_id) > _MAX_ACTOR_ID_LEN:
-        raise AuditValidationError(
-            f"actor_id exceeds {_MAX_ACTOR_ID_LEN} characters "
-            f"(got {len(actor_id)})."
-        )
-    if reason and len(reason) > _MAX_REASON_LEN:
-        raise AuditValidationError(
-            f"reason exceeds {_MAX_REASON_LEN} characters "
-            f"(got {len(reason)})."
-        )
-
-    # Sanitize all supplied details regardless of their source.
-    sanitized: dict[str, Any] | None = None
-    if details is not None:
-        sanitized = _sanitize_details(details)
-
-    row = FederationOperationalAudit(
-        actor_type=actor_type.value,
-        actor_id=actor_id,
-        action=action.value,
-        target_type=target_type.value,
+    row = build_audit_row(
+        actor_type=actor_type,
+        action=action,
+        target_type=target_type,
         target_id=target_id,
+        outcome=outcome,
+        actor_id=actor_id,
         peer_id=peer_id,
-        outcome=outcome.value,
-        reason=reason,
         request_id=request_id,
-        redacted_details=sanitized,
+        reason=reason,
+        details=details,
+    )
+    session.add(row)
+    return row
+
+
+def write_audit_row_sync(
+    session: Session,
+    *,
+    actor_type: AuditActorType,
+    action: AuditAction,
+    target_type: AuditTargetType,
+    target_id: str,
+    outcome: AuditOutcome,
+    actor_id: str | None = None,
+    peer_id: uuid.UUID | None = None,
+    request_id: str | None = None,
+    reason: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> FederationOperationalAudit:
+    row = build_audit_row(
+        actor_type=actor_type,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        outcome=outcome,
+        actor_id=actor_id,
+        peer_id=peer_id,
+        request_id=request_id,
+        reason=reason,
+        details=details,
     )
     session.add(row)
     return row

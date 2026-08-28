@@ -176,3 +176,30 @@ Implemented:
 - maintenance commands: `process`, `retry`, `requeue`, `rebuild`, `reconcile`;
 - Fuseki outages do not block PostgreSQL resolution; failed RDF jobs retry with leases/backoff and can be dead-lettered;
 - rebuild/reconcile operate only on graphs owned by this service.
+
+## Federation Phase 5 Increment 3 (lease-fenced sync coordination)
+
+Implemented:
+
+- synchronization uses persisted per-peer leases with globally monotonic fencing tokens;
+- lease claim/load/network/page-commit/release flow keeps all remote HTTP (discovery/JWKS/changes/records) outside DB transactions;
+- per-page commit verifies lease ownership (peer + owner instance + fencing token + DB-time expiry) before import/cursor update;
+- lease heartbeat/expiry are renewed at page commit; stale fencing aborts page commit and cursor advancement;
+- circuit breaker states: `closed`, `open`, `half_open` with transient/permanent failure handling;
+- admin-only controls:
+  - `POST /api/v1/admin/federation/peers/{peer-id}/suspend`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/resume`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/circuit/reset`
+  - `POST /api/v1/admin/federation/peers/{peer-id}/probe`
+- health snapshots are appended after actual sync attempts and explicit probes;
+- operational audit events are written for sync circuit transitions, probe, suspension/resume, and circuit reset.
+
+Increment 3 intentionally does **not** include:
+
+- peer-key inspection/approval workflows;
+- local signing-key rotation workflows;
+- cursor replay/checkpoint tooling;
+- RDF recovery enhancements beyond existing Phase 4 behavior;
+- rate limiting / metrics / logging expansions;
+- protocol-compatibility enforcement expansion;
+- production compose hardening changes.
