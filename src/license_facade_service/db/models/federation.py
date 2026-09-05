@@ -200,6 +200,8 @@ class FederationChangeEvent(Base):
     event_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, default="record.changed")
     authority_node_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # NULL is legacy compatibility only; new authoritative revision APIs must require a value.
+    idempotency_key: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     record_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("federation_records.id", ondelete="SET NULL")
     )
@@ -514,6 +516,13 @@ class FederationRdfGraphState(Base):
 Index("ix_federation_records_authority", FederationRecord.authority_node_id)
 Index("ix_federation_records_canonical_id", FederationRecord.canonical_id)
 Index("ix_federation_records_imported_peer", FederationRecord.imported_from_peer_id)
+Index(
+    "uix_fce_authority_idempotency",
+    FederationChangeEvent.authority_node_id,
+    FederationChangeEvent.idempotency_key,
+    unique=True,
+    postgresql_where=text("idempotency_key IS NOT NULL"),
+)
 Index("ix_federation_record_aliases_record_id", FederationRecordAlias.record_id)
 Index("ix_federation_representations_record_id", FederationRecordRepresentation.record_id)
 Index("ix_federation_provenance_record_id", FederationRecordProvenance.record_id)

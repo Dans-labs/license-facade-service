@@ -16,6 +16,7 @@ from uuid import UUID, NAMESPACE_DNS, uuid5
 
 import httpx
 from pydantic import BaseModel, Field
+from rdflib import Graph, URIRef
 from sqlalchemy import or_, select
 
 from src.license_facade_service.db.models.custom_licence import CustomLicence, CustomLicenceAlias, normalize_alias
@@ -78,6 +79,40 @@ ALLOWED_REL_IRIS = {
     "https://www.dublincore.org/specifications/dublin-core/dcmi-terms/",
     "http://schema.org/",
     "https://schema.org/",
+}
+
+REL_TERM_NAMESPACES = {
+    "https://www.w3.org/ns/odrl/2/": {"https://www.w3.org/ns/odrl/2/", "http://www.w3.org/ns/odrl/2/"},
+    "http://www.w3.org/ns/odrl/2/": {"https://www.w3.org/ns/odrl/2/", "http://www.w3.org/ns/odrl/2/"},
+    "https://www.w3.org/ns/odrl.jsonld": {"https://www.w3.org/ns/odrl/2/", "http://www.w3.org/ns/odrl/2/"},
+    "http://www.w3.org/ns/odrl.jsonld": {"https://www.w3.org/ns/odrl/2/", "http://www.w3.org/ns/odrl/2/"},
+    "https://www.w3.org/ns/odrl-profile/": {"https://www.w3.org/ns/odrl/2/", "http://www.w3.org/ns/odrl/2/", "https://www.w3.org/ns/odrl-profile/", "http://www.w3.org/ns/odrl-profile/"},
+    "http://www.w3.org/ns/odrl-profile/": {"https://www.w3.org/ns/odrl/2/", "http://www.w3.org/ns/odrl/2/", "https://www.w3.org/ns/odrl-profile/", "http://www.w3.org/ns/odrl-profile/"},
+    "https://openrel.org/ns#": {"https://openrel.org/ns#", "http://openrel.org/ns#"},
+    "http://openrel.org/ns#": {"https://openrel.org/ns#", "http://openrel.org/ns#"},
+    "http://creativecommons.org/ns#": {"http://creativecommons.org/ns#", "https://creativecommons.org/ns#"},
+    "https://opensource.creativecommons.org/ccrel/": {"https://opensource.creativecommons.org/ccrel/", "http://opensource.creativecommons.org/ccrel/"},
+    "https://dalicc.github.io/": {"https://dalicc.github.io/", "http://dalicc.github.io/"},
+    "https://www.dublincore.org/specifications/dublin-core/dcmi-terms/": {"https://www.dublincore.org/specifications/dublin-core/dcmi-terms/"},
+    "http://schema.org/": {"http://schema.org/"},
+    "https://schema.org/": {"https://schema.org/"},
+}
+
+REL_TERM_PREFIXES = {
+    "https://www.w3.org/ns/odrl/2/": {"odrl"},
+    "http://www.w3.org/ns/odrl/2/": {"odrl"},
+    "https://www.w3.org/ns/odrl.jsonld": {"odrl"},
+    "http://www.w3.org/ns/odrl.jsonld": {"odrl"},
+    "https://www.w3.org/ns/odrl-profile/": {"odrl"},
+    "http://www.w3.org/ns/odrl-profile/": {"odrl"},
+    "https://openrel.org/ns#": {"openrel"},
+    "http://openrel.org/ns#": {"openrel"},
+    "http://creativecommons.org/ns#": {"cc"},
+    "https://opensource.creativecommons.org/ccrel/": {"cc"},
+    "https://dalicc.github.io/": {"dali"},
+    "https://www.dublincore.org/specifications/dublin-core/dcmi-terms/": {"dcterms"},
+    "http://schema.org/": {"schema"},
+    "https://schema.org/": {"schema"},
 }
 
 
@@ -605,6 +640,34 @@ class LicenseService:
                 return False
         return True
 
+    def _graph_uses_declared_vocabulary(self, graph: Graph, declared_iris: list[str]) -> bool:
+        semantically_relevant = set()
+        semantic_prefixes = set()
+        for iri in declared_iris:
+            if not iri:
+                continue
+            semantically_relevant.update(REL_TERM_NAMESPACES.get(iri, {iri}))
+            semantic_prefixes.update(REL_TERM_PREFIXES.get(iri, set()))
+
+        for _, predicate, obj in graph.triples((None, None, None)):
+            predicate_value = str(predicate)
+            if any(predicate_value.startswith(namespace) for namespace in semantically_relevant):
+                return True
+            if ":" in predicate_value:
+                prefix = predicate_value.split(":", 1)[0]
+                if prefix in semantic_prefixes:
+                    return True
+
+            if isinstance(obj, URIRef):
+                obj_value = str(obj)
+                if any(obj_value.startswith(namespace) for namespace in semantically_relevant):
+                    return True
+                if ":" in obj_value:
+                    prefix = obj_value.split(":", 1)[0]
+                    if prefix in semantic_prefixes:
+                        return True
+        return False
+
     def _validate_machine_representation(self, descriptor: MachineRepresentation) -> bool:
         if descriptor.mediaType not in (
             "application/ld+json",
@@ -615,23 +678,38 @@ class LicenseService:
             return False
         if not descriptor.content and not descriptor.href:
             return False
+        if not self._validate_vocabulary(descriptor):
+            return False
+
+        declared_iris = [
+            self._normalize_rel(descriptor.profile),
+            self._normalize_rel(descriptor.vocabulary),
+        ]
+        declared_iris = [iri for iri in declared_iris if iri]
+
         if descriptor.content is not None:
             if descriptor.mediaType in {"application/json", "application/ld+json"}:
                 if not is_valid_json_document(descriptor.content):
                     return False
                 payload = json.loads(descriptor.content) if isinstance(descriptor.content, str) else descriptor.content
-                if isinstance(payload, dict):
-                    graph_text = json.dumps(payload)
-                else:
-                    graph_text = json.dumps(payload)
+                if not isinstance(payload, (dict, list)):
+                    return False
+                graph_text = json.dumps(payload)
+                try:
+                    graph = Graph()
+                    graph.parse(data=graph_text, format="json-ld")
+                except Exception:
+                    return False
             else:
                 graph_text = descriptor.content if isinstance(descriptor.content, str) else json.dumps(descriptor.content)
                 try:
-                    parse_rdf(graph_text, descriptor.mediaType)
+                    graph = parse_rdf(graph_text, descriptor.mediaType)
                 except Exception:
                     return False
-        if not self._validate_vocabulary(descriptor):
-            return False
+
+            if declared_iris and not self._graph_uses_declared_vocabulary(graph, declared_iris):
+                return False
+
         return True
 
     def _validate_original_representation(self, descriptor: OriginalRepresentation | None) -> bool:
@@ -644,55 +722,132 @@ class LicenseService:
     def _validate_legal_representation(self, descriptor: LegalRepresentation | None) -> bool:
         if descriptor is None:
             return False
-        if not descriptor.content:
-            return False
-        return descriptor.mediaType in {"text/plain", "text/html", "text/markdown"}
+        if descriptor.content:
+            return descriptor.mediaType in {"text/plain", "text/html", "text/markdown"}
+        return bool(descriptor.href)
 
     def _validate_encoding_representation(self, descriptor: EncodingRepresentation | None) -> bool:
         return bool(descriptor and descriptor.href)
+
+    def _validate_table5_crossrefs(self, details: dict[str, Any]) -> tuple[list[str], list[str]]:
+        missing: list[str] = []
+        invalid: list[str] = []
+        required_fields = (
+            ("match", "match"),
+            ("URL", "url"),
+            ("isValid", "isValid"),
+            ("isLive", "isLive"),
+            ("timeStamp", "timestamp"),
+            ("isWayBackLink", "isWayBackLink"),
+            ("order", "order"),
+        )
+
+        for index, raw in enumerate(details.get("crossRef", [])):
+            if not isinstance(raw, dict):
+                for canonical, _ in required_fields:
+                    invalid.append(f"crossRef[{index}].{canonical}")
+                continue
+
+            row_values = {
+                "match": raw.get("match"),
+                "URL": raw.get("url") if "url" in raw else raw.get("URL"),
+                "isValid": raw.get("isValid"),
+                "isLive": raw.get("isLive"),
+                "timeStamp": raw.get("timestamp") if "timestamp" in raw else raw.get("timeStamp"),
+                "isWayBackLink": raw.get("isWayBackLink"),
+                "order": raw.get("order"),
+            }
+
+            for canonical, _ in required_fields:
+                value = row_values[canonical]
+                path = f"crossRef[{index}].{canonical}"
+                if value is None:
+                    missing.append(path)
+                    continue
+
+                if canonical in {"match", "isValid", "isLive", "isWayBackLink"}:
+                    if type(value) is not bool:
+                        invalid.append(path)
+                    continue
+
+                if canonical == "URL":
+                    parsed = urlparse(str(value))
+                    if parsed.scheme != "https" or not parsed.netloc:
+                        invalid.append(path)
+                    continue
+
+                if canonical == "timeStamp":
+                    if not isinstance(value, str):
+                        invalid.append(path)
+                        continue
+                    normalized = value.replace("Z", "+00:00")
+                    try:
+                        datetime.fromisoformat(normalized)
+                    except ValueError:
+                        invalid.append(path)
+                    continue
+
+                if canonical == "order" and (type(value) is not int):
+                    invalid.append(path)
+
+        return missing, invalid
 
     def _crossrefs_from_spdx(self, details: dict[str, Any]) -> list[CrossReference]:
         cross_refs: list[CrossReference] = []
         for cross_ref in details.get("crossRef", []):
             if not isinstance(cross_ref, dict):
                 continue
-            url = cross_ref.get("url") or cross_ref.get("URL")
+            url = cross_ref.get("URL") or cross_ref.get("url")
             if not url:
                 continue
-            cross_refs.append(
-                CrossReference(
+            raw_timestamp = cross_ref.get("timeStamp")
+            if raw_timestamp is None:
+                raw_timestamp = cross_ref.get("timestamp")
+            normalized_timestamp = raw_timestamp
+            if isinstance(raw_timestamp, str):
+                candidate = raw_timestamp.strip()
+                if candidate.endswith("Z"):
+                    candidate = f"{candidate[:-1]}+00:00"
+                try:
+                    normalized_timestamp = datetime.fromisoformat(candidate).isoformat()
+                except ValueError:
+                    normalized_timestamp = raw_timestamp
+            try:
+                normalized = CrossReference(
                     type="upstream",
                     URL=url,
                     match=_coerce_optional_bool(cross_ref.get("match")),
                     isValid=_coerce_optional_bool(cross_ref.get("isValid")),
                     isLive=_coerce_optional_bool(cross_ref.get("isLive")),
-                    timeStamp=cross_ref.get("timestamp") or cross_ref.get("timeStamp"),
+                    timeStamp=normalized_timestamp,
                     isWayBackLink=_coerce_optional_bool(cross_ref.get("isWayBackLink")),
                     order=cross_ref.get("order"),
                     provenance="spdx",
-                    source=details.get("detailsUrl"),
+                    source=details.get("spdxDetailsURL") or details.get("detailsUrl") or details.get("detailsURL"),
                 )
-            )
+            except ValueError:
+                continue
+            cross_refs.append(normalized)
         return cross_refs
 
     def _table6_crossrefs(self, resolved: ResolvedLicense, reps: dict[str, Any]) -> list[CrossReference]:
         items = self._crossrefs_from_spdx(resolved.details)
-        for relation in ("original", "machine", "legal"):
+        local_urls = self.representation_links(resolved)
+        for relation in ("original", "machine", "legal", "encoding"):
             rep = reps.get(relation)
             if not rep:
                 continue
             if isinstance(rep, dict):
-                href = rep.get("href") or rep.get("source")
                 authority = rep.get("authority")
                 curator = rep.get("curator")
                 provenance = rep.get("provenance")
                 source = rep.get("source")
             else:
-                href = rep.href or rep.source
                 authority = rep.authority
                 curator = rep.curator
                 provenance = rep.provenance
                 source = rep.source
+            href = local_urls.get(relation)
             if not href:
                 continue
             items.append(
@@ -784,24 +939,37 @@ class LicenseService:
         machine = self._select_machine_representation(resolved)
         encoding = self._select_encoding_representation(resolved)
 
-        missing = []
+        missing_representations = []
         if original is None:
-            missing.append("original")
+            missing_representations.append("original")
         if machine is None:
-            missing.append("machine")
+            missing_representations.append("machine")
+
+        missing_table4_fields = []
+        for field_name in ("licenseText", "standardLicenseTemplate", "licenseTextHtml"):
+            value = details.get(field_name)
+            if value is None:
+                missing_table4_fields.append(field_name)
+                continue
+            if isinstance(value, str) and not value.strip():
+                missing_table4_fields.append(field_name)
+
+        missing_table5_fields, invalid_table5_fields = self._validate_table5_crossrefs(details)
+        missing_metadata_fields = missing_table4_fields + missing_table5_fields
 
         conformance = ConformanceStatus(
-            conformant=not missing,
+            conformant=not missing_representations and not missing_metadata_fields and not invalid_table5_fields,
             specification="LICENCE FACADE SERVICE - Rights & Ethics",
             requirements={
                 "LFS-REQ-2-04": ConformanceRequirement(
-                    status="passed" if not missing else "failed",
-                    missing=missing,
+                    status="passed" if not missing_representations else "failed",
+                    missing=missing_representations,
                     note="Table 2 mandatory representation coverage",
                 ),
                 "LFS-REQ-4-01": ConformanceRequirement(
-                    status="passed" if not missing else "failed",
-                    missing=missing,
+                    status="passed" if not missing_metadata_fields and not invalid_table5_fields else "failed",
+                    missing=missing_metadata_fields,
+                    invalid=invalid_table5_fields,
                 ),
             },
         )
@@ -817,15 +985,24 @@ class LicenseService:
             {"original": original, "legal": legal, "machine": machine, "encoding": encoding},
         )
         details_url = f"/api/v1/licenses/{resolved.license_id}/json"
+        reference_number = details.get("referenceNumber") if "referenceNumber" in details else record.get("referenceNumber")
+        is_fsf_libre = details.get("isFsfLibre") if "isFsfLibre" in details else record.get("isFsfLibre")
+        spdx_details_url = (
+            record.get("spdxDetailsURL")
+            or record.get("detailsUrl")
+            or record.get("detailsURL")
+            or details.get("detailsURL")
+            or details.get("detailsUrl")
+        )
         metadata = {
             "uri": resolved.uri,
-            "referenceNumber": record.get("referenceNumber"),
+            "referenceNumber": reference_number,
             "licenseId": resolved.license_id,
             "licenseID": resolved.license_id,
             "licenceID": resolved.license_id,
             "name": record.get("name") or details.get("name"),
             "detailsURL": details_url,
-            "spdxDetailsURL": record.get("detailsUrl") or record.get("detailsURL"),
+            "spdxDetailsURL": spdx_details_url,
             "reference": record.get("reference"),
             "isDeprecatedLicenseId": bool(record.get("isDeprecatedLicenseId", False)),
             "isDeprecatedLicenseID": bool(record.get("isDeprecatedLicenseId", False)),
@@ -834,6 +1011,9 @@ class LicenseService:
             "licenseText": details.get("licenseText"),
             "standardLicenseTemplate": details.get("standardLicenseTemplate"),
             "licenseTextHtml": details.get("licenseTextHtml"),
+            "licenseComments": details.get("licenseComments"),
+            "standardLicenseHeader": details.get("standardLicenseHeader"),
+            "standardLicenseHeaderTemplate": details.get("standardLicenseHeaderTemplate"),
             "crossRef": [item.model_dump(exclude_none=True) for item in cross_refs],
             "representations": {
                 key: value.model_dump(exclude_none=True)
@@ -849,21 +1029,28 @@ class LicenseService:
             "representationStatus": representation_status,
             "_links": self.representation_links(resolved),
         }
-        if "isFsfLibre" in details:
-            metadata["isFsfLibre"] = details.get("isFsfLibre")
+        if is_fsf_libre is not None:
+            metadata["isFsfLibre"] = is_fsf_libre
         return metadata
 
     def build_inventory_item(self, record: dict[str, Any]) -> LicenseInventoryItem:
         license_id = record.get("licenseId")
         return LicenseInventoryItem(
             uri=record.get("uri") or generate_license_uri(license_id),
+            referenceNumber=record.get("referenceNumber"),
             licenseId=license_id,
             name=record.get("name"),
             isDeprecatedLicenseId=bool(record.get("isDeprecatedLicenseId", False)),
             isOsiApproved=bool(record.get("isOsiApproved", False)),
             seeAlso=record.get("seeAlso", []),
-            detailsURL=record.get("detailsUrl"),
+            detailsURL=f"/api/v1/licenses/{license_id}/json",
+            spdxDetailsURL=(
+                record.get("spdxDetailsURL")
+                or record.get("detailsUrl")
+                or record.get("detailsURL")
+            ),
             reference=record.get("reference"),
+            isFsfLibre=record.get("isFsfLibre"),
         )
 
     def _render_html(self, metadata: dict[str, Any]) -> str:

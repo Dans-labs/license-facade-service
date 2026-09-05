@@ -1273,7 +1273,7 @@ async def get_license_encoding(
             links=service.representation_links(resolved),
             metadata=service.build_metadata(resolved),
         )
-    return RedirectResponse(url=encoding["href"], status_code=307)
+    return RedirectResponse(url=encoding.href, status_code=307)
 
 
 @router.get(

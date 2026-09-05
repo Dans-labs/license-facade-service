@@ -139,7 +139,7 @@ class RDFTransformer:
             self._add_cross_reference(license_uri, cross_ref, idx)
 
         # Add details URL
-        details_url = license_data.get("detailsUrl")
+        details_url = license_data.get("detailsURL") or license_data.get("detailsUrl")
         if details_url:
             self.graph.add((license_uri, SPDX.detailsUrl, URIRef(details_url)))
 
@@ -164,7 +164,7 @@ class RDFTransformer:
         self.graph.add((cross_ref_node, RDF.type, SPDX.CrossRef))
 
         # Add URL
-        url = cross_ref.get("url")
+        url = cross_ref.get("URL") or cross_ref.get("url")
         if url:
             self.graph.add((cross_ref_node, SPDX.url, URIRef(url)))
 
@@ -189,9 +189,9 @@ class RDFTransformer:
             self.graph.add((cross_ref_node, SPDX.isWayBackLink, Literal(is_wayback, datatype=XSD.boolean)))
 
         # Add timestamp
-        timestamp = cross_ref.get("timestamp")
+        timestamp = cross_ref.get("timeStamp") or cross_ref.get("timestamp")
         if timestamp:
-            self.graph.add((cross_ref_node, DCTERMS.date, Literal(timestamp, datatype=XSD.dateTime)))
+            self.graph.add((cross_ref_node, DCTERMS.date, Literal(str(timestamp), datatype=XSD.dateTime)))
 
         # Add order
         order = cross_ref.get("order")
@@ -248,7 +248,7 @@ class RDFTransformer:
                 self.graph.add((license_uri, SCHEMA.position, Literal(ref_number, datatype=XSD.integer)))
 
             # Add details URL
-            details_url = license_data.get("detailsUrl")
+            details_url = license_data.get("detailsURL") or license_data.get("detailsUrl")
             if details_url:
                 self.graph.add((license_uri, SPDX.detailsUrl, URIRef(details_url)))
 

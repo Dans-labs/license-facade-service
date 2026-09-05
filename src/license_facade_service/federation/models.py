@@ -115,7 +115,10 @@ class SignedFederationChangeEventPayload(BaseModel):
     operation: Literal["upsert", "deprecate", "tombstone"] = Field(description="Lifecycle operation represented by this event.")
     generatedAt: datetime = Field(description="Timestamp at which the event wrapper was generated.")
     record: SignedFederationRecordPayload = Field(description="Signed record payload carried by the change event.")
-    provenance: Literal["publication", "backfill"] = Field(default="publication", description="Reason this event entered the outbound feed.")
+    provenance: Literal["publication", "backfill"] | dict[str, Any] = Field(
+        default="publication",
+        description="Reason this event entered the outbound feed, or normalized structured provenance for revision events.",
+    )
     backfillCreatedAt: datetime | None = Field(default=None, description="Timestamp of the original event when this event was backfilled.")
 
 

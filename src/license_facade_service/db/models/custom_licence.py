@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.license_facade_service.db.base import Base
 
@@ -66,6 +66,13 @@ class CustomLicence(Base):
     deprecated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tombstoned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # OpenREL apply/rollback snapshots must capture these mutable fields plus active
+    # mapping representations, but must exclude operational timestamps and audit/outbox metadata.
+    representations: Mapped[list["CustomLicenceRepresentation"]] = relationship(
+        back_populates="custom_licence",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         UniqueConstraint("authority_id", "requested_license_id", "version", name="uq_custom_licences_authority_requested_version"),
@@ -130,6 +137,52 @@ class CustomLicenceAuditEvent(Base):
         CheckConstraint("char_length(btrim(event_type)) > 0", name="ck_custom_licence_audit_event_type_nonblank"),
         CheckConstraint("char_length(btrim(actor_role)) > 0", name="ck_custom_licence_audit_actor_role_nonblank"),
         Index("ix_custom_licence_audit_events_licence_created", "custom_licence_id", "created_at"),
+    )
+
+
+class CustomLicenceRepresentation(Base):
+    __tablename__ = "custom_licence_representations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    custom_licence_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("custom_licences.id", name="fk_clr_custom_licence", ondelete="CASCADE"),
+        nullable=False,
+    )
+    representation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    media_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    profile_uri: Mapped[str] = mapped_column(String(1024), nullable=False)
+    vocabulary_uri: Mapped[str] = mapped_column(String(1024), nullable=False)
+    content: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    href: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    content_digest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    mapping_profile: Mapped[str] = mapped_column(String(1024), nullable=False)
+    mapping_provenance: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    source_policy_state_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("openrel_policy_states.id", name="fk_clr_policy_state", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    rolled_back_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    custom_licence: Mapped["CustomLicence"] = relationship(back_populates="representations")
+
+    __table_args__ = (
+        CheckConstraint("representation_type = 'openrel-mapping'", name="ck_clr_repr_type"),
+        CheckConstraint("status IN ('active','rolled-back')", name="ck_clr_status"),
+        CheckConstraint("(content IS NOT NULL) OR (href IS NOT NULL)", name="ck_clr_content_or_href"),
+        CheckConstraint("(href IS NULL) OR (href ~ '^https://[^/].*')", name="ck_clr_href_https"),
+        CheckConstraint("content_digest_sha256 ~ '^[0-9a-f]{64}$'", name="ck_clr_digest"),
+        CheckConstraint(
+            "(status = 'active' AND rolled_back_at IS NULL) OR (status = 'rolled-back' AND rolled_back_at IS NOT NULL)",
+            name="ck_clr_rb_consistent",
+        ),
+        UniqueConstraint("source_policy_state_id", "representation_type", name="uq_clr_policy_repr"),
+        Index("ix_clr_custom_licence_id", "custom_licence_id"),
+        Index("ix_clr_source_policy_state_id", "source_policy_state_id"),
     )
 
 
@@ -229,5 +282,6 @@ __all__ = [
     "CustomLicenceAlias",
     "CustomLicenceAuditEvent",
     "CustomLicenceFederationOutbox",
+    "CustomLicenceRepresentation",
     "normalize_alias",
 ]

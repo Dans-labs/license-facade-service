@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.middleware.cors import CORSMiddleware
 
+from src.license_facade_service.api.admin import openrel as openrel_admin
 from src.license_facade_service.api import openrel as openrel_api
 from src.license_facade_service.api.federation import admin as federation_admin
 from src.license_facade_service.api.federation import jwks as federation_jwks
@@ -23,6 +24,8 @@ from src.license_facade_service.config.openrel import OpenRelSettings
 from src.license_facade_service.federation.runtime import FederationRuntime, FederationRuntimeState
 from src.license_facade_service.openrel.client import OpenRelClient
 from src.license_facade_service.services.custom_licence_registration import CustomLicenceRegistrationService
+from src.license_facade_service.services.openrel_policy import OpenRelPolicySettings
+from src.license_facade_service.runtime.openrel_policy import OpenRelPolicyRuntime, OpenRelPolicyRuntimeState
 from src.license_facade_service.services.problem import problem_response
 from src.license_facade_service.services.spdx_custom_license import validate_http_iri
 from src.license_facade_service.services.spdx3_documents import Spdx3DocumentService
@@ -77,6 +80,10 @@ OPENAPI_TAGS = [
             "Provider availability affects only the OpenREL endpoints."
         ),
     },
+    {
+        "name": "OpenREL Admin",
+        "description": "Protected administrative OpenREL policy evaluation, inspection, and review endpoints. These endpoints persist plans and review state but do not mutate licences.",
+    },
 ]
 
 
@@ -121,11 +128,15 @@ def _runtime_federation_settings(settings: FederationSettings) -> FederationSett
 async def lifespan(app: FastAPI):
     openrel_client: OpenRelClient | None = None
     registration_service: CustomLicenceRegistrationService | None = None
+    openrel_policy_runtime: OpenRelPolicyRuntime | None = None
     async_engine = None
     try:
         openrel_settings: OpenRelSettings = getattr(app.state, "openrel_settings")
         openrel_client = OpenRelClient(openrel_settings)
         app.state.openrel_client = openrel_client
+        openrel_policy_runtime = getattr(app.state, "openrel_policy_runtime", None)
+        if isinstance(openrel_policy_runtime, OpenRelPolicyRuntime):
+            app.state.openrel_policy_state = openrel_policy_runtime.initialize()
 
         service = licenses.get_license_service()
         try:
@@ -170,6 +181,13 @@ async def lifespan(app: FastAPI):
             cleanup_errors.append(exc)
         finally:
             app.state.custom_licence_registration_service = None
+        try:
+            if openrel_policy_runtime is not None:
+                openrel_policy_runtime.close()
+        except Exception as exc:  # pragma: no cover
+            cleanup_errors.append(exc)
+        finally:
+            app.state.openrel_policy_state = OpenRelPolicyRuntimeState(enabled=False, ready=True, errors=())
         try:
             if async_engine is not None:
                 await async_engine.dispose()
@@ -228,6 +246,8 @@ def create_app() -> FastAPI:
             node_id=settings.node_id,
         )
     app.state.openrel_settings = OpenRelSettings.from_env()
+    app.state.openrel_policy_runtime = OpenRelPolicyRuntime(OpenRelPolicySettings.from_env())
+    app.state.openrel_policy_state = OpenRelPolicyRuntimeState(enabled=False, ready=True, errors=())
     app.state.custom_licence_registration_settings = CustomLicenceRegistrationSettings.from_env()
     app.state.custom_licence_registration_service = None
     app.state.openrel_client = None
@@ -253,6 +273,7 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router, prefix="/api/v1")
     app.include_router(licenses.router, prefix="/api/v1")
     app.include_router(openrel_api.router)
+    app.include_router(openrel_admin.router)
     app.include_router(federation_outbound.router)
     app.include_router(federation_jwks.router)
     app.include_router(federation_admin.router)

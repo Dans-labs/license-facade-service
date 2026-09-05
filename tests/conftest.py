@@ -109,7 +109,17 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
             "licenseText": "MIT text",
             "licenseTextHtml": "<p>MIT text</p>",
             "standardLicenseTemplate": "MIT template",
-            "crossRef": [{"url": "https://opensource.org/licenses/MIT"}],
+            "crossRef": [
+                {
+                    "url": "https://opensource.org/licenses/MIT",
+                    "match": True,
+                    "isValid": True,
+                    "isLive": True,
+                    "timestamp": "2026-09-03T00:00:00Z",
+                    "isWayBackLink": False,
+                    "order": 1,
+                }
+            ],
         },
         "Apache-2.0": {
             "licenseId": "Apache-2.0",
@@ -117,7 +127,17 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
             "licenseText": "Apache text",
             "licenseTextHtml": "<p>Apache text</p>",
             "standardLicenseTemplate": "Apache template",
-            "crossRef": [{"url": "https://www.apache.org/licenses/LICENSE-2.0"}],
+            "crossRef": [
+                {
+                    "url": "https://www.apache.org/licenses/LICENSE-2.0",
+                    "match": True,
+                    "isValid": True,
+                    "isLive": True,
+                    "timestamp": "2026-09-03T00:00:00Z",
+                    "isWayBackLink": False,
+                    "order": 1,
+                }
+            ],
         },
         "CC-BY-4.0": {
             "licenseId": "CC-BY-4.0",
@@ -125,7 +145,17 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
             "licenseText": "CC text",
             "licenseTextHtml": "<p>CC text</p>",
             "standardLicenseTemplate": "CC template",
-            "crossRef": [{"url": "https://creativecommons.org/licenses/by/4.0/"}],
+            "crossRef": [
+                {
+                    "url": "https://creativecommons.org/licenses/by/4.0/",
+                    "match": True,
+                    "isValid": True,
+                    "isLive": True,
+                    "timestamp": "2026-09-03T00:00:00Z",
+                    "isWayBackLink": False,
+                    "order": 1,
+                }
+            ],
         },
         "Legacy-No-Original": {
             "licenseId": "Legacy-No-Original",
@@ -133,7 +163,17 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
             "licenseText": "Legacy text",
             "licenseTextHtml": "<p>Legacy text</p>",
             "standardLicenseTemplate": "Legacy template",
-            "crossRef": [{"url": "https://example.org/licenses/legacy-no-original"}],
+            "crossRef": [
+                {
+                    "url": "https://example.org/licenses/legacy-no-original",
+                    "match": True,
+                    "isValid": True,
+                    "isLive": True,
+                    "timestamp": "2026-09-03T00:00:00Z",
+                    "isWayBackLink": False,
+                    "order": 1,
+                }
+            ],
         },
         "Bad-REL": {
             "licenseId": "Bad-REL",
@@ -141,7 +181,17 @@ def _seed_snapshot(base_dir: Path) -> tuple[dict, dict[str, dict]]:
             "licenseText": "Bad REL text",
             "licenseTextHtml": "<p>Bad REL text</p>",
             "standardLicenseTemplate": "Bad template",
-            "crossRef": [{"url": "https://example.org/licenses/bad-rel"}],
+            "crossRef": [
+                {
+                    "url": "https://example.org/licenses/bad-rel",
+                    "match": True,
+                    "isValid": True,
+                    "isLive": True,
+                    "timestamp": "2026-09-03T00:00:00Z",
+                    "isWayBackLink": False,
+                    "order": 1,
+                }
+            ],
         },
     }
 

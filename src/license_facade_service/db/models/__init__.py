@@ -3,6 +3,7 @@ from src.license_facade_service.db.models.custom_licence import (
     CustomLicenceAlias,
     CustomLicenceAuditEvent,
     CustomLicenceFederationOutbox,
+    CustomLicenceRepresentation,
 )
 from src.license_facade_service.db.models.federation import (
     FederationChangeEvent,
@@ -20,12 +21,14 @@ from src.license_facade_service.db.models.federation import (
     FederationSyncAttempt,
     FederationTrustedPeer,
 )
+from src.license_facade_service.db.models.openrel_policy import OpenRelPolicyEvent, OpenRelPolicyState
 
 __all__ = [
     "CustomLicence",
     "CustomLicenceAlias",
     "CustomLicenceAuditEvent",
     "CustomLicenceFederationOutbox",
+    "CustomLicenceRepresentation",
     "FederationChangeEvent",
     "FederationConflictRecord",
     "FederationInboundEvent",
@@ -40,4 +43,6 @@ __all__ = [
     "FederationSigningKey",
     "FederationSyncAttempt",
     "FederationTrustedPeer",
+    "OpenRelPolicyState",
+    "OpenRelPolicyEvent",
 ]

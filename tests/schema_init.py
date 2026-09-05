@@ -19,7 +19,7 @@ from src.license_facade_service.db.base import Base
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_CONFIG_PATH = REPO_ROOT / "alembic.ini"
-ALEMBIC_HEAD_REVISION = "20260828_01"
+ALEMBIC_HEAD_REVISION = "20260904_03"
 PHASE5_HEAD_REVISION = "c8b534db4b5c"
 CUSTOM_TABLES = {
     "custom_licences",

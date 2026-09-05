@@ -48,8 +48,8 @@ def test_root_endpoint_reports_pyproject_version(app_client):
     expected = get_project_details(Path(__file__).resolve().parents[1], ["title", "version"])
     assert body["title"] == expected["title"]
     assert body["version"] == expected["version"]
-    assert body["version"] == "0.3.0"
-    assert client.get("/openapi.json").json()["info"]["version"] == "0.3.0"
+    assert body["version"] == "0.3.5"
+    assert client.get("/openapi.json").json()["info"]["version"] == "0.3.5"
 
 def test_openapi_operations_have_summary_description_tags_and_unique_operation_ids(app_client):
     client, *_ = app_client
@@ -110,6 +110,14 @@ def test_openapi_security_scheme_marks_only_protected_operations(app_client):
         ("get", "/api/v1/admin/federation/rdf-outbox"),
         ("get", "/api/v1/admin/federation/sync-attempts"),
         ("get", "/api/v1/admin/federation/compatibility"),
+        ("post", "/api/v1/admin/openrel/evaluations"),
+        ("get", "/api/v1/admin/openrel/policy-states"),
+        ("get", "/api/v1/admin/openrel/policy-states/{state_id}"),
+        ("get", "/api/v1/admin/openrel/policy-states/{state_id}/events"),
+        ("post", "/api/v1/admin/openrel/policy-states/{state_id}/approve"),
+        ("post", "/api/v1/admin/openrel/policy-states/{state_id}/reject"),
+        ("post", "/api/v1/admin/openrel/policy-states/{state_id}/apply"),
+        ("post", "/api/v1/admin/openrel/policy-states/{state_id}/rollback"),
         ("post", "/api/v1/admin/federation/peers/{peer_id}/suspend"),
         ("post", "/api/v1/admin/federation/peers/{peer_id}/resume"),
         ("post", "/api/v1/admin/federation/peers/{peer_id}/circuit/reset"),
@@ -143,6 +151,8 @@ def test_openapi_problem_media_types_and_public_response_types(app_client):
     assert "application/problem+json" in openapi["paths"]["/api/v1/licenses/provenance"]["get"]["responses"]["409"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/admin/federation/peers"]["post"]["responses"]["401"]["content"]
     assert "application/problem+json" in openapi["paths"]["/api/v1/admin/federation/conflicts/{conflict_id}/decisions"]["post"]["responses"]["409"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/admin/openrel/evaluations"]["post"]["responses"]["422"]["content"]
+    assert "application/problem+json" in openapi["paths"]["/api/v1/admin/openrel/policy-states"]["get"]["responses"]["400"]["content"]
 
     assert list(openapi["paths"]["/api/v1/licenses/{id}"]["get"]["responses"]["200"]["content"].keys()) == [
         "application/json",
@@ -235,6 +245,11 @@ def test_static_routes_take_precedence(app_client):
     assert "/api/v1/federation/records/{encoded_id}" in openapi["paths"]
     assert "/openrel/api/v0.4/actions" in openapi["paths"]
     assert "/openrel/api/v0.4/mappings/{id}" not in openapi["paths"]
+    assert "/api/v1/admin/openrel/evaluations" in openapi["paths"]
+    assert "/api/v1/admin/openrel/policy-states/{state_id}/approve" in openapi["paths"]
+    assert "/api/v1/admin/openrel/policy-states/{state_id}/reject" in openapi["paths"]
+    assert "/api/v1/admin/openrel/policy-states/{state_id}/apply" in openapi["paths"]
+    assert "/api/v1/admin/openrel/policy-states/{state_id}/rollback" in openapi["paths"]
 
 
 def test_custom_registration_alias_hidden_from_openapi_but_callable(app_client):

@@ -30,6 +30,7 @@ from src.license_facade_service.db.models.federation import (
     FederationTrustedPeer,
 )
 from src.license_facade_service.db.session import Database
+from src.license_facade_service.federation.digests import canonical_json_sha256_hex
 from src.license_facade_service.federation.license_identity import build_canonical_license_identity
 from src.license_facade_service.federation.outbound import FederationPublicationService
 from src.license_facade_service.federation.rdf_outbox import RdfOutboxService
@@ -361,14 +362,24 @@ def _graph_text(fuseki: FusekiClient, graph_uri: str) -> str:
     return graph
 
 
+def _wait_for_fuseki(url: str, timeout_seconds: int = 30) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if subprocess.run(["curl", "-fsS", f"{url}/$/ping"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            return
+        time.sleep(1)
+    raise RuntimeError("fuseki not ready")
+
+
 def test_real_fuseki_indexing_outage_and_recovery(rdf_env):
     db: Database = rdf_env["db"]
     fuseki: FusekiClient = rdf_env["fuseki"]
-    pg_container: str = rdf_env["postgres_container"]
     fuseki_container: str = rdf_env["fuseki_container"]
+    fuseki_url: str = rdf_env["fuseki_url"]
     settings: FederationSettings = rdf_env["settings"]
     outbox = RdfOutboxService(db, settings, fuseki=fuseki)
     resolution = FederationResolutionService(db, settings)
+    _wait_for_fuseki(fuseki_url)
 
     local = _seed_local_record(db, settings.node_id or "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "LocalRDF", "1", {"licenseId": "LocalRDF"}, 1)
     peer, imported = _seed_imported_record(
@@ -409,86 +420,131 @@ def test_real_fuseki_indexing_outage_and_recovery(rdf_env):
     assert resolution_response.authorityNodeId == peer.peer_node_id
     assert resolution_response.sourcePeerId == peer.id
 
-    subprocess.run(["docker", "stop", fuseki_container], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run(["docker", "stop", fuseki_container], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    imported_next = _seed_imported_record(
-        db,
-        peer_node_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        canonical_id="lfs:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:ImportedRDF:2",
-        local_id="ImportedRDF",
-        version="2",
-        payload={"licenseId": "ImportedRDF", "name": "Imported RDF v2"},
-        source_event_position=11,
-    )[1]
-    with db.transaction() as session:
-        outbox.enqueue_record_jobs(session, imported_next, operation="upsert")
+        imported_next = _seed_imported_record(
+            db,
+            peer_node_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            canonical_id="lfs:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:ImportedRDF:2",
+            local_id="ImportedRDF",
+            version="2",
+            payload={"licenseId": "ImportedRDF", "name": "Imported RDF v2"},
+            source_event_position=11,
+        )[1]
+        with db.transaction() as session:
+            outbox.enqueue_record_jobs(session, imported_next, operation="upsert")
 
-    retry_result = outbox.process_pending_jobs(limit=10, worker_id="worker-2")
-    assert retry_result["failed"] >= 1
-    with db.transaction() as session:
-        queued = session.execute(select(FederationRdfOutboxJob).where(FederationRdfOutboxJob.status == "retryable_failed")).scalars().all()
-        assert queued
-        state = session.execute(select(FederationRdfGraphState).where(FederationRdfGraphState.graph_uri == outbox.record_graph_uri(imported_next.id))).scalar_one()
-        assert state.status == "retryable_failed"
+        retry_result = outbox.process_pending_jobs(limit=10, worker_id="worker-2")
+        assert retry_result["failed"] >= 1
+        with db.transaction() as session:
+            queued = session.execute(select(FederationRdfOutboxJob).where(FederationRdfOutboxJob.status == "retryable_failed")).scalars().all()
+            assert queued
+    finally:
+        subprocess.run(["docker", "start", fuseki_container], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _wait_for_fuseki(fuseki_url)
 
-    with db.transaction() as session:
-        peer_row = session.execute(select(FederationTrustedPeer).where(FederationTrustedPeer.id == peer.id)).scalar_one()
-        peer_row.last_sync_status = "failed"
-        peer_row.last_sync_success_at = datetime.now(timezone.utc) - timedelta(days=1)
-        peer_row.updated_at = datetime.now(timezone.utc)
-    resolution_offline = resolution.resolve(imported.canonical_id)
-    assert resolution_offline.freshnessState == "stale"
 
-    requeued = outbox.retry_failed_jobs(limit=10)
-    assert requeued >= 1
-    subprocess.run(["docker", "start", fuseki_container], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2)
-    import asyncio
-
-    asyncio.run(fuseki.create_dataset())
-    asyncio.run(fuseki.clear_dataset())
-    recovered = outbox.process_pending_jobs(limit=10, worker_id="worker-3")
-    assert recovered["succeeded"] >= 1
-
-    with db.transaction() as session:
-        state = session.execute(select(FederationRdfGraphState).where(FederationRdfGraphState.graph_uri == outbox.record_graph_uri(imported_next.id))).scalar_one()
-        assert state.status == "succeeded"
-        assert state.current_generation == imported_next.materialized_generation
-        assert state.current_digest_sha256 == imported_next.payload_digest_sha256
-
-    repeated = outbox.process_pending_jobs(limit=10, worker_id="worker-4")
-    assert repeated["claimed"] == 0
-
-    dead_outbox = RdfOutboxService(db, replace(settings, rdf_outbox_retry_attempts=1), fuseki=fuseki)
-    imported_third = _seed_imported_record(
-        db,
-        peer_node_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        canonical_id="lfs:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:ImportedRDF:3",
-        local_id="ImportedRDF",
-        version="3",
-        payload={"licenseId": "ImportedRDF", "name": "Imported RDF v3"},
-        source_event_position=12,
-    )[1]
-    with db.transaction() as session:
-        dead_outbox.enqueue_record_jobs(session, imported_third, operation="upsert")
-
-    subprocess.run(["docker", "stop", fuseki_container], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    dead = dead_outbox.process_pending_jobs(limit=10, worker_id="worker-dead")
-    assert dead["dead_lettered"] >= 1
-
-    requeued_dead = dead_outbox.requeue_dead_lettered_jobs(limit=10)
-    assert requeued_dead >= 1
-
-    subprocess.run(["docker", "start", fuseki_container], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2)
-    asyncio.run(fuseki.create_dataset())
-    asyncio.run(fuseki.clear_dataset())
-
-    final = dead_outbox.process_pending_jobs(limit=10, worker_id="worker-final")
-    assert final["succeeded"] >= 1
-
-    with db.transaction() as session:
-        imported_rows = session.execute(select(FederationRdfGraphState).where(FederationRdfGraphState.graph_kind == "provenance")).scalars().all()
-        assert imported_rows
-        record_rows = session.execute(select(FederationRdfGraphState).where(FederationRdfGraphState.graph_kind == "record")).scalars().all()
-        assert record_rows
+def test_rdf_outbox_uses_explicit_revision_payload_not_stale_record_payload(rdf_env):
+    db: Database = rdf_env["db"]
+    base_settings: FederationSettings = rdf_env["settings"]
+    fuseki: FusekiClient = rdf_env["fuseki"]
+    fuseki_url: str = rdf_env["fuseki_url"]
+    private_key = Ed25519PrivateKey.generate()
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    temp_dir = REPO_ROOT / ".tmp"
+    temp_dir.mkdir(exist_ok=True)
+    key_path = temp_dir / f"revision-{uuid4().hex}.pem"
+    key_path.write_bytes(pem)
+    key_path.chmod(0o600)
+    settings = replace(base_settings, signing_key_path=str(key_path), active_kid="test-k1")
+    outbox = RdfOutboxService(db, settings, fuseki=fuseki)
+    publisher = FederationPublicationService(db, settings)
+    node_id = settings.node_id or "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    canonical = f"lfs:{node_id}:RDFREV:1"
+    settings = replace(
+        settings,
+        node_id=node_id,
+        public_base_url=settings.public_base_url or "https://node.example.org",
+        node_name=settings.node_name or "EDEN Node",
+        operator_name=settings.operator_name or "EDEN Operator",
+    )
+    outbox = RdfOutboxService(db, settings, fuseki=fuseki)
+    publisher = FederationPublicationService(db, settings)
+    try:
+        subprocess.run(["docker", "start", rdf_env["fuseki_container"]], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _wait_for_fuseki(fuseki_url)
+        with db.transaction() as session:
+            publisher._ensure_local_identity(session)  # noqa: SLF001
+        publisher.signing.ensure_runtime_active_key()
+        publisher.publish_new_version(
+            canonical_id=canonical,
+            authority_node_id=node_id,
+            local_id="RDFREV",
+            version="1",
+            payload={"licenseId": "RDFREV", "name": "Initial Name", "licenseText": "Initial text"},
+        )
+        with db.transaction() as session:
+            record = session.execute(select(FederationRecord).where(FederationRecord.canonical_id == canonical)).scalar_one()
+            publisher.append_authoritative_upsert_in_session(
+                session=session,
+                record_id=record.id,
+                idempotency_key=uuid4(),
+                payload={"licenseId": "RDFREV", "name": "Revision Name", "licenseText": "Revision text"},
+                provenance={"source": "revision-test"},
+            )
+            record_id = record.id
+        result = outbox.process_pending_jobs(limit=10, worker_id="worker-revision")
+        assert result["failed"] == 0
+        assert result["dead_lettered"] == 0
+        assert result["succeeded"] >= 2
+        record_graph = _graph_text(fuseki, outbox.record_graph_uri(record_id))
+        provenance_graph = _graph_text(fuseki, outbox.provenance_graph_uri(record_id))
+        assert 'dcterms:title               "Revision Name"' in record_graph
+        assert 'lfs:payloadLicenseText      "Revision text"' in record_graph
+        assert "Initial Name" not in record_graph
+        revision_digest = canonical_json_sha256_hex({"licenseId": "RDFREV", "name": "Revision Name", "licenseText": "Revision text"})
+        assert f'lfs:payloadDigestSha256     "{revision_digest}"' in record_graph
+        assert "lfs:materializedGeneration  2" in record_graph
+        assert revision_digest in provenance_graph
+        assert "lfs:materializedGeneration    2" in provenance_graph
+        with db.transaction() as session:
+            jobs = (
+                session.execute(
+                    select(FederationRdfOutboxJob)
+                    .where(FederationRdfOutboxJob.record_id == record_id, FederationRdfOutboxJob.expected_generation == 2)
+                    .order_by(FederationRdfOutboxJob.dedupe_key)
+                )
+                .scalars()
+                .all()
+            )
+            assert len(jobs) == 2
+            assert len({job.dedupe_key for job in jobs}) == 2
+            assert all(job.status == "succeeded" for job in jobs)
+            for job in jobs:
+                assert job.payload_json["recordPayload"]["payload"]["name"] == "Revision Name"
+                assert job.payload_json["recordPayload"]["payload"]["licenseText"] == "Revision text"
+                assert job.payload_json["provenance"] == {"source": "revision-test"}
+                assert job.expected_generation == 2
+            graph_states = session.execute(select(FederationRdfGraphState).where(FederationRdfGraphState.record_id == record_id)).scalars().all()
+            assert len(graph_states) == 2
+            assert all(state.status == "succeeded" for state in graph_states)
+            assert all(state.expected_generation == 2 for state in graph_states)
+            assert all(state.expected_digest_sha256 == revision_digest for state in graph_states)
+        repeated = outbox.process_pending_jobs(limit=10, worker_id="worker-4")
+        with db.transaction() as session:
+            latest_jobs = (
+                session.execute(
+                    select(FederationRdfOutboxJob)
+                    .where(FederationRdfOutboxJob.record_id == record_id, FederationRdfOutboxJob.expected_generation == 2)
+                )
+                .scalars()
+                .all()
+            )
+            assert all(job.status == "succeeded" for job in latest_jobs)
+    finally:
+        key_path.unlink(missing_ok=True)

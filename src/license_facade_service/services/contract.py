@@ -6,18 +6,25 @@ from html import escape
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 from rdflib import Graph
 
 
 SAFE_SCHEMES = {"https"}
 SUPPORTED_RDF_SERIALIZATIONS = {"text/turtle": "turtle", "application/rdf+xml": "xml"}
 SUPPORTED_JSON_MEDIA_TYPES = {"application/json", "application/ld+json"}
+LOCAL_REPRESENTATION_TYPES = {"original", "machine", "legal", "encoding"}
+LOCAL_REPRESENTATION_PREFIX = "/api/v1/licenses/"
 
 
 class CrossReference(BaseModel):
     type: str = Field(..., description="original, machine, legal, or upstream")
-    URL: str = Field(description="Curated HTTPS target for the related representation or upstream reference.")
+    URL: str = Field(
+        description=(
+            "For upstream references, an absolute HTTPS URL. For local representation mappings "
+            "(original, machine, legal, encoding), a root-relative path under /api/v1/licenses/."
+        )
+    )
     match: bool | None = None
     isValid: bool | None = None
     isLive: bool | None = None
@@ -30,16 +37,39 @@ class CrossReference(BaseModel):
     source: str | None = None
     relation: str | None = None
 
-    @field_validator("URL")
-    @classmethod
-    def _validate_url(cls, value: str) -> str:
-        parsed = urlparse(value)
-        if parsed.scheme not in SAFE_SCHEMES:
-            raise ValueError("Only https URLs are permitted for public representation targets")
-        return value
+    @model_validator(mode="after")
+    def _validate_url_for_type(self) -> "CrossReference":
+        parsed = urlparse(self.URL)
+
+        if self.type == "upstream":
+            if parsed.scheme not in SAFE_SCHEMES:
+                raise ValueError("Only https URLs are permitted for public representation targets")
+            if not parsed.netloc:
+                raise ValueError("Upstream URLs must include a host")
+            return self
+
+        relation = (self.relation or self.type or "").strip().lower()
+        if relation not in LOCAL_REPRESENTATION_TYPES:
+            raise ValueError("Only upstream and local representation cross-reference types are permitted")
+
+        if parsed.scheme or parsed.netloc:
+            raise ValueError("Local representation mappings must not include scheme or authority")
+        if self.URL.startswith("//"):
+            raise ValueError("Local representation mappings must not start with //")
+        if "\\" in self.URL:
+            raise ValueError("Local representation mappings must not contain backslashes")
+        if not self.URL.startswith(LOCAL_REPRESENTATION_PREFIX):
+            raise ValueError("Local representation mappings must start with /api/v1/licenses/")
+
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        if any(segment == ".." for segment in segments):
+            raise ValueError("Local representation mappings must not contain traversal segments")
+        return self
 
 
 class RepresentationDescriptor(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     href: str | None = Field(default=None, description="Curated external URL for the representation, when the service links out instead of embedding content.")
     relation: str | None = Field(default=None, description="Relationship of the representation to the licence, such as original, legal, or encoding.")
     type: str | None = Field(default=None, description="Application-specific representation classification.")
@@ -97,6 +127,10 @@ class EncodingRepresentation(RepresentationDescriptor):
 class ConformanceRequirement(BaseModel):
     status: Literal["passed", "failed", "unknown"] = Field(description="Conformance result for a single requirement.")
     missing: list[str] = Field(default_factory=list, description="Representation names or fields still missing for this requirement.")
+    invalid: list[str] = Field(
+        default_factory=list,
+        description="Present fields whose values violate the requirement.",
+    )
     note: str | None = Field(default=None, description="Additional conformance note for this requirement.")
 
 
@@ -110,7 +144,7 @@ class LicenseDetail(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     uri: str = Field(description="Canonical public URI for the licence record.")
-    referenceNumber: str | None = None
+    referenceNumber: str | int | None = None
     licenseId: str = Field(description="Primary SPDX licence ID or equivalent local identifier.")
     licenseID: str | None = None
     licenceID: str | None = None
@@ -125,6 +159,10 @@ class LicenseDetail(BaseModel):
     licenseText: str | None = None
     standardLicenseTemplate: str | None = None
     licenseTextHtml: str | None = None
+    licenseComments: str | None = None
+    standardLicenseHeader: str | None = None
+    standardLicenseHeaderTemplate: str | None = None
+    isFsfLibre: bool | None = None
     crossRef: list[CrossReference] = Field(default_factory=list)
     representations: dict[str, RepresentationDescriptor] = Field(default_factory=dict, description="Curated available representations keyed by representation name.")
     conformance: ConformanceStatus = Field(description="Conformance summary for this licence metadata record.")
@@ -133,13 +171,16 @@ class LicenseDetail(BaseModel):
 
 class LicenseInventoryItem(BaseModel):
     uri: str = Field(description="Canonical public URI for the licence record.")
+    referenceNumber: str | int | None = None
     licenseId: str = Field(description="Primary SPDX licence ID or equivalent local identifier.")
     name: str = Field(description="Human-readable licence name.")
     isDeprecatedLicenseId: bool = Field(description="Whether the identifier is deprecated in SPDX data.")
     isOsiApproved: bool = Field(description="Whether SPDX marks the licence as OSI-approved.")
     seeAlso: list[str] = Field(default_factory=list)
     detailsURL: str | None = None
+    spdxDetailsURL: str | None = None
     reference: str | None = None
+    isFsfLibre: bool | None = None
 
 
 class LicenseInventoryResponse(BaseModel):

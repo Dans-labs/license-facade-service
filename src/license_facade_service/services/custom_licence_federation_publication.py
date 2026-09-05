@@ -21,6 +21,7 @@ from src.license_facade_service.db.models.custom_licence import (
     CustomLicenceAlias,
     CustomLicenceAuditEvent,
     CustomLicenceFederationOutbox,
+    CustomLicenceRepresentation,
 )
 from src.license_facade_service.db.models.federation import FederationChangeEvent, FederationRecord
 from src.license_facade_service.db.session import Database
@@ -117,6 +118,7 @@ def build_custom_licence_federation_payload(
     custom_settings: CustomLicenceRegistrationSettings,
     publishing_node_id: str,
     aliases: list[str],
+    representations: list[CustomLicenceRepresentation] | None = None,
 ) -> dict[str, Any]:
     resolving_uri = ""
     if custom_settings.authority_base_iri:
@@ -126,7 +128,7 @@ def build_custom_licence_federation_payload(
             requested_license_id=custom_licence.requested_license_id,
             version=custom_licence.version,
         )
-    return {
+    payload = {
         "schema": "lfs.custom-licence.federation.v1",
         "customLicenceId": str(custom_licence.id),
         "customCanonicalId": custom_licence.canonical_id,
@@ -149,6 +151,36 @@ def build_custom_licence_federation_payload(
         "updatedAt": custom_licence.updated_at.astimezone(timezone.utc).isoformat(),
         "aliases": aliases,
     }
+    if representations:
+        active_rows = [row for row in representations if row.status == "active"]
+        if active_rows:
+            payload["representations"] = [
+                {
+                    "representationType": row.representation_type,
+                    "mediaType": row.media_type,
+                    "profile": row.profile_uri,
+                    "vocabulary": row.vocabulary_uri,
+                    **({"content": row.content} if row.content is not None else {}),
+                    **({"href": row.href} if row.href is not None else {}),
+                    "contentDigestSha256": row.content_digest_sha256,
+                    "mappingProfile": row.mapping_profile,
+                    "mappingProvenance": row.mapping_provenance,
+                    "sourcePolicyStateId": str(row.source_policy_state_id),
+                }
+                for row in sorted(
+                    active_rows,
+                    key=lambda item: (
+                        item.representation_type,
+                        item.media_type or "",
+                        item.profile_uri or "",
+                        item.vocabulary_uri or "",
+                        str(item.source_policy_state_id),
+                        item.content_digest_sha256 or "",
+                        item.href or "",
+                    ),
+                )
+            ]
+    return payload
 
 
 def classify_publication_error(exc: Exception) -> tuple[bool, str]:

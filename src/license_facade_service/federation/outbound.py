@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import logging
 import re
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.license_facade_service.config.federation import FederationSettings
@@ -54,6 +56,12 @@ class FederationError(Exception):
         super().__init__(detail)
         self.code = code
         self.detail = detail
+
+
+def _integrity_constraint_name(exc: IntegrityError) -> str | None:
+    orig = getattr(exc, "orig", None)
+    diag = getattr(orig, "diag", None)
+    return getattr(diag, "constraint_name", None)
 
 
 def encode_canonical_id(canonical_id: str) -> str:
@@ -262,7 +270,7 @@ class FederationPublicationService:
         session.add(record)
         session.flush()
         self._sync_resolution_aliases(session=session, record=record)
-        event_id, _sequence = self._insert_event(
+        event, _sequence = self._insert_event(
             session=session,
             record=record,
             operation="upsert",
@@ -271,7 +279,115 @@ class FederationPublicationService:
             backfill_created_at=None,
             enqueue_rdf=enqueue_rdf,
         )
-        return record_uuid, event_id
+        return record_uuid, event.id
+
+    def append_authoritative_upsert_in_session(
+        self,
+        *,
+        session: Session,
+        record_id: uuid.UUID,
+        idempotency_key: uuid.UUID,
+        payload: dict[str, Any],
+        provenance: dict[str, Any] | None = None,
+        generated_at: datetime | None = None,
+        enqueue_rdf: bool = True,
+    ) -> FederationChangeEvent:
+        if not isinstance(idempotency_key, uuid.UUID):
+            raise FederationError("invalid-idempotency-key", "idempotency_key must be a non-null UUID.")
+        if generated_at is None:
+            generated_at = datetime.now(timezone.utc)
+        record = self._load_locked_authoritative_record(session=session, record_id=record_id)
+        latest = _latest_event_for_record(session, record=record, authority_node_id=record.authority_node_id, for_update=True)
+        if _state_from_operation(latest.operation if latest else "upsert") == "tombstoned":
+            raise FederationError("invalid-state-transition", "Tombstoned records cannot transition.")
+
+        payload_copy = copy.deepcopy(payload)
+        signed_record_payload, record_digest = self._build_signed_record_payload(
+            record=record,
+            payload=payload_copy,
+            generated_at=generated_at,
+        )
+        provenance_value = self._normalize_event_provenance(provenance)
+        existing = session.execute(
+            select(FederationChangeEvent)
+            .where(
+                FederationChangeEvent.authority_node_id == record.authority_node_id,
+                FederationChangeEvent.idempotency_key == idempotency_key,
+            )
+            .with_for_update()
+        ).scalar_one_or_none()
+        if existing is not None:
+            record.materialized_generation = baseline_generation = int(record.materialized_generation or 0)
+            return self._resolve_idempotent_existing_event(
+                existing=existing,
+                record=record,
+                signed_record_payload=signed_record_payload,
+                record_digest=record_digest,
+                provenance=provenance_value,
+            )
+
+        baseline_generation = int(record.materialized_generation or 0)
+        record.materialized_generation = baseline_generation
+        try:
+            with session.begin_nested():
+                event, next_sequence = self._insert_event(
+                    session=session,
+                    record=record,
+                    operation="upsert",
+                    generated_at=generated_at,
+                    provenance_type="publication",
+                    backfill_created_at=None,
+                    enqueue_rdf=False,
+                    signed_record_payload=signed_record_payload,
+                    idempotency_key=idempotency_key,
+                    event_provenance=provenance_value,
+                )
+                record.materialized_generation = int(next_sequence)
+                if enqueue_rdf:
+                    self.rdf_outbox.enqueue_record_jobs(
+                        session,
+                        record,
+                        operation="upsert",
+                        signed_record_payload=signed_record_payload,
+                        record_digest=record_digest,
+                        generation=int(next_sequence),
+                        provenance=provenance_value,
+                    )
+                session.flush()
+                return event
+        except IntegrityError as exc:
+            record.materialized_generation = baseline_generation
+            if _integrity_constraint_name(exc) != "uix_fce_authority_idempotency":
+                raise
+            winner = session.execute(
+                select(FederationChangeEvent)
+                .where(
+                    FederationChangeEvent.authority_node_id == record.authority_node_id,
+                    FederationChangeEvent.idempotency_key == idempotency_key,
+                )
+                .with_for_update()
+            ).scalar_one_or_none()
+            if winner is None:
+                raise
+            session.execute(
+                text("DELETE FROM federation_rdf_outbox_jobs WHERE record_id = :record_id AND expected_generation > :baseline_generation"),
+                {"record_id": record.id, "baseline_generation": baseline_generation},
+            )
+            return self._resolve_idempotent_existing_event(
+                existing=winner,
+                record=record,
+                signed_record_payload=signed_record_payload,
+                record_digest=record_digest,
+                provenance=provenance_value,
+            )
+        except FederationError:
+            record.materialized_generation = baseline_generation
+            session.execute(
+                text("DELETE FROM federation_rdf_outbox_jobs WHERE record_id = :record_id AND expected_generation > :baseline_generation"),
+                {"record_id": record.id, "baseline_generation": baseline_generation},
+            )
+            session.flush()
+            raise
 
     def append_state_event(self, *, canonical_id: str, operation: str) -> None:
         if operation not in {"deprecate", "tombstone"}:
@@ -332,19 +448,22 @@ class FederationPublicationService:
         provenance_type: str,
         backfill_created_at: datetime | None,
         enqueue_rdf: bool = True,
-    ) -> tuple[uuid.UUID, int]:
+        signed_record_payload: SignedFederationRecordPayload | None = None,
+        idempotency_key: uuid.UUID | None = None,
+        event_provenance: dict[str, Any] | None = None,
+    ) -> tuple[FederationChangeEvent, int]:
         self._validate_record_identity(record)
-        state = _state_from_operation(operation)
-        signed_record_payload = SignedFederationRecordPayload(
-            nodeId=self.settings.node_id or "",
-            canonicalId=record.canonical_id,
-            authorityNodeId=record.authority_node_id,
-            localId=record.local_id,
-            version=record.version,
-            publishedAt=record.published_at or generated_at,
-            payload=record.payload,
-            payloadDigestSha256=record.payload_digest_sha256,
-        )
+        if signed_record_payload is None:
+            signed_record_payload = SignedFederationRecordPayload(
+                nodeId=self.settings.node_id or "",
+                canonicalId=record.canonical_id,
+                authorityNodeId=record.authority_node_id,
+                localId=record.local_id,
+                version=record.version,
+                publishedAt=record.published_at or generated_at,
+                payload=record.payload,
+                payloadDigestSha256=record.payload_digest_sha256,
+            )
         event_id = str(uuid.uuid4())
         next_sequence = int(session.execute(text("SELECT nextval('federation_change_event_sequence')")).scalar_one())
         payload = {
@@ -354,7 +473,7 @@ class FederationPublicationService:
             "operation": operation,
             "generatedAt": _iso_z(generated_at),
             "record": signed_record_payload.model_dump(mode="json"),
-            "provenance": provenance_type,
+            "provenance": event_provenance if event_provenance is not None else provenance_type,
             "backfillCreatedAt": _iso_z(backfill_created_at) if backfill_created_at else None,
         }
         try:
@@ -367,35 +486,106 @@ class FederationPublicationService:
             self.signing.ensure_runtime_active_key()
         signature = self.signing.sign_bytes(payload_bytes)
         digest = sha256_hex(payload_bytes)
-        session.add(
-            FederationChangeEvent(
-                id=uuid.UUID(event_id),
-                event_sequence=int(next_sequence),
-                event_type="record.changed",
-                authority_node_id=record.authority_node_id,
-                record_id=record.id,
-                operation=operation,
-                generated_at=generated_at,
-                payload_schema_version="1",
-                signed_payload=payload_json,
-                signed_payload_digest_sha256=digest,
-                signature_base64url=signature.value,
-                signature_kid=signature.kid,
-                signature_alg=signature.alg,
-                provenance_type=provenance_type,
-                backfill_created_at=backfill_created_at,
-                event_payload=payload_json,
-                event_digest_sha256=digest,
-                occurred_at=generated_at,
-                created_at=datetime.now(timezone.utc),
-            )
+        event = FederationChangeEvent(
+            id=uuid.UUID(event_id),
+            event_sequence=int(next_sequence),
+            event_type="record.changed",
+            authority_node_id=record.authority_node_id,
+            idempotency_key=idempotency_key,
+            record_id=record.id,
+            operation=operation,
+            generated_at=generated_at,
+            payload_schema_version="1",
+            signed_payload=payload_json,
+            signed_payload_digest_sha256=digest,
+            signature_base64url=signature.value,
+            signature_kid=signature.kid,
+            signature_alg=signature.alg,
+            provenance_type=provenance_type,
+            backfill_created_at=backfill_created_at,
+            event_payload=payload_json,
+            event_digest_sha256=digest,
+            occurred_at=generated_at,
+            created_at=datetime.now(timezone.utc),
         )
+        session.add(event)
         record.materialized_generation = int(next_sequence)
         if enqueue_rdf:
             self.rdf_outbox.enqueue_record_jobs(session, record, operation=operation)
         # Flush event row to make same-transaction FK references deterministic.
         session.flush()
-        return uuid.UUID(event_id), int(next_sequence)
+        return event, int(next_sequence)
+
+    def _load_locked_authoritative_record(self, *, session: Session, record_id: uuid.UUID) -> FederationRecord:
+        self._ensure_local_identity(session)
+        record = (
+            session.execute(select(FederationRecord).where(FederationRecord.id == record_id).with_for_update()).scalars().one_or_none()
+        )
+        if record is None:
+            raise FederationError("record-not-found", "Record not found.")
+        if not record.is_authoritative or record.imported_from_peer_id is not None or record.authority_node_id != self.settings.node_id:
+            raise FederationError("non-authoritative-record", "Record is not authoritative on this node.")
+        if record.published_at is None:
+            raise FederationError("unpublished-record", "Record is not published.")
+        return record
+
+    @staticmethod
+    def _normalize_event_provenance(provenance: dict[str, Any] | None) -> dict[str, Any] | None:
+        if provenance is None:
+            return None
+        if not isinstance(provenance, dict):
+            raise FederationError("invalid-event-payload", "Federation event provenance must be a JSON object.")
+        try:
+            normalized = json.loads(json.dumps(provenance))
+        except Exception as exc:
+            raise FederationError("invalid-event-payload", "Federation event provenance must be JSON-serializable.") from exc
+        if not isinstance(normalized, dict):
+            raise FederationError("invalid-event-payload", "Federation event provenance must be a JSON object.")
+        return normalized
+
+    def _build_signed_record_payload(
+        self, *, record: FederationRecord, payload: dict[str, Any], generated_at: datetime
+    ) -> tuple[SignedFederationRecordPayload, str]:
+        if not isinstance(payload, dict):
+            raise FederationError("invalid-record", "payload must be a JSON object.")
+        record_digest = canonical_json_sha256_hex(payload)
+        try:
+            signed_record_payload = SignedFederationRecordPayload.model_validate(
+                {
+                    "nodeId": self.settings.node_id or "",
+                    "canonicalId": record.canonical_id,
+                    "authorityNodeId": record.authority_node_id,
+                    "localId": record.local_id,
+                    "version": record.version,
+                    "publishedAt": record.published_at or generated_at,
+                    "payload": payload,
+                    "payloadDigestSha256": record_digest,
+                }
+            )
+        except ValidationError as exc:
+            raise FederationError("invalid-record", "Federation record payload failed schema validation.") from exc
+        return signed_record_payload, record_digest
+
+    def _resolve_idempotent_existing_event(
+        self,
+        *,
+        existing: FederationChangeEvent,
+        record: FederationRecord,
+        signed_record_payload: SignedFederationRecordPayload,
+        record_digest: str,
+        provenance: dict[str, Any] | None,
+    ) -> FederationChangeEvent:
+        payload = _validated_event_payload(existing)
+        expected_provenance = provenance if provenance is not None else "publication"
+        if existing.record_id != record.id or existing.operation != "upsert":
+            raise FederationError("idempotency-collision", "Federation change-event idempotency key conflicts with different content.")
+        if (
+            payload.record.model_dump(mode="json") != signed_record_payload.model_dump(mode="json")
+            or payload.record.payloadDigestSha256 != record_digest
+            or payload.provenance != expected_provenance
+        ):
+            raise FederationError("idempotency-collision", "Federation change-event idempotency key conflicts with different content.")
+        return existing
 
     def _validate_publication_input(self, *, canonical_id: str, authority_node_id: str, local_id: str, version: str) -> None:
         if not CANONICAL_ID_PATTERN.match(canonical_id):
@@ -570,6 +760,58 @@ class FederationBackfillService:
         return {"scanned": scanned, "inserted": inserted, "skipped": skipped, "rejected": rejected}
 
 
+def _latest_event_for_record(
+    session: Session, *, record: FederationRecord, authority_node_id: str, for_update: bool = False
+) -> FederationChangeEvent | None:
+    query = (
+        select(FederationChangeEvent)
+        .where(
+            FederationChangeEvent.record_id == record.id,
+            FederationChangeEvent.authority_node_id == authority_node_id,
+        )
+        .order_by(FederationChangeEvent.event_sequence.desc())
+        .limit(1)
+    )
+    if for_update:
+        query = query.with_for_update()
+    return session.execute(query).scalars().first()
+
+
+def _current_record_projection(
+    *, event: FederationChangeEvent | None, record: FederationRecord, node_id: str
+) -> tuple[SignedFederationRecordPayload, FederationChangeEvent | None]:
+    if event is None:
+        return (
+            SignedFederationRecordPayload(
+                nodeId=node_id,
+                canonicalId=record.canonical_id,
+                authorityNodeId=record.authority_node_id,
+                localId=record.local_id,
+                version=record.version,
+                publishedAt=record.published_at,
+                payload=record.payload,
+                payloadDigestSha256=record.payload_digest_sha256,
+            ),
+            None,
+        )
+    payload = SignedFederationChangeEventPayload.model_validate(event.signed_payload)
+    return payload.record, event
+
+
+def _validated_event_payload(event: FederationChangeEvent) -> SignedFederationChangeEventPayload:
+    try:
+        return SignedFederationChangeEventPayload.model_validate(event.signed_payload)
+    except ValidationError as exc:
+        LOGGER.warning(
+            "stored federation event payload invalid",
+            extra={"event_id": str(event.id), "event_position": int(event.event_sequence)},
+        )
+        raise FederationError(
+            "stored-federation-event-invalid",
+            f"Stored federation event is invalid at position {int(event.event_sequence)}.",
+        ) from exc
+
+
 class FederationOutboundService:
     def __init__(self, db: Database, settings: FederationSettings):
         self.db = db
@@ -703,12 +945,16 @@ class FederationOutboundService:
                     )
                 )
             rows = session.execute(q.order_by(FederationRecord.canonical_id, FederationRecord.id).limit(effective_limit + 1)).all()
+            projected_rows = [
+                (record, event, _current_record_projection(event=event, record=record, node_id=self.settings.node_id or "")[0])
+                for record, event in rows
+            ]
 
-        has_more = len(rows) > effective_limit
-        page = rows[:effective_limit]
+        has_more = len(projected_rows) > effective_limit
+        page = projected_rows[:effective_limit]
         next_cursor = None
         if has_more and page:
-            last_record, _ = page[-1]
+            last_record, _, _ = page[-1]
             next_cursor = self.cursor_codec.encode(
                 _CursorClaims(
                     kind="catalog",
@@ -725,14 +971,12 @@ class FederationOutboundService:
                 authorityNodeId=record.authority_node_id,
                 version=record.version,
                 publicationState=_state_from_operation(event.operation),
-                publishedAt=record.published_at,
-                payloadDigestSha256=record.payload_digest_sha256,
+                publishedAt=current_record.publishedAt,
+                payloadDigestSha256=current_record.payloadDigestSha256,
                 eventPosition=event.event_sequence,
             )
-            for record, event in page
+            for record, event, current_record in page
         ]
-        for _, event in page:
-            self._validated_event_payload(event)
         response = FederationCatalogResponse(
             items=items,
             limit=effective_limit,
@@ -766,25 +1010,14 @@ class FederationOutboundService:
             )
         if latest is None:
             raise FederationError("unpublished-record", "Record has no published state event.")
-        self._validated_event_payload(latest)
+        current_record, latest = _current_record_projection(event=latest, record=record, node_id=self.settings.node_id or "")
         state = _state_from_operation(latest.operation)
         if state == "tombstoned":
             raise FederationError("unpublished-record", "Record has been tombstoned.")
-
-        domain = SignedFederationRecordPayload(
-            nodeId=self.settings.node_id or "",
-            canonicalId=record.canonical_id,
-            authorityNodeId=record.authority_node_id,
-            localId=record.local_id,
-            version=record.version,
-            publishedAt=record.published_at,
-            payload=record.payload,
-            payloadDigestSha256=record.payload_digest_sha256,
-        )
-        payload_bytes = canonicalize_to_bytes(domain.model_dump(mode="json"))
+        payload_bytes = canonicalize_to_bytes(current_record.model_dump(mode="json"))
         signature = self.signing.sign_bytes(payload_bytes)
         return FederationRecordResponse(
-            record=domain,
+            record=current_record,
             signed=SignedDomainObject(digestSha256=sha256_hex(payload_bytes), signature=signature),
             currentState=state,
             latestEventPosition=latest.event_sequence,
@@ -792,17 +1025,7 @@ class FederationOutboundService:
         )
 
     def _validated_event_payload(self, event: FederationChangeEvent) -> SignedFederationChangeEventPayload:
-        try:
-            return SignedFederationChangeEventPayload.model_validate(event.signed_payload)
-        except ValidationError as exc:
-            LOGGER.warning(
-                "stored federation event payload invalid",
-                extra={"event_id": str(event.id), "event_position": int(event.event_sequence)},
-            )
-            raise FederationError(
-                "stored-federation-event-invalid",
-                f"Stored federation event is invalid at position {int(event.event_sequence)}.",
-            ) from exc
+        return _validated_event_payload(event)
 
     def _resolve_changes_cursor(self, since: str | None) -> tuple[int, int]:
         current_max = self._max_event_sequence()

@@ -1,314 +1,260 @@
 # API Specification Note
 
-Integrated application version: **0.3.0**.
+Integrated application version: **0.3.5**.
 
-This note aligns the implementation with `LICENCE FACADE SERVICE - Rights & Ethics.docx.pdf`.
+This note documents the behavior currently implemented in the repository. It aligns the service with the current Rights & Ethics interpretation, OpenREL policy workflow, federated revision model, and asynchronous RDF processing.
 
 ## Normative ambiguity
 
-The introductory prose suggests HTML as the default landing page, but **normative Table 2** defines the base `/licences/{id}` endpoint as the mandatory machine-readable metadata resource.  
-This implementation follows the normative table:
+The Rights & Ethics prose suggests HTML prominence, but the normative endpoint table still makes the base licence resource the machine-readable metadata entry point. The implementation follows the normative table:
 
-- no `Accept` header → `application/json`
 - no `Accept` header → `application/json`
 - `Accept: */*` → `application/json`
 - `Accept: text/html` → HTML
 - unsupported media types → `406 application/problem+json`
 
-`/api/v1/licences/{id}` is the specification alias; `/api/v1/licenses/{id}` is the documented implementation path.
+`/api/v1/licences/{id}` remains the specification alias; `/api/v1/licenses/{id}` is the implementation path.
 
-## Conformance matrix
+## Public licence architecture
 
-| PDF endpoint | Status | Implemented media type | When unavailable | Upstream limitation |
-|---|---|---|---|---|
-| `/licences/{id}` | Mandatory | negotiated; default JSON | `406` on unsupported `Accept` | none |
-| `/licences/{id}/html` | Optional | `text/html` | 404/problem if unavailable | none |
-| `/licences/{id}/json-ld` | Optional | `application/ld+json` | 404/problem if unavailable | none |
-| `/licences/{id}/original` | Mandatory | redirect to curated `https://...` | 404/problem and conformance failure if missing | SPDX `reference` is **not** treated as original |
-| `/licences/{id}/machine` | Mandatory | `application/ld+json`, `text/turtle`, or `application/rdf+xml` depending on curated rep | 404/problem and conformance failure if missing | SPDX metadata alone does **not** satisfy machine |
-| `/licences/{id}/legal` | Optional | curated source-defined representation | 404/problem if unavailable | no invented legal code |
-| `/licences/{id}/encoding` | Optional | redirect to curated encoding URL | 404/problem if unavailable | no invented encoding URL |
+Main responsibilities are split across these components:
 
-## Table 4 response fields
+- `src/license_facade_service/api/v1/licenses.py`: public HTTP routes, protected mutation routes, OpenAPI documentation
+- `src/license_facade_service/services/licenses.py`: licence retrieval, content negotiation, representation selection, response shaping
+- `src/license_facade_service/utils/rdf_transformer.py`: RDF serialization and vocabulary-aware transformation boundaries
+- `src/license_facade_service/services/problem.py`: RFC 9457 problem responses
 
-Detailed JSON metadata includes:
+The service distinguishes route existence from actual representation availability. Optional or mandatory representation routes may still return `404 application/problem+json` when curated data does not exist.
 
-- `uri`
-- `referenceNumber`
-- `licenseId` / `licenseID` / `licenceID`
-- `name`
-- `detailsURL` (local `/licenses/{id}/json`)
-- `spdxDetailsURL` (upstream SPDX details URL)
-- `reference`
-- `isDeprecatedLicenseId` / `isDeprecatedLicenseID`
-- `seeAlso`
-- `isOsiApproved`
-- `licenseText`
-- `standardLicenseTemplate`
-- `licenseTextHtml`
-- `crossRef`
-- `representations`
-- `representationStatus`
-- `conformance`
-- `_links`
-
-Missing mandatory fields are not fabricated; the record is marked non-conformant instead.
-
-## Table 6 mappings
-
-- `detailsURL` → `/api/v1/licenses/{id}/json`
-- `crossRef[type=original]` → `/api/v1/licenses/{id}/original`
-- `crossRef[type=machine]` → `/api/v1/licenses/{id}/machine`
-- `crossRef[type=legal]` → `/api/v1/licenses/{id}/legal`
-
-Upstream SPDX cross-references are preserved with provenance/source fields.
-
-## REL validation
-
-The implementation validates RELs syntactically and by registered vocabulary/profile IRIs:
-
-- ODRL
-- ccREL
-- DALICC
-- OpenREL
-- Dublin Core where allowed
-- schema.org for agents/concepts/things
-
-This is **syntax/vocabulary validation only**, not legal or semantic validation.
-
-## Federation Phase 1 foundation
-
-Implemented in this phase:
-
-- PostgreSQL schema + Alembic migrations for federation state tables.
-- Feature flag: `FEDERATION_ENABLED`.
-- Validated node identity from configuration (no request-header derivation).
-- Persisted node identity fingerprint/state for configuration drift detection.
-- Ed25519 signing-key loading from configured file/secret path.
-- Public-key metadata persistence (`kid`, `alg`, status, validity).
-- Typed JWKS service and optional `/.well-known/jwks.json` endpoint.
-- Canonical licence identity utility using UUIDv5 with fixed namespace.
-- Canonical JSON (RFC 8785/JCS) + SHA-256 digest helpers.
-- Typed federation peer/provenance/record/change-event models.
-
-Compatibility decision:
-
-- With `FEDERATION_ENABLED=false`, the current public licence API remains operational without federation configuration, PostgreSQL, or signing keys.
-
-## Federation Phase 2 outbound protocol
-
-Implemented:
-
-- `GET /.well-known/lfs`
-- `GET /.well-known/jwks.json`
-- `GET /api/v1/federation/catalog`
-- `GET /api/v1/federation/changes`
-- `GET /api/v1/federation/records/{encoded_id}`
-
-### Signed immutable payloads
-
-- Canonicalization: RFC 8785 / JCS
-- Encoding: UTF-8 bytes
-- Digest: SHA-256 hex over canonical bytes
-- Signature: Ed25519 (EdDSA), base64url signature, with `kid` and `alg`
-
-Signed record payload fields:
-
-- `nodeId`
-- `canonicalId`
-- `authorityNodeId`
-- `localId`
-- `version`
-- `publicationState`
-- `publishedAt`
-- `payload`
-- `payloadDigestSha256`
-
-Signed change-event payload fields:
-
-- `nodeId`
-- `eventId`
-- `eventPosition` (database-generated monotonic sequence)
-- `operation` (`upsert|deprecate|tombstone`)
-- `generatedAt`
-- `record` (signed record payload structure)
-- `provenance` (`publication|backfill`)
-- `backfillCreatedAt` (optional)
-
-### Cursor format and watermark
-
-- Opaque cursor token format: `v{n}.{kid}.{payload_b64url}.{sig_b64url}`
-- Cursor payload contains pagination state only (kind, node, watermark, after/last keys).
-- `changes` uses position cursor (`since` means strictly after position).
-- `catalog` uses keyset cursor plus snapshot watermark (max event sequence seen at initial page).
-- Later pages are constrained to the cursor watermark to prevent mid-traversal inserts from causing skips/duplicates.
-
-### ETag and conditional requests
-
-- Strong ETags are derived from deterministic canonical response bytes.
-- `If-None-Match` is supported (lists and `*`).
-- `304` responses are body-empty and include `ETag` and `Cache-Control`.
-
-### Backfill
-
-- Backfill is explicit and separate from GET/startup.
-- Command path: `src/license_facade_service/federation/backfill.py`
-- Defaults to dry-run; write mode requires explicit confirmation; idempotent.
-
-## Federation Phase 3 inbound synchronization
-
-Implemented Phase 3 boundaries:
-
-- trusted peers are explicitly admin-enrolled; automatic enrollment is not implemented;
-- peer trust material is pinned (node ID + verification key `kid` + fingerprint);
-- inbound synchronization uses `/changes` paging with `nextCursor` traversal and persisted `resumeCursor`;
-- per-page transactional import: if one page fails, that page and cursor update roll back, prior committed pages remain;
-- remote event positions are required to be strictly increasing for newly accepted events, but sequence gaps are allowed;
-- duplicate JSON keys are rejected before schema validation;
-- imported records are stored with `is_authoritative=false`, provenance metadata, and verification status;
-- imported events are stored in dedicated inbound tables and are never inserted into outbound `federation_change_events`.
-
-Security notes:
-
-- unknown/revoked peer keys are rejected;
-- HTTPS-only by default (demo profile may allow HTTP with explicit config);
-- SSRF protections validate resolved addresses and reject loopback/private/link-local/metadata ranges by default;
-- DNS is revalidated per request; deployment should still enforce outbound network policy to close resolver-to-connect rebinding gaps.
-
-## Federation Phase 4 resolution and RDF outbox
-
-Implemented Phase 4 boundaries:
-
-- `GET /api/v1/licenses/resolution?identifier=...` and `GET /api/v1/licenses/provenance?identifier=...` are the canonical arbitrary-identifier lookups.
-- Path lookup remains available for simple IDs, but query lookup is preferred for identifiers containing `/`, `:`, `#`, `?`, or encoded characters.
-- Local authoritative records always win; imported candidates are resolvable only when no local authoritative record is selected.
-- Imported records are immutable snapshots; signed inbound source/event history is preserved separately from current resolution state.
-- Canonical success outcomes are `200`, `404`, `409`, `410`, and `503` with RFC 9457 problem details for errors.
-- RDF graph ownership is per-record and per-conflict:
-  - `urn:lfs:graph:record:{recordId}`
-  - `urn:lfs:graph:provenance:{recordId}`
-  - `urn:lfs:graph:decision:{conflictId}`
-- Outbox statuses are `pending`, `running`, `succeeded`, `retryable_failed`, `dead_lettered`, and `superseded`.
-- Lease ownership is tracked in PostgreSQL and skipped by competing claimers; a stale or superseded job never overwrites newer graph state.
-- PostgreSQL remains the source of truth; Fuseki outages do not block resolution, publication, or imported-history lookup.
-- Worker/maintenance operations are bounded and explicit:
-  - `python -m src.license_facade_service.rdf_worker`
-  - `python -m src.license_facade_service.federation.maintenance process`
-  - `retry`
-  - `requeue`
-  - `rebuild`
-  - `reconcile`
-
-## Federation Phase 5 Increment 3-5 synchronization and peer-key trust hardening
-
-Implemented boundaries:
-
-- synchronization coordination uses persisted per-peer leases with fencing tokens (no long-held advisory lock during HTTP traversal);
-- lease claim and release are short transactions, and page commit re-verifies owner/token/expiry against PostgreSQL time;
-- remote discovery/JWKS/changes/record HTTP is executed outside DB transactions;
-- cursor advancement is atomic with per-page import commit and lease renewal;
-- transient/permanent peer circuit states (`closed`, `open`, `half_open`) govern synchronization/probe eligibility;
-- admin controls exist for suspend/resume, circuit reset, and read-only probe;
-- health snapshots and operational audit events are persisted for explicit probe and actual synchronization attempts;
-- peer-key trust is operator-controlled with explicit endpoints for inventory, remote inspection, approval, retirement, and revocation;
-- remote key inspection is read-only and deterministic with mutually exclusive category precedence `invalid -> changed -> expired -> known/new/removed`; inspection does not mutate trusted keys, cursor, or import state;
-- explicit approval requires exact `sha256:<hex>` fingerprint confirmation and rejects same-kid/different-material collisions;
-- collision rejection opens a permanent circuit (`key_collision`) requiring admin reset;
-- inbound event authorization for new imports requires `active` peer keys and DB-time validity windows (`valid_from` is null or `<= now`; `valid_until` is null or `now < valid_until`), using a single PostgreSQL timestamp per page verification path;
-- Key eligibility is checked again using PostgreSQL time in the fenced page-commit transaction.
-- `signing-key-not-yet-valid` and `signing-key-expired` are treated as permanent trust/integrity failures and map to permanent identity-mismatch circuit classification;
-- historical-evidence verification remains cryptographic-only and never authorizes imports, cursor movement, or state mutation;
-- enrollment `expected_key_kid` / `expected_key_fingerprint` remain enrollment evidence and are not silently overwritten by approval.
-- scheduled local-key activation is integrated into the existing federation worker loop (no second scheduler process).
-- worker startup requires `FEDERATION_ENABLED=true`, configured database URL, and at least one enabled subsystem (`FEDERATION_INBOUND_ENABLED=true` or `FEDERATION_ROTATION_WORKER_ENABLED=true`).
-- outbound-only federation publishers may run rotation-only worker mode (`inbound=false`, `rotation=true`).
-- each pass runs at most one scheduled activation candidate and uses PostgreSQL time for due-state checks.
-- the worker follows a two-phase activation model:
-  - Phase A: short transaction to identify due staged candidate, then transaction closes;
-  - filesystem/private-material validation happens outside any transaction;
-  - Phase B: locked transition transaction (`FOR UPDATE`) revalidates due state and atomically retires predecessor, activates successor, clears schedule, and writes activation audit.
-- if candidate state changed between Phase A and Phase B (manual activation/cancel/revoke/race), activation resolves as bounded idempotent no-op and does not enter a tight failure loop.
-- benign race/no-op outcomes (expected-state-mismatch from race, cancellation before Phase B, already-active/no-longer-due) do not emit `local_key.activation_failed` or `local_key.material_mismatch` and do not consume failure backoff budget.
-- rotation worker failures are classified as retriable vs operator-action-required:
-  - retriable failures use bounded exponential backoff with optional jitter `[0.75, 1.25]`;
-  - permanent failures keep the schedule and current active key unchanged, emit bounded failure audit, and use maximum backoff.
-- worker identity is process-scoped and independent from federation node identity:
-  - optional `FEDERATION_WORKER_INSTANCE_ID` provides a stable UUID when configured;
-  - if unset, each worker process generates one UUID at startup and reuses it for all heartbeat/audit writes in that process.
-- worker heartbeat remains on existing `sync` worker type with bounded status/result codes:
-  - idle/deferred no-op rotation results are not written as error classes;
-  - `last_error_class` is used only for bounded error/degraded/blocked codes;
-  - successful/no-op rotation does not overwrite sync-failure error reporting in combined mode.
-- rotation and sync failure boundaries are independent:
-  - rotation pass failures do not terminate peer synchronization scheduling;
-  - sync failures do not corrupt rotation state;
-  - loop cadence uses monotonic scheduling with bounded interruptible waits (no busy spin).
-
-Step 5 rotation worker environment variables:
-
-- `FEDERATION_WORKER_INSTANCE_ID` (optional UUID)
-- `FEDERATION_ROTATION_WORKER_ENABLED` (default `true`)
-- `FEDERATION_ROTATION_POLL_INTERVAL_SECONDS` (default `60`)
-- `FEDERATION_ROTATION_FAILURE_BACKOFF_MIN_SECONDS` (default `30`)
-- `FEDERATION_ROTATION_FAILURE_BACKOFF_MAX_SECONDS` (default `900`)
-- `FEDERATION_ROTATION_BACKOFF_JITTER_ENABLED` (default `true`)
-- `FEDERATION_ROTATION_MAX_OPERATIONS_PER_PASS` (must be `1`)
-
-Increment 5 Step 6 integration demonstration:
-
-- the `federation-demo` profile uses directory-based key loading (`FEDERATION_SIGNING_KEY_DIR`) for all federation containers;
-- Node A runs a rotation-only worker (`inbound=false`, `rotation=true`) against the same Node A DB + key directory as Node A API;
-- Node B runs inbound synchronization worker against an isolated Node B DB + key directory;
-- no Node A private key material is mounted into Node B services (and vice versa);
-- demo flow validates staged A2 activation, unknown-key rejection with unchanged B cursor, explicit peer-key approval/reset, successful import after approval, historical A1 signature evidence, restart persistence, and leak-safe output.
-
-Manual walkthrough for curl/Postman is documented in `docs/federation-two-node-rotation-demo.md`.
-
-Deferred beyond Increment 5:
-
-- cursor replay/checkpoint/recovery tooling;
-- RDF recovery additions beyond existing outbox behavior;
-- rate limiting, metrics, and expanded production logging;
-- additional protocol compatibility enforcement.
-
-## Custom licence registration and publication
+## Custom licence registration boundary
 
 `POST /api/v1/licenses` supports three scopes:
 
-- `local`: local-only registration.
-- `federated`: registration + durable publication outbox (`pending` until worker publication).
-- `spdx-submission`: local registration with SPDX submission workflow status.
+- `local`
+- `federated`
+- `spdx-submission`
 
-Federated registration persists local record + aliases + audit + outbox intent atomically in PostgreSQL. Publication is asynchronous via:
+Registration persists local data atomically in PostgreSQL. Federated scope also creates durable publication intent for the separate worker. SPDX-submission scope remains local and does not contact SPDX or GitHub.
 
-- `python -m src.license_facade_service.custom_licence_federation_worker`
+## OpenREL architecture
 
-Administrative status/retry endpoints:
+OpenREL responsibilities are split across these components:
 
-- `GET /api/v1/admin/licenses/{record_id}/federation`
-- `POST /api/v1/admin/licenses/{record_id}/federation/retry`
+- `src/license_facade_service/services/openrel_client.py`: strict read-only provider client
+- `src/license_facade_service/services/openrel_policy.py`: configuration, policy classification, candidate validation, fail-closed rules
+- `src/license_facade_service/services/openrel_evaluation.py`: evaluation coordinator and provider-availability handling
+- `src/license_facade_service/services/openrel_policy_store.py`: persisted plan storage, transition events, reason sanitization, idempotent plan recording
+- `src/license_facade_service/services/openrel_application.py`: local/federated apply and rollback execution
+- `src/license_facade_service/api/admin/openrel.py`: authenticated admin HTTP surface and RFC 9457 mapping
+- `src/license_facade_service/runtime/openrel_policy.py`: runtime/session wiring
 
-The custom publication worker remains separate from the federation sync/rotation worker process.
+The provider facade under `/openrel/api/v0.4/*` is read-only `GET` only. Provider availability does not create trust, does not mutate licences, and does not perform automatic application.
 
-## OpenREL read-only facade
+## OpenREL configuration
 
-OpenREL is exposed under `/openrel/api/v0.4/*` (read-only `GET` routes only). It is optional and bounded by configured network/time/size policy.
+Current OpenREL settings are read from these environment variables:
 
-OpenREL responses are not imported into:
+- `OPENREL_ENABLED`
+- `OPENREL_POLICY_MODE`
+- `OPENREL_POLICY_DATABASE_URL`
+- `OPENREL_POLICY_DATABASE_URL_FILE`
+- `OPENREL_ADMIN_CURSOR_SECRET`
+- `OPENREL_ADMIN_CURSOR_SECRET_FILE`
+- `OPENREL_BASE_URL`
+- `OPENREL_APPROVED_PROFILE`
+- `OPENREL_APPROVED_VERSION`
+- `OPENREL_POLICY_EFFECTIVE_DATE`
+- `OPENREL_CACHE_TTL_SECONDS`
+- `OPENREL_TIMEOUT_SECONDS`
+- `OPENREL_MAX_RESPONSE_BYTES`
+- `OPENREL_ALLOW_HTTP_FOR_DEMO`
+- `OPENREL_AUTODISCOVERY_ENABLED`
+- `OPENREL_MIGRATION_REVIEW_REQUIRED`
+- `OPENREL_MAPPING_AUTHORITY`
 
-- local authoritative licence records,
-- federation outbound catalog/changes,
-- inbound synchronization state,
-- RDF outbox/index graphs.
+Mode behavior:
 
-OpenREL readiness in `/api/v1/ready` is configuration-readiness only and does not perform provider network probes.
+- `disabled`: inert, no persisted policy-store activity required
+- `dry-run`: evaluation only, no mutation allowed
+- `active`: evaluation and later admin-controlled apply/rollback are enabled
+
+`active` mode requires enabled runtime, configured provider base URL, approved profile/version, and effective date. Autodiscovery is not allowed in `active` mode.
+
+## OpenREL policy lifecycle
+
+The implemented lifecycle is:
+
+```text
+evaluation -> persisted plan -> review -> apply -> rollback
+```
+
+### Evaluation
+
+Evaluation accepts external candidate input for comparison against configured OpenREL policy rules. It does not mutate the target licence. When the provider is unavailable or the timestamp is missing/untrusted, evaluation fails closed and may persist a no-op or review-required plan instead of applying anything.
+
+### Review
+
+Persisted policy states are reviewed through admin endpoints:
+
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/approve`
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/reject`
+
+Reasons are sanitized and persisted only in safe audit-event details.
+
+### Apply and rollback
+
+Persisted approved states are mutated only through admin endpoints:
+
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/apply`
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/rollback`
+
+Requests accept only an optional `reason`. They do not accept candidate payload, digest, target identity, actor identity, mapping content, federation IDs, or status overrides.
+
+## Allowed state transitions
+
+`OpenRelPolicyStore.transition_status()` currently allows:
+
+- `pending-review -> approved`
+- `pending-review -> rejected`
+- `planned -> applied`
+- `approved -> applied`
+- `planned -> failed`
+- `pending-review -> failed`
+- `approved -> failed`
+- `applied -> rolled-back`
+
+Exact retries are idempotent only for terminal or already-completed states with matching retry metadata.
+
+## OpenREL idempotency and append-only events
+
+Two idempotency boundaries are implemented.
+
+### Plan recording
+
+`OpenRelPolicyStore.record_plan()` performs an initial lookup, inserts state/event inside `session.begin_nested()`, and recovers only for the PostgreSQL uniqueness race on `uq_openrel_policy_states_license_policy_candidate_action`. Exact replays reuse the winner without rolling back the caller’s outer transaction.
+
+### Apply/rollback
+
+`OpenRelApplicationService.apply()` and `.rollback()` are idempotent on exact replay of already-applied or already-rolled-back states when the live target still matches the stored snapshot digest boundary. Retries do not create duplicate transition events or overwrite the first persisted sanitized reason.
+
+`OpenRelPolicyEvent` rows remain append-only audit history.
+
+## Transaction ownership
+
+Both policy storage and application logic are caller-owned transaction services.
+
+- `OpenRelPolicyStore` never commits the caller session.
+- `OpenRelApplicationService` never commits the caller session.
+- Federated savepoint handling uses `session.begin_nested()` and never calls outer `rollback()` for handled races or nested publication failures.
+- Admin HTTP handlers own one request transaction, commit once on success, roll back once on failure, and always close the session.
+
+## PostgreSQL constraints and persistence
+
+Current persistence includes:
+
+- `openrel_policy_states`
+- `openrel_policy_events`
+- `custom_licence_representations`
+- `federation_change_events.idempotency_key`
+
+Current Alembic head is:
+
+- `20260904_03`
+
+OpenREL apply/rollback relies on persisted target snapshots and digests, historical mapping representation state, and append-only transition events rather than overwriting history.
+
+## Local mutation boundary
+
+OpenREL apply/rollback supports only local authoritative `CustomLicence` mutation targets.
+
+Rejected targets include:
+
+- SPDX sources
+- imported federation records
+- unsupported lifecycle/publication states
+
+For local targets, mutation stays within PostgreSQL and local audit history.
+
+## Federated apply/rollback revision behavior
+
+Published federated custom licences are supported through `OpenRelApplicationService` only when federation publication linkage is valid and the publisher/payload dependencies are ready.
+
+Federated apply/rollback behavior:
+
+- mutate local `CustomLicence` state
+- compute exact before/after snapshots and digests
+- append one authoritative federation revision event with deterministic idempotency key
+- update outbox linkage to the latest authoritative event
+- enqueue RDF jobs asynchronously
+- append OpenREL transition event and custom audit event
+- perform all of the above atomically inside a nested savepoint relative to the outer request transaction
+
+If required federation dependencies are unavailable for an otherwise-valid federated action, the admin API returns `503` rather than `409`.
+
+## Latest-event projection
+
+Current authoritative federated record state is projected from the latest authoritative `FederationChangeEvent`, not by mutating historical record payload in place. This preserves append-only revision history while still allowing current catalog/record responses to reflect the newest authoritative content.
+
+## RDF outbox behavior
+
+RDF processing remains asynchronous.
+
+- queueing occurs in PostgreSQL during publication/apply/rollback work
+- worker execution happens separately through `python -m src.license_facade_service.rdf_worker`
+- Fuseki outages do not block registration, evaluation persistence, apply/rollback, or resolution from PostgreSQL
+- retries, requeue, rebuild, and reconcile are explicit maintenance actions
+
+## Failure and retry behavior
+
+- unavailable OpenREL provider during evaluation: fail closed, no automatic mutation
+- malformed JSON-like review/apply reason: rejected before mutation
+- oversized reason: `422`
+- extra request fields on review/apply/rollback: `422`
+- missing state or missing persisted target: `404`
+- invalid transition, digest mismatch, stale target, linkage mismatch, unsupported lifecycle: `409`
+- missing federation publisher/payload dependency for otherwise-valid federated apply/rollback: `503`
+
+## Admin authentication and problem responses
+
+Admin OpenREL endpoints require existing bearer authentication and administrator authorization.
+
+Documented admin endpoints:
+
+- `POST /api/v1/admin/openrel/evaluations`
+- `GET /api/v1/admin/openrel/policy-states`
+- `GET /api/v1/admin/openrel/policy-states/{state_id}`
+- `GET /api/v1/admin/openrel/policy-states/{state_id}/events`
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/approve`
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/reject`
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/apply`
+- `POST /api/v1/admin/openrel/policy-states/{state_id}/rollback`
+
+All documented errors use RFC 9457 `application/problem+json`.
+
+## Security and data-redaction rules
+
+OpenREL review/apply/rollback reasons are sanitized through `sanitize_review_reason()`:
+
+- malformed structured JSON-looking input is rejected
+- duplicate keys are rejected
+- sensitive fields are redacted recursively
+- assignment-style secrets are redacted
+- persisted output is bounded to 512 characters
+
+Sanitized reasons are stored only in safe policy-event details. They are not included in:
+
+- admin response models
+- licence snapshots
+- federation event payloads
+- federation provenance
+- RDF payloads
 
 ## Migration ownership and startup sequencing
 
-Alembic is authoritative for application tables and schema evolution.
+Alembic is authoritative for schema creation and evolution.
 
-- Startup migration command: `uv run alembic -c alembic.ini upgrade head`
-- No `Base.metadata.create_all` table-creation path is used.
-- The removed SQL dump `docker/postgres-init/001-lfs-schema.sql` is not part of startup.
+- startup migration command: `uv run alembic -c alembic.ini upgrade head`
+- no `Base.metadata.create_all` startup path is used
+- the removed SQL dump `docker/postgres-init/001-lfs-schema.sql` is not used
 
-Each Compose startup path has a single migration owner per database path; API and worker services start only after migration readiness for that path.
+Each deployment path keeps one migration owner per database path before API or worker startup.

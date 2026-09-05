@@ -6,6 +6,7 @@ import socket
 import subprocess
 import time
 from pathlib import Path
+from uuid import UUID, uuid4
 from uuid import uuid4
 
 import psycopg
@@ -182,3 +183,144 @@ def test_federation_identity_key_readiness_and_jwks(postgres_url: str, tmp_path:
         assert ready_changed.status_code == 200
         assert ready_changed.json()["federation"]["ready"] is False
         assert "configuration changed" in " ".join(ready_changed.json()["federation"]["errors"]).lower()
+
+
+def test_federation_change_event_idempotency_schema_and_repeatability(postgres_url: str):
+    authority_a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    authority_b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    key_a = uuid4()
+    key_b = uuid4()
+    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'federation_change_events'
+                  AND column_name = 'idempotency_key'
+                """
+            )
+            assert cur.fetchone() == ("uuid", "YES")
+            cur.execute(
+                """
+                SELECT indexname, indexdef
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND tablename = 'federation_change_events'
+                  AND indexname = 'uix_fce_authority_idempotency'
+                """
+            )
+            index_row = cur.fetchone()
+            assert index_row is not None
+            index_name, indexdef = index_row
+            assert len(index_name) <= 63
+            assert "(authority_node_id, idempotency_key)" in indexdef
+            assert "WHERE (idempotency_key IS NOT NULL)" in indexdef
+            cur.execute(
+                """
+                INSERT INTO federation_change_events (
+                    id, event_sequence, event_type, authority_node_id, idempotency_key, record_id,
+                    operation, generated_at, payload_schema_version, signed_payload,
+                    signed_payload_digest_sha256, signature_base64url, signature_kid, signature_alg,
+                    provenance_type, event_payload, event_digest_sha256, occurred_at, created_at
+                ) VALUES
+                (%s, 1, 'record.changed', %s, NULL, NULL, 'upsert', now(), '1', '{}'::jsonb, 'd1', 's1', 'k1', 'EdDSA', 'publication', '{}'::jsonb, 'e1', now(), now()),
+                (%s, 2, 'record.changed', %s, NULL, NULL, 'upsert', now(), '1', '{}'::jsonb, 'd2', 's2', 'k1', 'EdDSA', 'publication', '{}'::jsonb, 'e2', now(), now()),
+                (%s, 3, 'record.changed', %s, %s, NULL, 'upsert', now(), '1', '{}'::jsonb, 'd3', 's3', 'k1', 'EdDSA', 'publication', '{}'::jsonb, 'e3', now(), now()),
+                (%s, 4, 'record.changed', %s, %s, NULL, 'upsert', now(), '1', '{}'::jsonb, 'd4', 's4', 'k1', 'EdDSA', 'publication', '{}'::jsonb, 'e4', now(), now()),
+                (%s, 5, 'record.changed', %s, %s, NULL, 'upsert', now(), '1', '{}'::jsonb, 'd5', 's5', 'k1', 'EdDSA', 'publication', '{}'::jsonb, 'e5', now(), now())
+                """,
+                (
+                    str(uuid4()), authority_a,
+                    str(uuid4()), authority_a,
+                    str(uuid4()), authority_a, key_a,
+                    str(uuid4()), authority_a, key_b,
+                    str(uuid4()), authority_b, key_a,
+                ),
+            )
+            with pytest.raises(psycopg.errors.UniqueViolation):
+                cur.execute("SAVEPOINT duplicate_key_attempt")
+                cur.execute(
+                    """
+                    INSERT INTO federation_change_events (
+                        id, event_sequence, event_type, authority_node_id, idempotency_key, record_id,
+                        operation, generated_at, payload_schema_version, signed_payload,
+                        signed_payload_digest_sha256, signature_base64url, signature_kid, signature_alg,
+                        provenance_type, event_payload, event_digest_sha256, occurred_at, created_at
+                    ) VALUES (
+                        %s, 6, 'record.changed', %s, %s, NULL, 'upsert', now(), '1', '{}'::jsonb,
+                        'd6', 's6', 'k1', 'EdDSA', 'publication', '{}'::jsonb, 'e6', now(), now()
+                    )
+                    """,
+                    (str(uuid4()), authority_a, key_a),
+                )
+            cur.execute("ROLLBACK TO SAVEPOINT duplicate_key_attempt")
+            cur.execute("RELEASE SAVEPOINT duplicate_key_attempt")
+        conn.commit()
+
+    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM federation_change_events WHERE idempotency_key IS NULL")
+            assert cur.fetchone()[0] == 2
+            cur.execute(
+                "SELECT COUNT(*) FROM federation_change_events WHERE authority_node_id = %s AND idempotency_key IS NOT NULL",
+                (authority_a,),
+            )
+            assert cur.fetchone()[0] == 2
+            cur.execute(
+                "SELECT COUNT(*) FROM federation_change_events WHERE authority_node_id = %s AND idempotency_key = %s",
+                (authority_b, key_a),
+            )
+            assert cur.fetchone()[0] == 1
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND tablename = 'federation_change_events'
+                  AND indexdef ILIKE '%%payload_digest_sha256%%UNIQUE%%'
+                """
+            )
+            assert cur.fetchone()[0] == 0
+
+    from tests.schema_init import read_current_revision, run_alembic
+
+    assert read_current_revision(postgres_url) == "20260904_03"
+    run_alembic(postgres_url, "downgrade", "20260904_02")
+    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'federation_change_events'
+                  AND column_name = 'idempotency_key'
+                """
+            )
+            assert cur.fetchone()[0] == 0
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND tablename = 'federation_change_events'
+                  AND indexname = 'uix_fce_authority_idempotency'
+                """
+            )
+            assert cur.fetchone()[0] == 0
+    run_alembic(postgres_url, "upgrade", "head")
+    assert read_current_revision(postgres_url) == "20260904_03"
+    with psycopg.connect(postgres_url.replace("+psycopg", "")) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'federation_change_events'
+                  AND column_name = 'idempotency_key'
+                """
+            )
+            assert cur.fetchone() == ("uuid", "YES")

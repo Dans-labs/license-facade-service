@@ -14,6 +14,7 @@ from sqlalchemy import and_, or_, select
 
 from src.license_facade_service.config.federation import FederationSettings
 from src.license_facade_service.db.models.federation import (
+    FederationChangeEvent,
     FederationConflictDecisionEvent,
     FederationRecord,
     FederationResolutionConflict,
@@ -22,6 +23,7 @@ from src.license_facade_service.db.models.federation import (
 )
 from src.license_facade_service.db.session import Database
 from src.license_facade_service.federation.digests import canonical_json_sha256_hex
+from src.license_facade_service.federation.models import SignedFederationChangeEventPayload
 from src.license_facade_service.infra.fuseki_client import FusekiClient
 from src.license_facade_service.utils.rdf_transformer import json_to_rdf
 
@@ -70,12 +72,25 @@ class RdfOutboxService:
     def decision_graph_uri(conflict_id: UUID) -> str:
         return f"urn:lfs:graph:decision:{conflict_id}"
 
-    def enqueue_record_jobs(self, session, record: FederationRecord, *, operation: str) -> None:
+    def enqueue_record_jobs(
+        self,
+        session,
+        record: FederationRecord,
+        *,
+        operation: str,
+        signed_record_payload: dict | Any | None = None,
+        record_digest: str | None = None,
+        generation: int | None = None,
+        provenance: dict[str, Any] | None = None,
+    ) -> None:
         session.flush()
         graph_uri = self.record_graph_uri(record.id)
         provenance_uri = self.provenance_graph_uri(record.id)
-        generation = int(record.materialized_generation or 0)
-        digest = record.payload_digest_sha256
+        current_generation = int(record.materialized_generation or 0) if generation is None else int(generation)
+        digest = record.payload_digest_sha256 if record_digest is None else record_digest
+        revision_payload = None
+        if signed_record_payload is not None:
+            revision_payload = signed_record_payload.model_dump(mode="json") if hasattr(signed_record_payload, "model_dump") else signed_record_payload
         payload = {
             "recordId": str(record.id),
             "canonicalId": record.canonical_id,
@@ -83,17 +98,19 @@ class RdfOutboxService:
             "operation": operation,
             "graphUri": graph_uri,
             "provenanceGraphUri": provenance_uri,
-            "recordGeneration": generation,
+            "recordGeneration": current_generation,
             "recordDigestSha256": digest,
+            "recordPayload": revision_payload,
+            "provenance": provenance,
         }
         self._upsert_job(
             session,
-            dedupe_key=f"record:{record.id}:{generation}:{operation}:{digest}",
+            dedupe_key=f"record:{record.id}:{current_generation}:{operation}:{digest}",
             job_type="rdf-index",
             record_id=record.id,
             authority_node_id=record.authority_node_id,
             graph_uri=graph_uri,
-            expected_generation=generation,
+            expected_generation=current_generation,
             expected_digest_sha256=digest,
             payload_json=payload,
         )
@@ -104,18 +121,18 @@ class RdfOutboxService:
             record_id=record.id,
             authority_node_id=record.authority_node_id,
             source_peer_id=record.imported_from_peer_id,
-            expected_generation=generation,
+            expected_generation=current_generation,
             expected_digest_sha256=digest,
             status="pending",
         )
         self._upsert_job(
             session,
-            dedupe_key=f"provenance:{record.id}:{generation}:{operation}:{digest}",
+            dedupe_key=f"provenance:{record.id}:{current_generation}:{operation}:{digest}",
             job_type="rdf-index",
             record_id=record.id,
             authority_node_id=record.authority_node_id,
             graph_uri=provenance_uri,
-            expected_generation=generation,
+            expected_generation=current_generation,
             expected_digest_sha256=digest,
             payload_json=payload,
         )
@@ -126,7 +143,7 @@ class RdfOutboxService:
             record_id=record.id,
             authority_node_id=record.authority_node_id,
             source_peer_id=record.imported_from_peer_id,
-            expected_generation=generation,
+            expected_generation=current_generation,
             expected_digest_sha256=digest,
             status="pending",
         )
@@ -249,6 +266,39 @@ class RdfOutboxService:
         state.status = status
         state.owned_by_service = True
         state.updated_at = now
+
+    def _authoritative_event_digest_for_claim(self, session, record: FederationRecord, claim: RdfJobClaim) -> tuple[str | None, dict[str, Any] | None]:
+        event = session.execute(
+            select(FederationChangeEvent)
+            .where(
+                FederationChangeEvent.record_id == record.id,
+                FederationChangeEvent.event_sequence == claim.expected_generation,
+                FederationChangeEvent.authority_node_id == record.authority_node_id,
+            )
+        ).scalar_one_or_none()
+        if event is None:
+            return None, None
+        payload = SignedFederationChangeEventPayload.model_validate(event.signed_payload)
+        event_record_payload = payload.record.model_dump(mode="json")
+        job_record_payload = claim.payload_json.get("recordPayload")
+        if not isinstance(job_record_payload, dict):
+            return "", None
+        if event_record_payload != job_record_payload:
+            return "", None
+        digest = payload.record.payloadDigestSha256
+        if claim.payload_json.get("recordDigestSha256") != digest:
+            return "", None
+        return digest, event_record_payload
+
+    def _current_record_digest_for_claim(self, session, record: FederationRecord, claim: RdfJobClaim) -> tuple[str | None, dict[str, Any] | None]:
+        if int(record.materialized_generation or 0) != claim.expected_generation:
+            return None, None
+        digest, payload = self._authoritative_event_digest_for_claim(session, record, claim)
+        if digest is not None:
+            return digest, payload
+        if record.imported_from_peer_id is not None or claim.payload_json.get("recordPayload") is None:
+            return record.payload_digest_sha256, None
+        return None, None
 
     def claim_jobs(self, *, limit: int, lease_seconds: int, worker_id: str) -> list[RdfJobClaim]:
         now = datetime.now(timezone.utc)
@@ -557,10 +607,11 @@ class RdfOutboxService:
                 state.active_lease_until = None
                 state.updated_at = datetime.now(timezone.utc)
                 return "superseded"
-            if kind != "decision" and record is not None and (
-                int(record.materialized_generation or 0) != claim.expected_generation
-                or record.payload_digest_sha256 != claim.expected_digest_sha256
-            ):
+            validated_digest = None
+            validated_record_payload = None
+            if kind != "decision" and record is not None:
+                validated_digest, validated_record_payload = self._current_record_digest_for_claim(session, record, claim)
+            if kind != "decision" and record is not None and validated_digest != claim.expected_digest_sha256:
                 job.status = "superseded"
                 job.leased_by = None
                 job.leased_until = None
@@ -571,7 +622,7 @@ class RdfOutboxService:
                 state.active_lease_until = None
                 state.updated_at = datetime.now(timezone.utc)
                 return "superseded"
-        rdf_data = self._build_rdf_payload(claim, record)
+        rdf_data = self._build_rdf_payload(claim, record, validated_record_payload=validated_record_payload)
         if not rdf_data:
             return "superseded"
         success = await self.fuseki.replace_graph(claim.graph_uri, rdf_data, "text/turtle")
@@ -599,10 +650,10 @@ class RdfOutboxService:
                 state.active_lease_until = None
                 state.updated_at = now
                 return "superseded"
-            if kind != "decision" and current_record is not None and (
-                int(current_record.materialized_generation or 0) != claim.expected_generation
-                or current_record.payload_digest_sha256 != claim.expected_digest_sha256
-            ):
+            current_validated_digest = None
+            if kind != "decision" and current_record is not None:
+                current_validated_digest, _ = self._current_record_digest_for_claim(session, current_record, claim)
+            if kind != "decision" and current_record is not None and current_validated_digest != claim.expected_digest_sha256:
                 job.status = "superseded"
                 job.leased_by = None
                 job.leased_until = None
@@ -664,17 +715,31 @@ class RdfOutboxService:
             state.updated_at = now
             return "failed"
 
-    def _build_rdf_payload(self, claim: RdfJobClaim, record: FederationRecord | None) -> str:
+    def _build_rdf_payload(
+        self,
+        claim: RdfJobClaim,
+        record: FederationRecord | None,
+        *,
+        validated_record_payload: dict[str, Any] | None = None,
+    ) -> str:
         kind = self._graph_kind_from_uri(claim.graph_uri)
         if kind == "decision":
             return self._build_decision_graph(claim)
         if record is None:
             return ""
         if kind == "provenance":
-            return self._build_provenance_graph(claim, record)
-        return self._build_record_graph(claim, record)
+            return self._build_provenance_graph(claim, record, validated_record_payload=validated_record_payload)
+        return self._build_record_graph(claim, record, validated_record_payload=validated_record_payload)
 
-    def _build_record_graph(self, claim: RdfJobClaim, record: FederationRecord) -> str:
+    def _build_record_graph(
+        self,
+        claim: RdfJobClaim,
+        record: FederationRecord,
+        *,
+        validated_record_payload: dict[str, Any] | None = None,
+    ) -> str:
+        payload = validated_record_payload or claim.payload_json.get("recordPayload")
+        digest = claim.payload_json.get("recordDigestSha256") or record.payload_digest_sha256
         graph = Graph()
         graph.bind("lfs", LFS)
         graph.bind("prov", PROV)
@@ -688,16 +753,36 @@ class RdfOutboxService:
         graph.add((record_uri, RDF.type, LFS.LicenseRecord))
         graph.add((record_uri, LFS.canonicalId, Literal(record.canonical_id)))
         graph.add((record_uri, LFS.authorityNodeId, Literal(record.authority_node_id)))
-        graph.add((record_uri, LFS.materializedGeneration, Literal(int(record.materialized_generation or 0), datatype=XSD.integer)))
-        graph.add((record_uri, LFS.payloadDigestSha256, Literal(record.payload_digest_sha256)))
+        graph.add((record_uri, LFS.materializedGeneration, Literal(int(claim.expected_generation), datatype=XSD.integer)))
+        graph.add((record_uri, LFS.payloadDigestSha256, Literal(str(digest))))
         graph.add((record_uri, LFS.lifecycleState, Literal(record.lifecycle_state or "published")))
         graph.add((record_uri, PROV.wasDerivedFrom, provenance_uri))
-        graph.add((record_uri, PROV.generatedAtTime, Literal(record.published_at.isoformat() if record.published_at else "")))
+        generated_at = payload.get("publishedAt") if isinstance(payload, dict) else None
+        graph.add((record_uri, PROV.generatedAtTime, Literal(generated_at or (record.published_at.isoformat() if record.published_at else ""))))
+        if isinstance(payload, dict):
+            record_payload = payload.get("payload")
+            if isinstance(record_payload, dict):
+                if "uri" not in record_payload:
+                    record_payload = dict(record_payload)
+                    record_payload["uri"] = str(record_uri)
+                graph.parse(data=json_to_rdf(record_payload, format="turtle"), format="turtle")
+                if record_payload.get("name"):
+                    graph.add((record_uri, DCTERMS.title, Literal(str(record_payload["name"]))))
+                if record_payload.get("licenseText"):
+                    graph.add((record_uri, LFS.payloadLicenseText, Literal(str(record_payload["licenseText"]))))
         if record.imported_from_peer_id is not None:
             graph.add((record_uri, LFS.sourcePeerId, Literal(str(record.imported_from_peer_id))))
         return graph.serialize(format="turtle")
 
-    def _build_provenance_graph(self, claim: RdfJobClaim, record: FederationRecord) -> str:
+    def _build_provenance_graph(
+        self,
+        claim: RdfJobClaim,
+        record: FederationRecord,
+        *,
+        validated_record_payload: dict[str, Any] | None = None,
+    ) -> str:
+        payload = validated_record_payload or claim.payload_json.get("recordPayload")
+        digest = claim.payload_json.get("recordDigestSha256") or record.payload_digest_sha256
         graph = Graph()
         graph.bind("lfs", LFS)
         graph.bind("prov", PROV)
@@ -718,12 +803,13 @@ class RdfOutboxService:
             graph.add((record_uri, LFS.sourceEventId, Literal(str(record.source_event_id))))
         if record.source_event_position is not None:
             graph.add((record_uri, LFS.sourceEventPosition, Literal(int(record.source_event_position), datatype=XSD.integer)))
-        graph.add((record_uri, LFS.signedRecordDigestSha256, Literal(record.source_signed_payload_digest_sha256 or "")))
+        graph.add((record_uri, LFS.signedRecordDigestSha256, Literal(digest if record.imported_from_peer_id is None else (record.source_signed_payload_digest_sha256 or ""))))
         graph.add((record_uri, LFS.lifecycleState, Literal(record.lifecycle_state or "published")))
-        graph.add((record_uri, LFS.materializedGeneration, Literal(int(record.materialized_generation or 0), datatype=XSD.integer)))
+        graph.add((record_uri, LFS.materializedGeneration, Literal(int(claim.expected_generation), datatype=XSD.integer)))
         graph.add((record_uri, LFS.importedAt, Literal(record.last_verified_at.isoformat() if record.last_verified_at else "")))
         graph.add((record_uri, PROV.wasAttributedTo, URIRef(f"urn:lfs:authority:{record.authority_node_id}")))
-        graph.add((record_uri, PROV.generatedAtTime, Literal(record.last_verified_at.isoformat() if record.last_verified_at else "")))
+        generated_at = payload.get("publishedAt") if isinstance(payload, dict) else None
+        graph.add((record_uri, PROV.generatedAtTime, Literal(generated_at or (record.last_verified_at.isoformat() if record.last_verified_at else ""))))
         graph.add((record_uri, PROV.hadPrimarySource, URIRef(self.record_graph_uri(record.id))))
         return graph.serialize(format="turtle")
 
